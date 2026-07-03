@@ -1,34 +1,34 @@
 # Braim
 
 A glassmorphic Google-Keep-style notes app built with Flutter. Local-only (no
-account, no backend) — everything is stored on the device. (Project folder and
+account, no backend) - everything is stored on the device. (Project folder and
 package id are still `keepy`/`com.keepy.keepy`; the user-facing app is **Braim**.)
 
 ## Features
 
-- **Floating island nav** — a frosted pill at the bottom with **Home / Cards /
+- **Floating island nav** - a frosted pill at the bottom with **Home / Cards /
   Cortex**. The active tab expands with a label.
-- **Compact search** — a deliberately narrow search bar on Home, Cards and
+- **Compact search** - a deliberately narrow search bar on Home, Cards and
   Cortex filters notes, cards and folders live.
-- **Home** — a masonry feed of notes. A note can interleave **multiple images
+- **Home** - a masonry feed of notes. A note can interleave **multiple images
   between text**, and text supports **rich formatting**: Heading / Sub-heading /
   Body sizes, **bold**, *italic*, underline and highlight, via a shared toolbar
   that targets the focused line. The first image becomes the feed **thumbnail**,
   with the note's **folder name overlaid in black or white** (auto-contrast).
-- **Cards** — save tweets/links. **Share a tweet to Braim** (Android share
+- **Cards** - save tweets/links. **Share a tweet to Braim** (Android share
   sheet) or paste a URL with the **+** button; it becomes a card with a
   best-effort preview, the **author's profile picture** in a small circle next
   to their name/handle, and a compact media image. Tweets use Twitter/X oEmbed
   (no API key) + unavatar for the avatar; other links use Open Graph tags.
-  **Tapping a card opens it as a note** — the fetched preview and the source
+  **Tapping a card opens it as a note**, the fetched preview and the source
   link (with a **Copy** button) are pinned at the top, with an editable note
   body (rich text + images) below. The card stays in Cards, plus in its Cortex
   folder if assigned.
-- **Cortex** — folders for **both notes and cards**, shown as **square,
+- **Cortex** - folders for **both notes and cards**, shown as **square,
   round-cornered tiles** with an **uploadable thumbnail** and auto-contrast
   label. **Long-press** any note or card → *Move to cortex*. A folder's detail
   lists its notes (masonry) and its cards.
-- **Glass everywhere** — translucent, blurred surfaces. The side pane and the
+- **Glass everywhere** - translucent, blurred surfaces. The side pane and the
   Settings screen blur the live screen behind them. The background blur layer
   for Home/Cards/Cortex can be toggled in **Settings → Background blur**.
 
