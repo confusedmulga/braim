@@ -1,8 +1,11 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
 
 import '../models/space.dart';
-import '../models/tweet_card.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 
@@ -18,6 +21,8 @@ class SharePopupApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const SharePopupScreen(),
     );
   }
@@ -57,6 +62,9 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
     } catch (_) {}
     final match = RegExp(r'https?://\S+').firstMatch(shared ?? '');
     final data = await StorageService.instance.load();
+    AppPalette.dark = data.darkFollowSystem
+        ? PlatformDispatcher.instance.platformBrightness == Brightness.dark
+        : data.darkMode;
     if (!mounted) return;
     setState(() {
       _url = match?.group(0);
@@ -70,12 +78,15 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
     }
   }
 
+  // Saves go through the share inbox (one file per share): this engine never
+  // writes the main data file, so it can't race the main app's own saves.
+  // The main app drains the inbox on next launch/resume and de-duplicates.
+
   Future<void> _saveTo(String? spaceId, String label) async {
     if (_url == null || _savedTo != null) return;
     setState(() => _savedTo = label);
-    final data = await StorageService.instance.load();
-    data.cards.add(TweetCard(url: _url!, spaceId: spaceId));
-    await StorageService.instance.save(data);
+    await StorageService.instance
+        .saveShareInbox({'url': _url, 'spaceId': spaceId});
     await Future.delayed(const Duration(milliseconds: 650));
     _close();
   }
@@ -85,11 +96,8 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
     final name = _folderCtrl.text.trim();
     if (name.isEmpty || _url == null || _savedTo != null) return;
     setState(() => _savedTo = name);
-    final data = await StorageService.instance.load();
-    final space = Space(name: name);
-    data.spaces.add(space);
-    data.cards.add(TweetCard(url: _url!, spaceId: space.id));
-    await StorageService.instance.save(data);
+    await StorageService.instance
+        .saveShareInbox({'url': _url, 'newFolderName': name});
     await Future.delayed(const Duration(milliseconds: 650));
     _close();
   }
@@ -117,7 +125,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                 margin: const EdgeInsets.fromLTRB(14, 0, 14, 18),
                 constraints: const BoxConstraints(maxHeight: 420),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppPalette.sheet,
                   borderRadius: BorderRadius.circular(26),
                   boxShadow: [
                     BoxShadow(
@@ -162,8 +170,8 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
               color: Color(0xFF34A853), size: 34),
           const SizedBox(height: 8),
           Text(
-            'Saved to $_savedTo',
-            style: const TextStyle(
+            context.t.savedToName(_savedTo!),
+            style: TextStyle(
               fontWeight: FontWeight.w700,
               color: AppPalette.inkPrimary,
             ),
@@ -175,11 +183,11 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
 
   Widget _pickerBody() {
     if (_url == null) {
-      return const SizedBox(
+      return SizedBox(
         height: 90,
         child: Center(
           child: Text(
-            'No link found in the shared text',
+            context.t.noLinkFound,
             style: TextStyle(color: AppPalette.inkSecondary),
           ),
         ),
@@ -197,8 +205,8 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                   width: 30, height: 30, fit: BoxFit.cover),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'Save to Braim',
+            Text(
+              context.t.saveToBraim,
               style: TextStyle(
                 fontSize: 16.5,
                 fontWeight: FontWeight.w800,
@@ -207,7 +215,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
             ),
             const Spacer(),
             IconButton(
-              icon: const Icon(Icons.close_rounded,
+              icon: Icon(Icons.close_rounded,
                   size: 20, color: AppPalette.inkSecondary),
               onPressed: _close,
               visualDensity: VisualDensity.compact,
@@ -220,7 +228,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style:
-              const TextStyle(fontSize: 12.5, color: AppPalette.inkSecondary),
+              TextStyle(fontSize: 12.5, color: AppPalette.inkSecondary),
         ),
         const SizedBox(height: 10),
         if (_creatingFolder)
@@ -233,13 +241,13 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                     controller: _folderCtrl,
                     autofocus: true,
                     onSubmitted: (_) => _createFolderAndSave(),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 14.5, color: AppPalette.inkPrimary),
                     decoration: InputDecoration(
                       isDense: true,
-                      hintText: 'Folder name',
+                      hintText: context.t.folderName,
                       hintStyle:
-                          const TextStyle(color: AppPalette.inkSecondary),
+                          TextStyle(color: AppPalette.inkSecondary),
                       filled: true,
                       fillColor: Colors.black.withValues(alpha: 0.05),
                       border: OutlineInputBorder(
@@ -252,7 +260,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _createFolderAndSave,
-                  child: const Text('Save'),
+                  child: Text(context.t.save),
                 ),
               ],
             ),
@@ -265,14 +273,14 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
               if (!_creatingFolder)
                 _option(
                   icon: Icons.create_new_folder_outlined,
-                  label: 'New folder',
-                  sub: 'Create & save',
+                  label: context.t.newFolder,
+                  sub: context.t.createAndSave,
                   onTap: () => setState(() => _creatingFolder = true),
                 ),
               _option(
                 icon: Icons.style_rounded,
-                label: 'Cards',
-                sub: 'No folder',
+                label: context.t.tabCards,
+                sub: context.t.noFolder,
                 onTap: () => _saveTo(null, 'Cards'),
               ),
               for (final s in _spaces)
@@ -320,7 +328,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: AppPalette.inkPrimary,
@@ -330,7 +338,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
               if (sub != null)
                 Text(
                   sub,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12, color: AppPalette.inkSecondary),
                 ),
             ],

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../models/note.dart';
@@ -48,15 +50,15 @@ class _AddToSpaceSheet extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
-                child: Text('Add to $spaceName',
-                    style: const TextStyle(
+                child: Text(context.t.addToName(spaceName),
+                    style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 16,
                         color: AppPalette.inkPrimary)),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-                child: Text('Tap an item to add or remove it from this folder.',
+                child: Text(context.t.addRemoveHint,
                     style: TextStyle(
                         fontSize: 12.5, color: AppPalette.inkSecondary)),
               ),
@@ -67,7 +69,7 @@ class _AddToSpaceSheet extends StatelessWidget {
                     if (notes.isEmpty && cards.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(20),
-                        child: Text('No notes or cards yet.',
+                        child: Text(context.t.noNotesOrCards,
                             style:
                                 TextStyle(color: AppPalette.inkSecondary)),
                       ),
@@ -133,7 +135,7 @@ class _AddToSpaceSheet extends StatelessWidget {
       title: Text(title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppPalette.inkPrimary)),
+          style: TextStyle(color: AppPalette.inkPrimary)),
       trailing: Icon(
         inSpace ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
         color: inSpace ? const Color(0xFF3BA776) : AppPalette.inkSecondary,

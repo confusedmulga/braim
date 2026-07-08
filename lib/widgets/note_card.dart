@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 import '../models/note.dart';
 import '../models/space.dart';
 import '../theme/app_theme.dart';
@@ -31,19 +33,35 @@ class NoteCard extends StatelessWidget {
       child: GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: GlassEdge(
+      child: FlatCard(
         borderRadius: 22,
-        blur: 0,
-        fill: AppPalette.cardFill,
-        padding: EdgeInsets.zero,
-        shadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-        child: Column(
+        fill: NoteColors.resolve(note.colorValue),
+        child: Stack(
+          children: [
+            _cardBody(context, thumb, preview),
+            if (note.pinned)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withValues(alpha: 0.22),
+                  ),
+                  child: const Icon(Icons.push_pin_rounded,
+                      size: 12, color: Colors.white),
+                ),
+              ),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  Widget _cardBody(BuildContext context, String? thumb, String preview) {
+    return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -72,7 +90,7 @@ class NoteCard extends StatelessWidget {
                       note.title.trim(),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppPalette.inkPrimary,
@@ -85,7 +103,7 @@ class NoteCard extends StatelessWidget {
                       preview,
                       maxLines: thumb != null ? 4 : 8,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         height: 1.35,
                         color: AppPalette.inkSecondary,
@@ -94,8 +112,8 @@ class NoteCard extends StatelessWidget {
                   if (preview.isEmpty &&
                       note.title.trim().isEmpty &&
                       thumb == null)
-                    const Text(
-                      'Empty note',
+                    Text(
+                      context.t.emptyNote,
                       style: TextStyle(
                         fontStyle: FontStyle.italic,
                         color: AppPalette.inkSecondary,
@@ -105,12 +123,12 @@ class NoteCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.photo_library_outlined,
+                        Icon(Icons.photo_library_outlined,
                             size: 15, color: AppPalette.inkSecondary),
                         const SizedBox(width: 4),
                         Text(
-                          '${note.imagePaths.length} photos',
-                          style: const TextStyle(
+                          context.t.photosCount(note.imagePaths.length),
+                          style: TextStyle(
                             fontSize: 12,
                             color: AppPalette.inkSecondary,
                           ),
@@ -122,9 +140,6 @@ class NoteCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-      ),
     );
   }
 
@@ -138,7 +153,7 @@ class NoteCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.folder_rounded,
+          Icon(Icons.folder_rounded,
               size: 13, color: AppPalette.inkSecondary),
           const SizedBox(width: 5),
           Flexible(
@@ -146,7 +161,7 @@ class NoteCard extends StatelessWidget {
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12, color: AppPalette.inkSecondary),
             ),
           ),

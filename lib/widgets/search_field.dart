@@ -1,30 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
+import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 
 /// A compact, deliberately-narrow liquid-glass search field (same glass as the
 /// navigation island). [widthFactor] keeps it less wide than the full screen.
-class SearchField extends StatelessWidget {
+/// Shows a clear ✕ on the right whenever there is text.
+class SearchField extends StatefulWidget {
   const SearchField({
     super.key,
     required this.hint,
     required this.onChanged,
     this.widthFactor = 0.74,
+    this.trailing,
   });
 
   final String hint;
   final ValueChanged<String> onChanged;
   final double widthFactor;
 
+  /// Optional action shown in the empty space to the right of the field
+  /// (e.g. the feed sort button).
+  final Widget? trailing;
+
+  @override
+  State<SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<SearchField> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _clear() {
+    _ctrl.clear();
+    widget.onChanged('');
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-      child: Align(
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
         alignment: Alignment.centerLeft,
         child: FractionallySizedBox(
-          widthFactor: widthFactor,
+          widthFactor: widget.widthFactor,
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
@@ -38,8 +67,8 @@ class SearchField extends StatelessWidget {
             ),
             child: FakeGlass(
             shape: const LiquidRoundedSuperellipse(borderRadius: 22),
-            settings: const LiquidGlassSettings(
-              glassColor: Color(0xA6FFFFFF),
+            settings: LiquidGlassSettings(
+              glassColor: AppPalette.bubbleGlass,
               blur: 14,
             ),
             child: SizedBox(
@@ -48,19 +77,24 @@ class SearchField extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
-                    const Icon(Icons.search_rounded,
+                    Icon(Icons.search_rounded,
                         size: 18, color: AppPalette.inkSecondary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextField(
-                        onChanged: onChanged,
-                        style: const TextStyle(
+                        controller: _ctrl,
+                        onChanged: (v) {
+                          widget.onChanged(v);
+                          // Rebuild so the clear button tracks the text.
+                          setState(() {});
+                        },
+                        style: TextStyle(
                             fontSize: 14, color: AppPalette.inkPrimary),
                         cursorColor: AppPalette.inkPrimary,
                         decoration: InputDecoration(
                           isDense: true,
-                          hintText: hint,
-                          hintStyle: const TextStyle(
+                          hintText: widget.hint,
+                          hintStyle: TextStyle(
                               fontSize: 14, color: AppPalette.inkSecondary),
                           border: InputBorder.none,
                           contentPadding:
@@ -68,6 +102,20 @@ class SearchField extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (_ctrl.text.isNotEmpty)
+                      Semantics(
+                        button: true,
+                        label: context.t.clearSearch,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _clear,
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(Icons.close_rounded,
+                                size: 17, color: AppPalette.inkSecondary),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -75,6 +123,13 @@ class SearchField extends StatelessWidget {
             ),
           ),
         ),
+      ),
+          ),
+          if (widget.trailing != null) ...[
+            const SizedBox(width: 10),
+            widget.trailing!,
+          ],
+        ],
       ),
     );
   }

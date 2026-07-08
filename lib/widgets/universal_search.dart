@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../models/note.dart';
@@ -30,15 +32,30 @@ class UniversalSearchResults extends StatelessWidget {
           n.textPreview.toLowerCase().contains(q) ||
           (space?.name.toLowerCase().contains(q) ?? false);
     }).toList();
-    final cards = state.cards.where((c) {
+    bool cardMatches(TweetCard c) {
       return c.text.toLowerCase().contains(q) ||
           c.noteTitle.toLowerCase().contains(q) ||
           c.authorName.toLowerCase().contains(q) ||
           c.authorHandle.toLowerCase().contains(q) ||
           c.url.toLowerCase().contains(q);
-    }).toList();
+    }
 
-    if (spaces.isEmpty && notes.isEmpty && cards.isEmpty) {
+    bool noteMatches(Note n) {
+      final space = state.spaceById(n.spaceId);
+      return n.title.toLowerCase().contains(q) ||
+          n.textPreview.toLowerCase().contains(q) ||
+          (space?.name.toLowerCase().contains(q) ?? false);
+    }
+
+    final cards = state.cards.where(cardMatches).toList();
+    final archivedNotes = state.archivedNotes.where(noteMatches).toList();
+    final archivedCards = state.archivedCards.where(cardMatches).toList();
+    final archivedCount = archivedNotes.length + archivedCards.length;
+
+    if (spaces.isEmpty &&
+        notes.isEmpty &&
+        cards.isEmpty &&
+        archivedCount == 0) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -46,7 +63,7 @@ class UniversalSearchResults extends StatelessWidget {
             Icon(Icons.search_off_rounded,
                 size: 56, color: AppPalette.textSecondary),
             const SizedBox(height: 12),
-            Text('No matches',
+            Text(context.t.noMatches,
                 style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -60,24 +77,26 @@ class UniversalSearchResults extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 40, 18, 150),
       children: [
         if (spaces.isNotEmpty) ...[
-          _label('CORTEX'),
+          _label(context, context.t.sectionCortex),
           for (final s in spaces)
             _ResultTile(
               icon: Icons.folder_rounded,
               title: s.name,
-              subtitle: _countLabel(state.itemCountForSpace(s.id)),
+              subtitle: context.t.itemsCount(state.itemCountForSpace(s.id)),
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => SpaceDetailScreen(spaceId: s.id))),
             ),
         ],
         if (notes.isNotEmpty) ...[
-          _label('NOTES'),
+          _label(context, context.t.sectionNotes),
           for (final n in notes)
             _ResultTile(
               icon: Icons.lightbulb_outline_rounded,
               title: n.title.trim().isNotEmpty
                   ? n.title.trim()
-                  : (n.textPreview.isNotEmpty ? n.textPreview : 'Empty note'),
+                  : (n.textPreview.isNotEmpty
+                      ? n.textPreview
+                      : context.t.emptyNote),
               subtitle: n.title.trim().isNotEmpty && n.textPreview.isNotEmpty
                   ? n.textPreview
                   : null,
@@ -85,7 +104,7 @@ class UniversalSearchResults extends StatelessWidget {
             ),
         ],
         if (cards.isNotEmpty) ...[
-          _label('CARDS'),
+          _label(context, context.t.sectionCards),
           for (final c in cards)
             _ResultTile(
               icon: Icons.link_rounded,
@@ -95,11 +114,33 @@ class UniversalSearchResults extends StatelessWidget {
                   builder: (_) => CardDetailScreen(card: c))),
             ),
         ],
+        if (archivedCount > 0) ...[
+          _label(context, context.t.sectionArchived),
+          for (final n in archivedNotes)
+            _ResultTile(
+              icon: Icons.archive_outlined,
+              title: n.title.trim().isNotEmpty
+                  ? n.title.trim()
+                  : (n.textPreview.isNotEmpty
+                      ? n.textPreview
+                      : context.t.emptyNote),
+              subtitle: n.title.trim().isNotEmpty && n.textPreview.isNotEmpty
+                  ? n.textPreview
+                  : null,
+              onTap: () => _openNote(context, n),
+            ),
+          for (final c in archivedCards)
+            _ResultTile(
+              icon: Icons.archive_outlined,
+              title: _cardTitle(c),
+              subtitle: c.text.isNotEmpty ? c.text : c.url,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => CardDetailScreen(card: c))),
+            ),
+        ],
       ],
     );
   }
-
-  String _countLabel(int n) => n == 1 ? '1 item' : '$n items';
 
   String _cardTitle(TweetCard c) {
     if (c.noteTitle.trim().isNotEmpty) return c.noteTitle.trim();
@@ -113,7 +154,7 @@ class UniversalSearchResults extends StatelessWidget {
         builder: (_) => NoteEditorScreen(note: n, isNew: false)));
   }
 
-  Widget _label(String text) {
+  Widget _label(BuildContext context, String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 14, 4, 8),
       child: Text(
@@ -173,7 +214,7 @@ class _ResultTile extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppPalette.inkPrimary,
@@ -184,7 +225,7 @@ class _ResultTile extends StatelessWidget {
                         subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12.5,
                           color: AppPalette.inkSecondary,
                         ),

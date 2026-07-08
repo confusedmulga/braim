@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -9,6 +11,12 @@ import '../services/backup_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
+
+/// Human-readable "last backed up" line for the backup row.
+String _lastBackupText(BuildContext context, DateTime? last) {
+  if (last == null) return context.t.lastBackupNever;
+  return context.t.lastBackupAgo(DateTime.now().difference(last).inDays);
+}
 
 /// Settings opens as a transparent overlay so the screen the user came from
 /// stays visible (and blurred) behind it.
@@ -39,17 +47,62 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _backup(BuildContext context) async {
+    final t = context.t;
     final messenger = ScaffoldMessenger.of(context);
+    final appState = context.read<AppState>();
+    final nav = Navigator.of(context, rootNavigator: true);
+    final progress = ValueNotifier<double?>(null);
+    var dialogOpen = true;
+    // Progress while the zip streams to disk.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: GlassPanel(
+          borderRadius: 22,
+          color: AppPalette.surfaceGlass,
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.t.preparingBackup,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppPalette.inkPrimary)),
+              const SizedBox(height: 14),
+              ValueListenableBuilder<double?>(
+                valueListenable: progress,
+                builder: (_, v, _) => ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(value: v, minHeight: 6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).then((_) => dialogOpen = false);
     try {
-      final file = await BackupService.instance.exportToTempFile();
+      // Pending coalesced edits must reach disk before we zip it.
+      if (context.mounted) await context.read<AppState>().flushNow();
+      final file = await BackupService.instance.exportToTempFile(
+        onProgress: (done, total) =>
+            progress.value = total == 0 ? null : done / total,
+      );
+      if (dialogOpen) nav.pop();
       // ignore: deprecated_member_use
       await Share.shareXFiles([XFile(file.path)], text: 'Braim backup');
+      await appState.markBackedUp();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Backup failed: $e')));
+      if (dialogOpen) nav.pop();
+      messenger.showSnackBar(SnackBar(content: Text(t.backupFailed(e.toString()))));
     }
   }
 
   Future<void> _restore(BuildContext context) async {
+    final t = context.t;
     final messenger = ScaffoldMessenger.of(context);
     final appState = context.read<AppState>();
     final nav = Navigator.of(context);
@@ -62,14 +115,16 @@ class SettingsScreen extends StatelessWidget {
       if (path == null || !context.mounted) return;
       final ok = await _confirmRestore(context);
       if (ok != true) return;
+      // Nothing pending may overwrite the restored file afterwards.
+      await appState.flushNow();
       await BackupService.instance.restoreFromFile(path);
       await appState.init();
       nav.pop();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Backup restored')),
+        SnackBar(content: Text(t.backupRestored)),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text(t.restoreFailed(e.toString()))));
     }
   }
 
@@ -86,14 +141,13 @@ class SettingsScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Restore backup?',
+              Text(context.t.restoreBackupTitle,
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
               const SizedBox(height: 8),
-              Text('This replaces your current notes, cards and folders '
-                  'with the ones in the backup.',
+              Text(context.t.restoreBackupBody,
                   style: TextStyle(color: AppPalette.inkSecondary)),
               const SizedBox(height: 16),
               Row(
@@ -101,11 +155,11 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel')),
+                      child: Text(context.t.cancel)),
                   const SizedBox(width: 8),
                   FilledButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Restore')),
+                      child: Text(context.t.restore)),
                 ],
               ),
             ],
@@ -128,14 +182,14 @@ class SettingsScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Clear all data?',
+              Text(context.t.clearAllDataTitle,
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
               const SizedBox(height: 8),
               Text(
-                'This permanently deletes every note, space and card on this device.',
+                context.t.clearAllDataBody,
                 style: TextStyle(color: AppPalette.inkSecondary),
               ),
               const SizedBox(height: 16),
@@ -144,13 +198,13 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel')),
+                      child: Text(context.t.cancel)),
                   const SizedBox(width: 8),
                   FilledButton(
                     style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFE5557A)),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Delete'),
+                    child: Text(context.t.delete),
                   ),
                 ],
               ),
@@ -174,7 +228,7 @@ class SettingsScreen extends StatelessWidget {
         // Blurs whatever screen is painted behind this transparent route.
         filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
         child: Container(
-          color: Colors.white.withValues(alpha: 0.60),
+          color: AppPalette.scrimFill,
           child: SafeArea(
             child: Column(
               children: [
@@ -186,7 +240,7 @@ class SettingsScreen extends StatelessWidget {
                         icon: const Icon(Icons.arrow_back_rounded),
                         onPressed: () => Navigator.pop(context),
                       ),
-                      const Text('Settings',
+                      Text(context.t.settings,
                           style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
@@ -198,51 +252,103 @@ class SettingsScreen extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.all(18),
                     children: [
-                      _SectionLabel('Backup'),
+                      _SectionLabel(context.t.appearance),
                       GlassPanel(
                         borderRadius: 20,
-                        color: const Color(0xB3FFFFFF),
+                        color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
-                        onTap: () => _backup(context),
-                        child: const ListTile(
-                          leading: Icon(Icons.backup_outlined,
+                        child: ListTile(
+                          leading: Icon(Icons.brightness_6_outlined,
                               color: AppPalette.inkPrimary),
-                          title: Text('Back up (data + images)',
+                          title: Text(context.t.appearance,
                               style:
                                   TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text('Share to Google Drive, Files, …',
+                          trailing: DropdownButton<String>(
+                            value: state.darkFollowSystem
+                                ? 'system'
+                                : (state.darkMode ? 'dark' : 'light'),
+                            underline: const SizedBox.shrink(),
+                            borderRadius: BorderRadius.circular(16),
+                            dropdownColor: AppPalette.sheet,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppPalette.inkPrimary,
+                            ),
+                            iconEnabledColor: AppPalette.inkSecondary,
+                            items: [
+                              DropdownMenuItem(
+                                value: 'system',
+                                child: Text(context.t.appearanceSystem),
+                              ),
+                              DropdownMenuItem(
+                                value: 'light',
+                                child: Text(context.t.appearanceLight),
+                              ),
+                              DropdownMenuItem(
+                                value: 'dark',
+                                child: Text(context.t.appearanceDark),
+                              ),
+                            ],
+                            onChanged: (v) {
+                              if (v == null) return;
+                              context.read<AppState>().setAppearance(
+                                    followSystem: v == 'system',
+                                    dark: v == 'dark',
+                                  );
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _SectionLabel(context.t.backupSection),
+                      GlassPanel(
+                        borderRadius: 20,
+                        color: AppPalette.surfaceGlass,
+                        padding: EdgeInsets.zero,
+                        onTap: () => _backup(context),
+                        child: ListTile(
+                          leading: Icon(Icons.backup_outlined,
+                              color: AppPalette.inkPrimary),
+                          title: Text(context.t.backupTitle,
+                              style:
+                                  TextStyle(color: AppPalette.inkPrimary)),
+                          subtitle: Text(
+                              _lastBackupText(context, state.lastBackupAt),
                               style: TextStyle(color: Color(0xFF5E5F69))),
                         ),
                       ),
                       const SizedBox(height: 12),
                       GlassPanel(
                         borderRadius: 20,
-                        color: const Color(0xB3FFFFFF),
+                        color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
                         onTap: () => _restore(context),
-                        child: const ListTile(
+                        child: ListTile(
                           leading: Icon(Icons.settings_backup_restore_rounded,
                               color: AppPalette.inkPrimary),
-                          title: Text('Restore from backup',
+                          title: Text(context.t.restoreFromBackup,
                               style:
                                   TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text('Pick a .zip backup file',
+                          subtitle: Text(context.t.restoreSubtitle,
                               style: TextStyle(color: Color(0xFF5E5F69))),
                         ),
                       ),
                       const SizedBox(height: 24),
-                      _SectionLabel('Storage'),
+                      _SectionLabel(context.t.storageSection),
                       GlassPanel(
                         borderRadius: 20,
-                        color: const Color(0xB3FFFFFF),
+                        color: AppPalette.surfaceGlass,
                         padding: const EdgeInsets.all(8),
                         child: Column(
                           children: [
-                            _statRow(Icons.lightbulb_outline_rounded, 'Notes',
+                            _statRow(Icons.lightbulb_outline_rounded,
+                                context.t.statNotes,
                                 state.noteCount),
-                            _statRow(Icons.grid_view_rounded, 'Cortex',
+                            _statRow(Icons.grid_view_rounded,
+                                context.t.statCortex,
                                 state.spaceCount),
-                            _statRow(Icons.style_outlined, 'Cards',
+                            _statRow(Icons.style_outlined, context.t.statCards,
                                 state.cardCount),
                           ],
                         ),
@@ -250,32 +356,32 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       GlassPanel(
                         borderRadius: 20,
-                        color: const Color(0xB3FFFFFF),
+                        color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
                         onTap: () => _confirmClear(context),
                         child: ListTile(
                           leading: const Icon(Icons.delete_forever_rounded,
                               color: Color(0xFFFF8A9B)),
-                          title: const Text('Clear all data',
+                          title: Text(context.t.clearAllData,
                               style: TextStyle(color: Color(0xFFFF8A9B))),
                         ),
                       ),
                       const SizedBox(height: 24),
-                      _SectionLabel('About'),
+                      _SectionLabel(context.t.aboutSection),
                       GlassPanel(
                         borderRadius: 20,
-                        color: const Color(0xB3FFFFFF),
+                        color: AppPalette.surfaceGlass,
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Braim',
+                            Text(context.t.appTitle,
                                 style: TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 16,
                                     color: AppPalette.inkPrimary)),
                             const SizedBox(height: 4),
-                            Text('A glassy notes app · v1.0 (prototype)',
+                            Text(context.t.aboutLine,
                                 style: TextStyle(
                                     color: AppPalette.inkSecondary,
                                     fontSize: 13)),
@@ -296,7 +402,7 @@ class SettingsScreen extends StatelessWidget {
   Widget _statRow(IconData icon, String label, int value) {
     return ListTile(
       leading: Icon(icon, color: AppPalette.inkPrimary),
-      title: Text(label, style: const TextStyle(color: AppPalette.inkPrimary)),
+      title: Text(label, style: TextStyle(color: AppPalette.inkPrimary)),
       trailing: Text('$value',
           style: TextStyle(
               color: AppPalette.inkSecondary,

@@ -2,6 +2,9 @@ import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +13,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_bubble.dart';
+import '../widgets/glass_morph.dart';
 import '../widgets/move_to_space_sheet.dart';
 import '../widgets/note_background.dart';
 import '../widgets/note_body_editor.dart';
@@ -108,9 +112,29 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void _close() {
     final state = context.read<AppState>();
     _collect();
+    // A brand-new note that has content doesn't belong back in the + button
+    // it morphed out of — slide the sheet down instead so it doesn't read
+    // as the note being discarded.
+    if (widget.isNew && !_note.isEmpty) GlassMorph.slideCloseOf(context);
     setState(() => _closing = true);
     Navigator.of(context).pop();
     _persistLater(state);
+  }
+
+  /// Copies the whole note (title + text) to the clipboard for sharing.
+  void _copyNote() {
+    _collect();
+    final buffer = StringBuffer();
+    if (_note.title.trim().isNotEmpty) buffer.writeln(_note.title.trim());
+    final body = _note.textPreview;
+    if (body.isNotEmpty) {
+      if (buffer.isNotEmpty) buffer.writeln();
+      buffer.write(body);
+    }
+    Clipboard.setData(ClipboardData(text: buffer.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.t.noteCopied)),
+    );
   }
 
   Future<void> _pickSpace() async {
@@ -130,6 +154,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         _note.backgroundAsset = selected == '__none__' ? null : selected);
   }
 
+  Future<void> _pickColor() async {
+    final selected =
+        await showNoteColorPicker(context, current: _note.colorValue);
+    if (selected == null) return; // dismissed
+    setState(() =>
+        _note.colorValue = selected == NoteColors.none ? null : selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -145,17 +177,25 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       },
       child: NoteBackground(
         asset: _note.backgroundAsset,
+        color: NoteColors.resolve(_note.colorValue),
         child: Scaffold(
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: true,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             foregroundColor: AppPalette.inkPrimary,
+            // Status-bar clock/battery must stay readable over the sheet:
+            // dark icons on the light sheet, light icons on the dark one.
+            systemOverlayStyle: (AppPalette.dark
+                    ? SystemUiOverlayStyle.light
+                    : SystemUiOverlayStyle.dark)
+                .copyWith(statusBarColor: Colors.transparent),
             leadingWidth: 64,
             leading: Padding(
               padding: const EdgeInsets.only(left: 10),
               child: GlassBubble(
                 icon: Icons.chevron_left_rounded,
+                tooltip: context.t.back,
                 iconColor: AppPalette.inkPrimary,
                 glassColor: const Color(0x14000000),
                 iconSize: 28,
@@ -164,9 +204,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
             actions: [
+              IconButton(
+                tooltip: context.t.copyNote,
+                icon: const Icon(Icons.copy_all_rounded),
+                onPressed: _copyNote,
+              ),
               if (!widget.isNew)
                 IconButton(
-                  tooltip: _note.archived ? 'Unarchive' : 'Archive',
+                  tooltip: _note.archived ? context.t.unarchive : context.t.archive,
                   icon: Icon(_note.archived
                       ? Icons.unarchive_outlined
                       : Icons.archive_outlined),
@@ -207,11 +252,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.folder_rounded,
+                              Icon(Icons.folder_rounded,
                                   size: 13, color: AppPalette.inkSecondary),
                               const SizedBox(width: 6),
                               Text(space.name,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       color: AppPalette.inkSecondary)),
                             ],
                           ),
@@ -224,7 +269,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     blur: true,
                     child: TextField(
                       controller: _titleCtrl,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: AppPalette.inkPrimary,
@@ -235,7 +280,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       // on its own instead of scrolling with the note.
                       scrollPhysics: const NeverScrollableScrollPhysics(),
                       decoration: InputDecoration(
-                        hintText: 'Title',
+                        hintText: context.t.title,
                         hintStyle: TextStyle(
                           color:
                               AppPalette.inkSecondary.withValues(alpha: 0.6),
@@ -284,6 +329,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     onAddPhotos: () => _editorKey.currentState?.addPhotos(),
                     onPickSpace: _pickSpace,
                     onPickTheme: _pickTheme,
+                    onPickColor: _pickColor,
                   ),
                 ),
               ],
@@ -366,7 +412,7 @@ class _StaticBody extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(
             plain,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16.5,
               height: 1.4,
               color: AppPalette.inkPrimary,

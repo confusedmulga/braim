@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
@@ -197,7 +199,10 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
         focusNode: _focusNodes[block.id]!,
         scrollController: _scrollCtrls[block.id]!,
         config: QuillEditorConfig(
-          placeholder: 'Write something…',
+          // Only the lone text block of an empty note gets the hint — the
+          // filler blocks around images must stay visually empty.
+          placeholder:
+              _blocks.length == 1 ? context.t.writeSomething : null,
           scrollable: false,
           expands: false,
           autoFocus: false,
@@ -216,19 +221,46 @@ DefaultStyles _quillStyles(bool onLight) {
   final placeholder = onLight
       ? AppPalette.inkSecondary.withValues(alpha: 0.7)
       : AppPalette.textSecondary.withValues(alpha: 0.7);
-  TextStyle base(double size, FontWeight w) =>
-      TextStyle(fontSize: size, height: 1.4, color: text, fontWeight: w);
+  // Quill paints spans directly (no DefaultTextStyle inheritance), so the
+  // family must be spelled out here or the editor falls back to Roboto.
+  TextStyle base(double size, FontWeight w) => TextStyle(
+      fontSize: size,
+      height: 1.4,
+      color: text,
+      fontWeight: w,
+      fontFamily: 'SpaceGrotesk');
   const hs = HorizontalSpacing(0, 0);
   const vs = VerticalSpacing(6, 0);
   return DefaultStyles(
     paragraph: DefaultTextBlockStyle(
         base(16.5, FontWeight.w400), hs, vs, const VerticalSpacing(0, 0), null),
+    // Without these, list lines and their bullets/numbers fall back to the
+    // theme's (white) text style and vanish on the white sheet.
+    lists: DefaultListBlockStyle(
+      base(16.5, FontWeight.w400),
+      hs,
+      vs,
+      const VerticalSpacing(0, 6),
+      null,
+      null,
+    ),
+    leading: DefaultTextBlockStyle(
+      base(16.5, FontWeight.w400),
+      hs,
+      const VerticalSpacing(0, 0),
+      const VerticalSpacing(0, 0),
+      null,
+    ),
     h1: DefaultTextBlockStyle(base(26, FontWeight.w800), hs,
         const VerticalSpacing(10, 0), const VerticalSpacing(0, 0), null),
     h2: DefaultTextBlockStyle(base(21, FontWeight.w700), hs,
         const VerticalSpacing(8, 0), const VerticalSpacing(0, 0), null),
     placeHolder: DefaultTextBlockStyle(
-      TextStyle(fontSize: 16.5, height: 1.4, color: placeholder),
+      TextStyle(
+          fontSize: 16.5,
+          height: 1.4,
+          color: placeholder,
+          fontFamily: 'SpaceGrotesk'),
       hs,
       vs,
       const VerticalSpacing(0, 0),
@@ -237,9 +269,9 @@ DefaultStyles _quillStyles(bool onLight) {
   );
 }
 
-/// On-light colours for the white floating island.
-const _islandPrimary = Color(0xFF202126);
-const _islandSecondary = Color(0xFF6B6C77);
+// Island ink colours follow the theme.
+Color get _islandPrimary => AppPalette.inkPrimary;
+Color get _islandSecondary => AppPalette.inkSecondary;
 
 /// The standalone floating editor island: a white, frosted, faintly refractive
 /// panel holding the format controls, add-photos and move-to-cortex actions.
@@ -250,11 +282,13 @@ class EditorBottomBar extends StatelessWidget {
     required this.onAddPhotos,
     required this.onPickSpace,
     this.onPickTheme,
+    this.onPickColor,
   });
 
   final ValueNotifier<QuillController?> activeController;
   final VoidCallback onAddPhotos;
   final VoidCallback onPickSpace;
+  final VoidCallback? onPickColor;
 
   /// When provided (note editor only), shows a button to change the note's
   /// background between the add-photos and move-to-cortex buttons.
@@ -275,29 +309,36 @@ class EditorBottomBar extends StatelessWidget {
               Row(
                 children: [
                   IconButton(
-                    tooltip: 'Add photos',
-                    icon: const Icon(Icons.add_photo_alternate_outlined,
+                    tooltip: context.t.addPhotos,
+                    icon: Icon(Icons.add_photo_alternate_outlined,
                         color: _islandPrimary),
                     onPressed: onAddPhotos,
                   ),
+                  if (onPickColor != null)
+                    IconButton(
+                      tooltip: context.t.noteColor,
+                      icon: Icon(Icons.palette_outlined,
+                          color: _islandPrimary),
+                      onPressed: onPickColor,
+                    ),
                   if (onPickTheme != null)
                     IconButton(
-                      tooltip: 'Background',
-                      icon: const Icon(Icons.wallpaper_rounded,
+                      tooltip: context.t.background,
+                      icon: Icon(Icons.wallpaper_rounded,
                           color: _islandPrimary),
                       onPressed: onPickTheme,
                     ),
                   IconButton(
-                    tooltip: 'Cortex',
-                    icon: const Icon(Icons.folder_outlined,
+                    tooltip: context.t.tabCortex,
+                    icon: Icon(Icons.folder_outlined,
                         color: _islandPrimary),
                     onPressed: onPickSpace,
                   ),
                   const Spacer(),
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 8),
                     child: Text(
-                      'Saved automatically',
+                      context.t.savedAutomatically,
                       style: TextStyle(fontSize: 12, color: _islandSecondary),
                     ),
                   ),
@@ -334,8 +375,8 @@ class _RefractiveIsland extends StatelessWidget {
       ),
       child: FakeGlass(
         shape: const LiquidRoundedSuperellipse(borderRadius: 28),
-        settings: const LiquidGlassSettings(
-          glassColor: Color(0xCCFFFFFF),
+        settings: LiquidGlassSettings(
+          glassColor: AppPalette.islandGlass,
           blur: 14,
         ),
         child: Padding(
@@ -364,9 +405,7 @@ class NoteFormatBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = onLight ? _islandPrimary : AppPalette.textPrimary;
     final secondary = onLight ? _islandSecondary : AppPalette.textSecondary;
-    final activeFill = onLight
-        ? Colors.black.withValues(alpha: 0.08)
-        : Colors.white.withValues(alpha: 0.20);
+    final activeFill = AppPalette.selFill;
     final sepColor = onLight
         ? Colors.black.withValues(alpha: 0.12)
         : Colors.white.withValues(alpha: 0.15);
@@ -379,7 +418,7 @@ class NoteFormatBar extends StatelessWidget {
             height: 40,
             child: Center(
               child: Text(
-                'Tap a line to format text',
+                context.t.tapLineToFormat,
                 style: TextStyle(fontSize: 12, color: secondary),
               ),
             ),
@@ -394,18 +433,58 @@ class NoteFormatBar extends StatelessWidget {
             final italic = attrs.containsKey(Attribute.italic.key);
             final underline = attrs.containsKey(Attribute.underline.key);
             final highlight = attrs.containsKey(Attribute.background.key);
+            final listVal = attrs[Attribute.list.key]?.value;
 
             void toggle(Attribute attr) {
               final on = attrs.containsKey(attr.key);
               c.formatSelection(on ? Attribute.clone(attr, null) : attr);
             }
 
+            void toggleList(Attribute attr) {
+              c.formatSelection(listVal == attr.value
+                  ? Attribute.clone(Attribute.list, null)
+                  : attr);
+            }
+
+            // Checkbox lists use the `list` key with a checked/unchecked value.
+            void toggleCheck() {
+              final isCheck = listVal == 'unchecked' || listVal == 'checked';
+              c.formatSelection(isCheck
+                  ? Attribute.clone(Attribute.list, null)
+                  : Attribute.unchecked);
+            }
+
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
+                  _IconToggle(
+                      tooltip: context.t.undo,
+                      icon: Icons.undo_rounded,
+                      active: false,
+                      primary: primary,
+                      secondary: c.hasUndo
+                          ? primary
+                          : secondary.withValues(alpha: 0.45),
+                      activeFill: activeFill,
+                      onTap: () {
+                        if (c.hasUndo) c.undo();
+                      }),
+                  _IconToggle(
+                      tooltip: context.t.redo,
+                      icon: Icons.redo_rounded,
+                      active: false,
+                      primary: primary,
+                      secondary: c.hasRedo
+                          ? primary
+                          : secondary.withValues(alpha: 0.45),
+                      activeFill: activeFill,
+                      onTap: () {
+                        if (c.hasRedo) c.redo();
+                      }),
+                  _vsep(sepColor),
                   _TextChip(
-                    label: 'Heading',
+                    label: context.t.heading,
                     active: headerVal == 1,
                     primary: primary,
                     secondary: secondary,
@@ -415,7 +494,7 @@ class NoteFormatBar extends StatelessWidget {
                         : Attribute.h1),
                   ),
                   _TextChip(
-                    label: 'Sub',
+                    label: context.t.subHeading,
                     active: headerVal == 2,
                     primary: primary,
                     secondary: secondary,
@@ -425,7 +504,7 @@ class NoteFormatBar extends StatelessWidget {
                         : Attribute.h2),
                   ),
                   _TextChip(
-                    label: 'Body',
+                    label: context.t.body,
                     active: headerVal == null,
                     primary: primary,
                     secondary: secondary,
@@ -435,6 +514,7 @@ class NoteFormatBar extends StatelessWidget {
                   ),
                   _vsep(sepColor),
                   _IconToggle(
+                      tooltip: context.t.bold,
                       icon: Icons.format_bold_rounded,
                       active: bold,
                       primary: primary,
@@ -442,6 +522,7 @@ class NoteFormatBar extends StatelessWidget {
                       activeFill: activeFill,
                       onTap: () => toggle(Attribute.bold)),
                   _IconToggle(
+                      tooltip: context.t.italic,
                       icon: Icons.format_italic_rounded,
                       active: italic,
                       primary: primary,
@@ -449,6 +530,7 @@ class NoteFormatBar extends StatelessWidget {
                       activeFill: activeFill,
                       onTap: () => toggle(Attribute.italic)),
                   _IconToggle(
+                      tooltip: context.t.underline,
                       icon: Icons.format_underlined_rounded,
                       active: underline,
                       primary: primary,
@@ -456,6 +538,7 @@ class NoteFormatBar extends StatelessWidget {
                       activeFill: activeFill,
                       onTap: () => toggle(Attribute.underline)),
                   _IconToggle(
+                    tooltip: context.t.highlight,
                     icon: Icons.highlight_rounded,
                     active: highlight,
                     primary: primary,
@@ -465,6 +548,31 @@ class NoteFormatBar extends StatelessWidget {
                         ? Attribute.clone(Attribute.background, null)
                         : Attribute.clone(Attribute.background, '#FFE082')),
                   ),
+                  _vsep(sepColor),
+                  _IconToggle(
+                      tooltip: context.t.bulletList,
+                      icon: Icons.format_list_bulleted_rounded,
+                      active: listVal == 'bullet',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => toggleList(Attribute.ul)),
+                  _IconToggle(
+                      tooltip: context.t.numberedList,
+                      icon: Icons.format_list_numbered_rounded,
+                      active: listVal == 'ordered',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => toggleList(Attribute.ol)),
+                  _IconToggle(
+                      tooltip: context.t.checklist,
+                      icon: Icons.checklist_rounded,
+                      active: listVal == 'unchecked' || listVal == 'checked',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: toggleCheck),
                 ],
               ),
             );
@@ -533,7 +641,9 @@ class _IconToggle extends StatelessWidget {
     required this.primary,
     required this.secondary,
     required this.activeFill,
+    this.tooltip,
   });
+  final String? tooltip;
   final IconData icon;
   final bool active;
   final VoidCallback onTap;
@@ -543,20 +653,28 @@ class _IconToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 1),
-      child: Material(
-        color: active ? activeFill : Colors.transparent,
+    Widget w = Material(
+      color: active ? activeFill : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Icon(icon, size: 20, color: active ? primary : secondary),
-          ),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, size: 20, color: active ? primary : secondary),
         ),
       ),
+    );
+    if (tooltip != null) {
+      w = Tooltip(
+        message: tooltip!,
+        child: Semantics(
+            button: true, selected: active, label: tooltip, child: w),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: w,
     );
   }
 }

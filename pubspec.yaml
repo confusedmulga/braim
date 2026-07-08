@@ -45,8 +45,12 @@ dependencies:
   flutter_quill: ^11.5.0
   flutter_localizations:
     sdk: flutter
-  animations: ^2.2.0
-  liquid_glass_renderer: ^0.2.0-dev.4
+  intl: any
+  # Dev-channel package (we only use its FakeGlass fallback) — pinned exact so
+  # a breaking dev release can never slip in.
+  liquid_glass_renderer: 0.2.0-dev.4
+  url_launcher: ^6.3.1
+  flutter_staggered_grid_view: ^0.7.0
   local_auth: ^3.0.1
   archive: ^4.0.9
   share_plus: ^12.0.2
@@ -63,6 +67,7 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+  path_provider_platform_interface: any
 
 flutter_launcher_icons:
   android: true
@@ -77,6 +82,7 @@ flutter_launcher_icons:
 
 # The following section is specific to Flutter packages.
 flutter:
+  generate: true
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
@@ -85,6 +91,20 @@ flutter:
 
   assets:
     - assets/
+    # OFL requires the license to travel with the font.
+    - assets/fonts/OFL-SpaceGrotesk.txt
+
+  # Space Grotesk (OFL) — the closest open-licensed face to the Claude app's
+  # Styrene B; bundled in the same three weights Claude uses.
+  fonts:
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/SpaceGrotesk-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/SpaceGrotesk-Bold.ttf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

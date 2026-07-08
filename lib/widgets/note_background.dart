@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 import '../theme/app_theme.dart';
 import 'glass.dart';
 
@@ -30,9 +32,14 @@ class NoteBackground extends StatelessWidget {
     super.key,
     required this.asset,
     required this.child,
+    this.color,
   });
 
   final String? asset;
+
+  /// Optional note colour tag; used as the flat background when no [asset] is
+  /// set (an asset takes precedence).
+  final Color? color;
   final Widget child;
 
   @override
@@ -41,7 +48,7 @@ class NoteBackground extends StatelessWidget {
       return Stack(
         fit: StackFit.expand,
         children: [
-          const ColoredBox(color: Colors.white),
+          ColoredBox(color: color ?? AppPalette.sheet),
           child,
         ],
       );
@@ -50,7 +57,7 @@ class NoteBackground extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Image.asset(asset!, fit: BoxFit.cover),
-        ColoredBox(color: Colors.white.withValues(alpha: 0.68)),
+        ColoredBox(color: AppPalette.noteTint),
         child,
       ],
     );
@@ -77,9 +84,9 @@ Future<String?> showNoteBackgroundPicker(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(left: 4, bottom: 12),
-              child: Text('Note background',
+              child: Text(context.t.noteBackground,
                   style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
@@ -157,8 +164,96 @@ class _SwatchNone extends StatelessWidget {
             width: 2.5,
           ),
         ),
-        child: const Icon(Icons.format_color_reset_rounded,
+        child: Icon(Icons.format_color_reset_rounded,
             color: AppPalette.inkSecondary),
+      ),
+    );
+  }
+}
+
+
+/// Bottom sheet to pick a note colour tag. Returns the swatch ARGB int,
+/// [NoteColors.none] to clear it, or null if dismissed.
+Future<int?> showNoteColorPicker(
+  BuildContext context, {
+  required int? current,
+}) {
+  return showModalBottomSheet<int>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (_) => Padding(
+      padding: const EdgeInsets.all(16),
+      child: GlassEdge(
+        borderRadius: 28,
+        fill: AppPalette.whiteFill,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 12),
+              child: Text(context.t.noteColor,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppPalette.inkPrimary)),
+            ),
+            GridView.count(
+              crossAxisCount: 5,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              children: [
+                _ColorDot(
+                  color: null,
+                  selected: current == null,
+                  onTap: () => Navigator.pop(context, NoteColors.none),
+                ),
+                for (final c in NoteColors.swatches)
+                  _ColorDot(
+                    color: Color(c),
+                    selected: current == c,
+                    onTap: () => Navigator.pop(context, c),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _ColorDot extends StatelessWidget {
+  const _ColorDot(
+      {required this.color, required this.selected, required this.onTap});
+  final Color? color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color ?? Colors.transparent,
+          border: Border.all(
+            color: selected ? AppPalette.inkPrimary : Colors.black26,
+            width: selected ? 3 : 1.5,
+          ),
+        ),
+        child: color == null
+            ? Icon(Icons.format_color_reset_rounded,
+                size: 20, color: AppPalette.inkSecondary)
+            : (selected
+                ? Icon(Icons.check_rounded,
+                    size: 20, color: Colors.black.withValues(alpha: 0.6))
+                : null),
       ),
     );
   }

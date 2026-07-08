@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'l10n/l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
@@ -33,14 +35,24 @@ class BraimApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState()..init(),
-      child: MaterialApp(
-        title: 'Braim',
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        scrollBehavior: const _NoStretchScrollBehavior(),
-        localizationsDelegates: FlutterQuillLocalizations.localizationsDelegates,
-        supportedLocales: FlutterQuillLocalizations.supportedLocales,
-        home: const _Root(),
+      child: Consumer<AppState>(
+        builder: (context, state, _) => MaterialApp(
+          title: 'Braim',
+          debugShowCheckedModeBanner: false,
+          theme: buildTheme(),
+          scrollBehavior: const _NoStretchScrollBehavior(),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            ...FlutterQuillLocalizations.localizationsDelegates,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          // Remount the tree when the theme flips so every widget re-reads
+          // the mode-aware palette.
+          home: KeyedSubtree(
+            key: ValueKey(state.effectiveDark),
+            child: const _Root(),
+          ),
+        ),
       ),
     );
   }
