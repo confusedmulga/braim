@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../models/note.dart' show richToPlain;
 
 import '../models/tweet_card.dart';
 import '../state/app_state.dart';
@@ -28,16 +33,39 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
   final _editorKey = GlobalKey<NoteBodyEditorState>();
   final _activeController = ValueNotifier<QuillController?>(null);
 
-  // Defer the expensive edge blurs until the open morph has settled.
-  bool _showEdgeBlur = false;
+  // Heavy children (Quill, edge blurs, bottom island) mount only after the
+  // open morph settles; a static body is shown during the transition.
+  bool _settled = false;
+  bool _settleHooked = false;
+  bool _closing = false;
 
   @override
   void initState() {
     super.initState();
     _card = widget.card;
     _titleCtrl = TextEditingController(text: _card.noteTitle);
-    Future.delayed(const Duration(milliseconds: 420), () {
-      if (mounted) setState(() => _showEdgeBlur = true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_settleHooked) return;
+    _settleHooked = true;
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.isCompleted) {
+      _settled = true;
+      return;
+    }
+    void onStatus(AnimationStatus status) {
+      if (status == AnimationStatus.completed) {
+        animation.removeStatusListener(onStatus);
+        if (mounted) setState(() => _settled = true);
+      }
+    }
+
+    animation.addStatusListener(onStatus);
+    Future.delayed(const Duration(milliseconds: 380), () {
+      if (mounted && !_settled) setState(() => _settled = true);
     });
   }
 
@@ -48,16 +76,40 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  void _collect() {
     _card.noteTitle = _titleCtrl.text;
     _editorKey.currentState?.sync();
-    await context.read<AppState>().updateCard(_card);
+  }
+
+  void _close() {
+    final state = context.read<AppState>();
+    _collect();
+    setState(() => _closing = true);
+    Navigator.of(context).pop();
+    // Persist after the close animation so the write can't jank it.
+    Future.delayed(const Duration(milliseconds: 380), () {
+      state.updateCard(_card);
+    });
+  }
+
+  Future<void> _openLink() async {
+    final uri = Uri.tryParse(_card.url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.t.couldNotOpenLink)),
+        );
+      }
+    }
   }
 
   void _copyLink() {
     Clipboard.setData(ClipboardData(text: _card.url));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Link copied')),
+      SnackBar(content: Text(context.t.linkCopied)),
     );
   }
 
@@ -73,48 +125,52 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        final nav = Navigator.of(context);
-        await _save();
-        if (mounted) nav.pop();
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _close();
       },
-      child: FrostedWhiteBackground(
+      child: ColoredBox(
+        color: AppPalette.sheet,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           extendBodyBehindAppBar: true,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             foregroundColor: AppPalette.inkPrimary,
+            // Status-bar clock/battery must stay readable over the sheet:
+            // dark icons on the light sheet, light icons on the dark one.
+            systemOverlayStyle: (AppPalette.dark
+                    ? SystemUiOverlayStyle.light
+                    : SystemUiOverlayStyle.dark)
+                .copyWith(statusBarColor: Colors.transparent),
             leadingWidth: 64,
             leading: Padding(
               padding: const EdgeInsets.only(left: 10),
               child: GlassBubble(
                 icon: Icons.chevron_left_rounded,
+                tooltip: context.t.back,
                 iconColor: AppPalette.inkPrimary,
                 glassColor: const Color(0x14000000),
                 iconSize: 28,
                 shadow: false,
-                onTap: () async {
-                  final nav = Navigator.of(context);
-                  await _save();
-                  if (mounted) nav.pop();
-                },
+                onTap: _close,
               ),
             ),
             actions: [
               IconButton(
-                tooltip: 'Refresh preview',
+                tooltip: context.t.refreshPreview,
                 icon: const Icon(Icons.refresh_rounded),
                 onPressed: () => context.read<AppState>().refreshCard(_card.id),
               ),
               IconButton(
-                tooltip: 'Delete card',
+                tooltip: context.t.deleteCard,
                 icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () async {
-                  final nav = Navigator.of(context);
-                  await context.read<AppState>().deleteCard(_card.id);
-                  if (mounted) nav.pop();
+                onPressed: () {
+                  final state = context.read<AppState>();
+                  setState(() => _closing = true);
+                  Navigator.of(context).pop();
+                  Future.delayed(const Duration(milliseconds: 380), () {
+                    state.deleteCard(_card.id);
+                  });
                 },
               ),
             ],
@@ -126,11 +182,12 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                 children: [
                   _CardPreview(card: _card),
                   const SizedBox(height: 10),
-                  _LinkBar(url: _card.url, onCopy: _copyLink),
+                  _LinkBar(
+                      url: _card.url, onOpen: _openLink, onCopy: _copyLink),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _titleCtrl,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: AppPalette.inkPrimary,
@@ -140,7 +197,7 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                     // independently under the bouncy scroll physics.
                     scrollPhysics: const NeverScrollableScrollPhysics(),
                     decoration: InputDecoration(
-                      hintText: 'Add a title',
+                      hintText: context.t.addATitle,
                       hintStyle: TextStyle(
                         color: AppPalette.inkSecondary.withValues(alpha: 0.6),
                         fontSize: 22,
@@ -150,38 +207,67 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  NoteBodyEditor(
-                    key: _editorKey,
-                    blocks: _card.blocks,
-                    activeController: _activeController,
-                    onLight: true,
-                    onRemoveImagePath: (path) =>
-                        context.read<AppState>().refreshAfterImageRemoval(path),
-                  ),
+                  if (_settled)
+                    NoteBodyEditor(
+                      key: _editorKey,
+                      blocks: _card.blocks,
+                      activeController: _activeController,
+                      onLight: true,
+                      onRemoveImagePath: (path) => context
+                          .read<AppState>()
+                          .refreshAfterImageRemoval(path),
+                    )
+                  else
+                    // Static lookalike of the body during the open morph.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final b in _card.blocks)
+                          if (b.isText && richToPlain(b.text).isNotEmpty)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                richToPlain(b.text),
+                                style: TextStyle(
+                                  fontSize: 16.5,
+                                  height: 1.4,
+                                  color: AppPalette.inkPrimary,
+                                ),
+                              ),
+                            ),
+                      ],
+                    ),
                 ],
               ),
-              if (_showEdgeBlur) ...[
+              if (_settled && !_closing) ...[
                 Positioned(
                   top: 0,
                   left: 0,
                   right: 0,
-                  child: ProgressiveBlur(height: topInset + 10, fromTop: true),
+                  // Fewer blur bands: each one is a live BackdropFilter that
+                  // resamples the content on every scroll frame.
+                  child: ProgressiveBlur(
+                      height: topInset + 10, fromTop: true, bands: 4),
                 ),
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  child: ProgressiveBlur(height: 170, fromTop: false),
+                  // The island covers most of this zone; a shorter, coarser
+                  // fade reads the same and filters far fewer pixels.
+                  child:
+                      ProgressiveBlur(height: 130, fromTop: false, bands: 4),
+                ),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: EditorBottomBar(
+                    activeController: _activeController,
+                    onAddPhotos: () => _editorKey.currentState?.addPhotos(),
+                    onPickSpace: _pickSpace,
+                  ),
                 ),
               ],
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: EditorBottomBar(
-                  activeController: _activeController,
-                  onAddPhotos: () => _editorKey.currentState?.addPhotos(),
-                  onPickSpace: _pickSpace,
-                ),
-              ),
             ],
           ),
         ),
@@ -199,6 +285,9 @@ class _CardPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassPanel(
       borderRadius: 22,
+      // The sheet behind is opaque: a backdrop blur here is invisible and
+      // costs a full compositing layer during the open/close morph.
+      blur: 0,
       color: Colors.black.withValues(alpha: 0.05),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -216,17 +305,19 @@ class _CardPreview extends StatelessWidget {
                     Text(
                       card.authorName.isNotEmpty
                           ? card.authorName
-                          : (card.siteName.isNotEmpty ? card.siteName : 'Link'),
+                          : (card.siteName.isNotEmpty
+                              ? card.siteName
+                              : context.t.linkFallback),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
                         color: AppPalette.inkPrimary,
                       ),
                     ),
                     if (card.authorHandle.isNotEmpty)
                       Text(card.authorHandle,
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 12, color: AppPalette.inkSecondary)),
                   ],
                 ),
@@ -237,7 +328,7 @@ class _CardPreview extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               card.text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14.5,
                 height: 1.4,
                 color: AppPalette.inkPrimary,
@@ -252,6 +343,10 @@ class _CardPreview extends StatelessWidget {
                 card.imageUrl,
                 fit: BoxFit.cover,
                 width: double.infinity,
+                // Matches the feed tiles' cacheWidth, so this is a cache hit
+                // (no fresh full-res decode mid-morph).
+                cacheWidth: 900,
+                gaplessPlayback: true,
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
@@ -283,6 +378,7 @@ class _CardPreview extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        cacheWidth: 120,
         headers: const {
           'User-Agent':
               'Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36',
@@ -295,21 +391,24 @@ class _CardPreview extends StatelessWidget {
   }
 }
 
-/// The source link with a copy button.
+/// The source link with open and copy buttons.
 class _LinkBar extends StatelessWidget {
-  const _LinkBar({required this.url, required this.onCopy});
+  const _LinkBar(
+      {required this.url, required this.onOpen, required this.onCopy});
   final String url;
+  final VoidCallback onOpen;
   final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
       borderRadius: 16,
+      blur: 0,
       color: Colors.black.withValues(alpha: 0.05),
       padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
       child: Row(
         children: [
-          const Icon(Icons.link_rounded,
+          Icon(Icons.link_rounded,
               size: 18, color: AppPalette.inkSecondary),
           const SizedBox(width: 10),
           Expanded(
@@ -317,14 +416,23 @@ class _LinkBar extends StatelessWidget {
               url,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 13, color: AppPalette.inkSecondary),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+            label: Text(context.t.open),
+            style: TextButton.styleFrom(
+              foregroundColor: AppPalette.inkPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
             ),
           ),
           TextButton.icon(
             onPressed: onCopy,
             icon: const Icon(Icons.copy_rounded, size: 16),
-            label: const Text('Copy'),
+            label: Text(context.t.copy),
             style: TextButton.styleFrom(
               foregroundColor: AppPalette.inkPrimary,
               padding: const EdgeInsets.symmetric(horizontal: 10),

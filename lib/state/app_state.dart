@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/note.dart';
@@ -5,12 +7,20 @@ import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../services/link_preview_service.dart';
 import '../services/storage_service.dart';
+import '../theme/app_theme.dart';
 
 /// Reserved space id for the locked Crypt folder.
 const String kCryptSpaceId = '__crypt__';
 
 /// How long deleted notes stay in Recently Deleted before being purged.
 const Duration kTrashRetention = Duration(days: 30);
+
+/// Maximum pinned items per feed (notes and cards each).
+const int kMaxPins = 10;
+
+/// Feed sort order chosen by the user; applies to the notes and cards
+/// feeds (pinned items always stay on top).
+enum NoteSort { recent, oldest, azTitle, zaTitle }
 
 class AppState extends ChangeNotifier {
   AppState();
@@ -25,6 +35,115 @@ class AppState extends ChangeNotifier {
   bool _loaded = false;
   bool get loaded => _loaded;
 
+  /// Cards feed view: false = Open (full cards), true = Blocks (compact grid).
+  bool _cardsCompact = false;
+  bool get cardsCompact => _cardsCompact;
+
+  Future<void> setCardsCompact(bool value) async {
+    _cardsCompact = value;
+    await _persist();
+  }
+
+  /// Feed sort order (notes + cards). Pinned items still lead.
+  NoteSort _sortMode = NoteSort.recent;
+  NoteSort get sortMode => _sortMode;
+
+  Future<void> setSortMode(NoteSort value) async {
+    if (value == _sortMode) return;
+    _sortMode = value;
+    await _persist(); // bumps _rev, so the memoized feeds re-sort
+  }
+
+  static NoteSort _sortFromName(String s) => NoteSort.values
+      .firstWhere((e) => e.name == s, orElse: () => NoteSort.recent);
+
+  bool _darkMode = false;
+  bool get darkMode => _darkMode;
+
+  bool _darkFollowSystem = true;
+  bool get darkFollowSystem => _darkFollowSystem;
+
+  bool _systemDark =
+      PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+
+  /// The theme actually in effect: system when following, else the manual
+  /// switch.
+  bool get effectiveDark => _darkFollowSystem ? _systemDark : _darkMode;
+
+  /// Called by the shell when the platform brightness changes.
+  void updateSystemBrightness() {
+    final dark =
+        PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+    if (dark == _systemDark) return;
+    _systemDark = dark;
+    if (_darkFollowSystem) {
+      AppPalette.dark = effectiveDark;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setDarkFollowSystem(bool value) async {
+    _darkFollowSystem = value;
+    AppPalette.dark = effectiveDark;
+    await _persist();
+  }
+
+  /// Sets the whole appearance preference in one persist: follow the system,
+  /// or force light/dark manually.
+  Future<void> setAppearance({required bool followSystem, bool dark = false}) async {
+    _darkFollowSystem = followSystem;
+    if (!followSystem) _darkMode = dark;
+    AppPalette.dark = effectiveDark;
+    await _persist();
+  }
+
+  bool _tutorialSeen = false;
+  bool get tutorialSeen => _tutorialSeen;
+
+  Future<void> setTutorialSeen() async {
+    _tutorialSeen = true;
+    await _persist();
+  }
+
+  /// When the user last exported a backup (null = never).
+  DateTime? _lastBackupAt;
+  DateTime? get lastBackupAt => _lastBackupAt;
+
+  /// Dismissed for this session only (a safety nudge should return next launch
+  /// if the library still isn't backed up).
+  bool _backupReminderDismissed = false;
+  bool get backupReminderDismissed => _backupReminderDismissed;
+
+  /// Reminder threshold: nudge once a backup is this stale (or never taken).
+  static const Duration _backupStaleAfter = Duration(days: 14);
+
+  /// True when there is something worth losing and it hasn't been backed up
+  /// recently.
+  bool get backupOverdue {
+    if (_notes.isEmpty && _cards.isEmpty && _spaces.isEmpty) return false;
+    final last = _lastBackupAt;
+    if (last == null) return true;
+    return DateTime.now().difference(last) > _backupStaleAfter;
+  }
+
+  void dismissBackupReminder() {
+    _backupReminderDismissed = true;
+    notifyListeners();
+  }
+
+  /// Records that a backup was just taken; clears the nudge.
+  Future<void> markBackedUp() async {
+    _lastBackupAt = DateTime.now();
+    _backupReminderDismissed = false;
+    await _persist();
+  }
+
+  Future<void> setDarkMode(bool value) async {
+    _darkMode = value;
+    AppPalette.dark = effectiveDark;
+    await _persist();
+  }
+
   Future<void> init() async {
     final data = await _storage.load();
     _notes
@@ -36,13 +155,25 @@ class AppState extends ChangeNotifier {
     _cards
       ..clear()
       ..addAll(data.cards);
+    _cardsCompact = data.cardsCompact;
+    _darkMode = data.darkMode;
+    _darkFollowSystem = data.darkFollowSystem;
+    _tutorialSeen = data.tutorialSeen;
+    _lastBackupAt = data.lastBackupAt;
+    _sortMode = _sortFromName(data.sortMode);
+    _rev++;
+    AppPalette.dark = effectiveDark;
     await _purgeExpiredTrash();
+    await _importSharedInbox();
     _loaded = true;
     notifyListeners();
 
     // Cards saved by the share popup arrive without a preview; enrich them in
-    // the background now.
-    for (final c in _cards.where((c) => !c.fetched).toList()) {
+    // the background now. Capped so a dead link doesn't refetch every launch.
+    for (final c in _cards
+        .where((c) => !c.fetched && c.enrichAttempts < 3)
+        .toList()) {
+      c.enrichAttempts++;
       _linkPreview.enrich(c).then((_) => _persist());
     }
   }
@@ -53,7 +184,30 @@ class AppState extends ChangeNotifier {
   bool _isFeedNote(Note n) =>
       !n.archived && n.deletedAt == null && n.spaceId != kCryptSpaceId;
 
-  List<Note> get notes => _notes.where(_isFeedNote).toList()..sort(_byCreatedDesc);
+  bool _isFeedCard(TweetCard c) =>
+      !c.archived && c.deletedAt == null && c.spaceId != kCryptSpaceId;
+
+  bool _isLiveSpace(Space s) => !s.archived && s.deletedAt == null;
+
+  // Feed lists are memoized against a mutation revision so a rebuild of
+  // several watching screens doesn't re-filter + re-sort the library each.
+  int _rev = 0;
+  int _notesRev = -1;
+  List<Note>? _notesCache;
+  int _cardsRev = -1;
+  List<TweetCard>? _cardsCache;
+
+  List<Note> get notes {
+    if (_notesRev != _rev || _notesCache == null) {
+      _notesCache = _notes.where(_isFeedNote).toList()
+        ..sort((a, b) {
+          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+          return _compareNotes(a, b);
+        });
+      _notesRev = _rev;
+    }
+    return _notesCache!;
+  }
 
   List<Note> get archivedNotes => _notes
       .where((n) =>
@@ -64,6 +218,24 @@ class AppState extends ChangeNotifier {
   List<Note> get deletedNotes => _notes.where((n) => n.deletedAt != null).toList()
     ..sort((a, b) => b.deletedAt!.compareTo(a.deletedAt!));
 
+  List<TweetCard> get archivedCards => _cards
+      .where((c) =>
+          c.archived && c.deletedAt == null && c.spaceId != kCryptSpaceId)
+      .toList()
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  List<TweetCard> get deletedCards =>
+      _cards.where((c) => c.deletedAt != null).toList()
+        ..sort((a, b) => b.deletedAt!.compareTo(a.deletedAt!));
+
+  List<Space> get archivedSpaces =>
+      _spaces.where((s) => s.archived && s.deletedAt == null).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  List<Space> get deletedSpaces =>
+      _spaces.where((s) => s.deletedAt != null).toList()
+        ..sort((a, b) => b.deletedAt!.compareTo(a.deletedAt!));
+
   List<Note> notesForSpace(String spaceId) => _notes
       .where((n) => n.spaceId == spaceId && !n.archived && n.deletedAt == null)
       .toList()
@@ -73,17 +245,26 @@ class AppState extends ChangeNotifier {
       .where((n) => n.spaceId == spaceId && !n.archived && n.deletedAt == null)
       .length;
 
-  List<Space> get spaces =>
-      List.unmodifiable(_spaces..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())));
+  List<Space> get spaces => _spaces.where(_isLiveSpace).toList()
+    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-  List<TweetCard> get cards => _cards
-      .where((c) => c.spaceId != kCryptSpaceId)
+  List<TweetCard> get cards {
+    if (_cardsRev != _rev || _cardsCache == null) {
+      _cardsCache = _cards.where(_isFeedCard).toList()
+        ..sort((a, b) {
+          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+          return _compareCards(a, b);
+        });
+      _cardsRev = _rev;
+    }
+    return _cardsCache!;
+  }
+
+  List<TweetCard> cardsForSpace(String spaceId) => (_cards
+      .where((c) =>
+          c.spaceId == spaceId && !c.archived && c.deletedAt == null)
       .toList()
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-  List<TweetCard> cardsForSpace(String spaceId) =>
-      (_cards.where((c) => c.spaceId == spaceId).toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
 
   /// Notes + cards that live in a space.
   int itemCountForSpace(String spaceId) =>
@@ -91,7 +272,10 @@ class AppState extends ChangeNotifier {
           .where((n) =>
               n.spaceId == spaceId && !n.archived && n.deletedAt == null)
           .length +
-      _cards.where((c) => c.spaceId == spaceId).length;
+      _cards
+          .where((c) =>
+              c.spaceId == spaceId && !c.archived && c.deletedAt == null)
+          .length;
 
   Space? spaceById(String? id) {
     if (id == null) return null;
@@ -107,6 +291,46 @@ class AppState extends ChangeNotifier {
   // morph aligned to the same card.
   static int _byCreatedDesc(Note a, Note b) =>
       b.createdAt.compareTo(a.createdAt);
+
+  // ---- User-selectable feed sort -----------------------------------------
+  int _compareNotes(Note a, Note b) {
+    switch (_sortMode) {
+      case NoteSort.recent:
+        return b.createdAt.compareTo(a.createdAt);
+      case NoteSort.oldest:
+        return a.createdAt.compareTo(b.createdAt);
+      case NoteSort.azTitle:
+        return _noteSortKey(a).compareTo(_noteSortKey(b));
+      case NoteSort.zaTitle:
+        return _noteSortKey(b).compareTo(_noteSortKey(a));
+    }
+  }
+
+  static String _noteSortKey(Note n) {
+    final t = n.title.trim();
+    return (t.isNotEmpty ? t : n.textPreview).toLowerCase();
+  }
+
+  int _compareCards(TweetCard a, TweetCard b) {
+    switch (_sortMode) {
+      case NoteSort.recent:
+        return b.createdAt.compareTo(a.createdAt);
+      case NoteSort.oldest:
+        return a.createdAt.compareTo(b.createdAt);
+      case NoteSort.azTitle:
+        return _cardSortKey(a).compareTo(_cardSortKey(b));
+      case NoteSort.zaTitle:
+        return _cardSortKey(b).compareTo(_cardSortKey(a));
+    }
+  }
+
+  static String _cardSortKey(TweetCard c) {
+    final t = c.noteTitle.trim();
+    if (t.isNotEmpty) return t.toLowerCase();
+    if (c.authorName.trim().isNotEmpty) return c.authorName.toLowerCase();
+    if (c.siteName.trim().isNotEmpty) return c.siteName.toLowerCase();
+    return c.url.toLowerCase();
+  }
 
   // ---- Notes -------------------------------------------------------------
 
@@ -148,29 +372,65 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> emptyTrash() async {
-    final trashed = _notes.where((n) => n.deletedAt != null).toList();
-    for (final n in trashed) {
+    for (final n in _notes.where((n) => n.deletedAt != null).toList()) {
       _notes.remove(n);
       for (final path in n.imagePaths) {
         await _storage.deleteImage(path);
       }
+    }
+    for (final c in _cards.where((c) => c.deletedAt != null).toList()) {
+      _cards.remove(c);
+      for (final path in c.imagePaths) {
+        await _storage.deleteImage(path);
+      }
+    }
+    for (final sp in _spaces.where((s) => s.deletedAt != null).toList()) {
+      await _reallyDeleteSpace(sp);
     }
     await _persist();
   }
 
   Future<void> _purgeExpiredTrash() async {
     final cutoff = DateTime.now().subtract(kTrashRetention);
-    final expired = _notes
+    final expiredNotes = _notes
         .where((n) => n.deletedAt != null && n.deletedAt!.isBefore(cutoff))
         .toList();
-    if (expired.isEmpty) return;
-    for (final n in expired) {
+    final expiredCards = _cards
+        .where((c) => c.deletedAt != null && c.deletedAt!.isBefore(cutoff))
+        .toList();
+    final expiredSpaces = _spaces
+        .where((sp) => sp.deletedAt != null && sp.deletedAt!.isBefore(cutoff))
+        .toList();
+    if (expiredNotes.isEmpty &&
+        expiredCards.isEmpty &&
+        expiredSpaces.isEmpty) {
+      return;
+    }
+    for (final n in expiredNotes) {
       _notes.remove(n);
       for (final path in n.imagePaths) {
         await _storage.deleteImage(path);
       }
     }
-    await _storage.save(AppData(notes: _notes, spaces: _spaces, cards: _cards));
+    for (final c in expiredCards) {
+      _cards.remove(c);
+      for (final path in c.imagePaths) {
+        await _storage.deleteImage(path);
+      }
+    }
+    for (final sp in expiredSpaces) {
+      await _reallyDeleteSpace(sp);
+    }
+    await _storage.save(AppData(
+        notes: _notes,
+        spaces: _spaces,
+        cards: _cards,
+        cardsCompact: _cardsCompact,
+        darkMode: _darkMode,
+        darkFollowSystem: _darkFollowSystem,
+        tutorialSeen: _tutorialSeen,
+        lastBackupAt: _lastBackupAt,
+        sortMode: _sortMode.name));
   }
 
   Future<void> moveNoteToSpace(String noteId, String? spaceId) async {
@@ -184,6 +444,30 @@ class AppState extends ChangeNotifier {
     final note = _notes.firstWhere((n) => n.id == noteId);
     note.archived = archived;
     await _persist();
+  }
+
+  /// Pins/unpins a note. Returns false when the pin limit is already reached.
+  Future<bool> setNotePinned(String noteId, bool pinned) async {
+    if (pinned &&
+        _notes.where((n) => _isFeedNote(n) && n.pinned).length >= kMaxPins) {
+      return false;
+    }
+    final note = _notes.firstWhere((n) => n.id == noteId);
+    note.pinned = pinned;
+    await _persist();
+    return true;
+  }
+
+  /// Pins/unpins a card. Returns false when the pin limit is already reached.
+  Future<bool> setCardPinned(String cardId, bool pinned) async {
+    if (pinned &&
+        _cards.where((c) => _isFeedCard(c) && c.pinned).length >= kMaxPins) {
+      return false;
+    }
+    final card = _cards.firstWhere((c) => c.id == cardId);
+    card.pinned = pinned;
+    await _persist();
+    return true;
   }
 
   /// Deletes an image file that was removed from a note in the editor.
@@ -207,42 +491,115 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
-  Future<void> deleteSpace(String id, {bool deleteNotes = false}) async {
+  /// Soft-delete: the folder moves to Recently Deleted; its notes/cards keep
+  /// their association (still visible in the feeds) and come back with it.
+  Future<void> deleteSpace(String id) async {
     final idx = _spaces.indexWhere((s) => s.id == id);
     if (idx < 0) return;
-    final space = _spaces.removeAt(idx);
+    _spaces[idx].deletedAt = DateTime.now();
+    await _persist();
+  }
+
+  Future<void> restoreSpace(String id) async {
+    final idx = _spaces.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+    _spaces[idx]
+      ..deletedAt = null
+      ..archived = false;
+    await _persist();
+  }
+
+  Future<void> setSpaceArchived(String id, bool archived) async {
+    final idx = _spaces.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+    _spaces[idx].archived = archived;
+    await _persist();
+  }
+
+  Future<void> permanentlyDeleteSpace(String id) async {
+    final idx = _spaces.indexWhere((s) => s.id == id);
+    if (idx < 0) return;
+    await _reallyDeleteSpace(_spaces[idx]);
+    await _persist();
+  }
+
+  /// Removes the folder for good: contents fall back to no folder.
+  Future<void> _reallyDeleteSpace(Space space) async {
+    _spaces.remove(space);
     if (space.thumbnailPath != null) {
       await _storage.deleteImage(space.thumbnailPath!);
     }
-    if (deleteNotes) {
-      final toDelete = _notes.where((n) => n.spaceId == id).toList();
-      for (final n in toDelete) {
-        await deleteNote(n.id);
-      }
-    } else {
-      for (final n in _notes.where((n) => n.spaceId == id)) {
-        n.spaceId = null;
-      }
+    for (final n in _notes.where((n) => n.spaceId == space.id)) {
+      n.spaceId = null;
     }
-    // Cards in the space always fall back to no space.
-    for (final c in _cards.where((c) => c.spaceId == id)) {
+    for (final c in _cards.where((c) => c.spaceId == space.id)) {
       c.spaceId = null;
     }
-    await _persist();
   }
 
   // ---- Cards -------------------------------------------------------------
 
-  /// Adds a shared link as a card and enriches it in the background.
-  Future<TweetCard> addCardFromUrl(String url) async {
+  /// Adds a shared link as a card and enriches it in the background. If the
+  /// same link is already saved (and not deleted), the existing card is
+  /// reused instead of creating a duplicate.
+  Future<TweetCard> addCardFromUrl(String url, {String? spaceId}) async {
     final cleaned = _extractUrl(url);
-    final card = TweetCard(url: cleaned);
+    final normalized = _normalizeUrl(cleaned);
+    final existing = _cards.where(
+        (c) => c.deletedAt == null && _normalizeUrl(c.url) == normalized);
+    if (existing.isNotEmpty) {
+      final card = existing.first;
+      // Merge: adopt the requested folder and surface it again.
+      if (spaceId != null) card.spaceId = spaceId;
+      card.archived = false;
+      await _persist();
+      return card;
+    }
+    final card = TweetCard(url: cleaned, spaceId: spaceId);
     _cards.add(card);
     await _persist();
 
     // Fetch preview without blocking the UI.
     _linkPreview.enrich(card).then((_) => _persist());
     return card;
+  }
+
+  String _normalizeUrl(String url) {
+    var u = url.trim();
+    while (u.endsWith('/')) {
+      u = u.substring(0, u.length - 1);
+    }
+    final uri = Uri.tryParse(u);
+    if (uri == null || uri.host.isEmpty) return u;
+    return uri
+        .replace(
+            scheme: uri.scheme.toLowerCase(), host: uri.host.toLowerCase())
+        .toString();
+  }
+
+  /// Imports links saved by the share popup (one inbox file per share, so the
+  /// popup never contends with this engine's writes to the data file).
+  Future<void> _importSharedInbox() async {
+    final records = await _storage.drainShareInbox();
+    for (final r in records) {
+      final url = r['url'] as String?;
+      if (url == null || url.isEmpty) continue;
+      String? spaceId = r['spaceId'] as String?;
+      final newFolderName = (r['newFolderName'] as String?)?.trim();
+      if (newFolderName != null && newFolderName.isNotEmpty) {
+        final existing = _spaces.where((s) =>
+            _isLiveSpace(s) &&
+            s.name.toLowerCase() == newFolderName.toLowerCase());
+        if (existing.isNotEmpty) {
+          spaceId = existing.first.id;
+        } else {
+          final space = Space(name: newFolderName);
+          _spaces.add(space);
+          spaceId = space.id;
+        }
+      }
+      await addCardFromUrl(url, spaceId: spaceId);
+    }
   }
 
   Future<void> refreshCard(String id) async {
@@ -257,7 +614,31 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
+  /// Soft-delete: moves the card to Recently Deleted (kept ~30 days).
   Future<void> deleteCard(String id) async {
+    final idx = _cards.indexWhere((c) => c.id == id);
+    if (idx < 0) return;
+    _cards[idx].deletedAt = DateTime.now();
+    await _persist();
+  }
+
+  Future<void> restoreCard(String id) async {
+    final idx = _cards.indexWhere((c) => c.id == id);
+    if (idx < 0) return;
+    _cards[idx]
+      ..deletedAt = null
+      ..archived = false;
+    await _persist();
+  }
+
+  Future<void> setCardArchived(String id, bool archived) async {
+    final idx = _cards.indexWhere((c) => c.id == id);
+    if (idx < 0) return;
+    _cards[idx].archived = archived;
+    await _persist();
+  }
+
+  Future<void> permanentlyDeleteCard(String id) async {
     final idx = _cards.indexWhere((c) => c.id == id);
     if (idx < 0) return;
     final card = _cards.removeAt(idx);
@@ -306,12 +687,53 @@ class AppState extends ChangeNotifier {
 
   // ---- Persistence -------------------------------------------------------
 
+  Timer? _flushTimer;
+  bool _dirty = false;
+  Future<void> _writeChain = Future.value();
+
+  /// Marks the library dirty and notifies immediately; the actual disk write
+  /// is coalesced (~400ms) and runs on a background isolate. A burst of
+  /// mutations becomes a single write.
   Future<void> _persist() async {
-    await _storage.save(AppData(
+    _rev++;
+    _dirty = true;
+    notifyListeners();
+    _flushTimer ??= Timer(const Duration(milliseconds: 400), () {
+      _flushTimer = null;
+      _flush();
+    });
+  }
+
+  void _flush() {
+    if (!_dirty) return;
+    _dirty = false;
+    final snapshot = AppData(
       notes: _notes,
       spaces: _spaces,
       cards: _cards,
-    ));
-    notifyListeners();
+      cardsCompact: _cardsCompact,
+      darkMode: _darkMode,
+      darkFollowSystem: _darkFollowSystem,
+      tutorialSeen: _tutorialSeen,
+      lastBackupAt: _lastBackupAt,
+      sortMode: _sortMode.name,
+    );
+    // Chain writes so they never interleave.
+    _writeChain = _writeChain.then((_) => _storage.save(snapshot));
+  }
+
+  /// Forces any pending changes to disk now (app pause, before backup or
+  /// restore).
+  Future<void> flushNow() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _flush();
+    await _writeChain;
+  }
+
+  @override
+  void dispose() {
+    _flushTimer?.cancel();
+    super.dispose();
   }
 }

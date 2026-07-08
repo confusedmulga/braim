@@ -1,0 +1,241 @@
+{
+  "@@locale": "en",
+  "appTitle": "Braim",
+  "tabHome": "Home",
+  "tabCards": "Cards",
+  "tabCortex": "Cortex",
+  "subtitleHome": "Your notes",
+  "subtitleCards": "Tweets & links you saved",
+  "subtitleCortex": "Folders for notes & cards",
+  "searchHint": "Search notes, cards, cortex",
+  "menu": "Menu",
+  "back": "Back",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "restore": "Restore",
+  "open": "Open",
+  "copy": "Copy",
+  "skip": "Skip",
+  "next": "Next",
+  "getStarted": "Get started",
+  "empty": "Empty",
+
+  "newNote": "New note",
+  "saveALink": "Save a link",
+  "newFolder": "New folder",
+  "pasteTweetOrUrl": "Paste a tweet or any URL.",
+  "urlHint": "https://x.com/…",
+
+  "viewOpen": "Open",
+  "viewBlocks": "Blocks",
+
+  "noNotesYet": "No notes yet",
+  "tapPencilToAdd": "Tap the pencil to add one.",
+  "noCardsYet": "No cards yet",
+  "shareOrPasteLink": "Share a link to Braim, or tap + to paste one.",
+  "noMatches": "No matches",
+
+  "itemsCount": "{count, plural, =1{1 item} other{{count} items}}",
+  "@itemsCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "photosCount": "{count, plural, =1{1 photo} other{{count} photos}}",
+  "@photosCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "emptyNote": "Empty note",
+  "linkFallback": "Link",
+
+  "sectionCortex": "CORTEX",
+  "sectionNotes": "NOTES",
+  "sectionCards": "CARDS",
+  "sectionFolders": "FOLDERS",
+  "sectionArchived": "ARCHIVED",
+  "sectionYourCortex": "YOUR CORTEX",
+
+  "pin": "Pin",
+  "unpin": "Unpin",
+  "archive": "Archive",
+  "unarchive": "Unarchive",
+  "moveToCortex": "Move to cortex",
+  "newFolderSubtitle": "Create a folder and move this into it",
+  "deleteKeptSubtitle": "Kept in Recently deleted for 30 days",
+  "pinLimitReached": "Pin limit reached (max {max})",
+  "@pinLimitReached": {
+    "placeholders": {
+      "max": {"type": "int"}
+    }
+  },
+  "archived": "Archived",
+  "unarchived": "Unarchived",
+  "movedToTrash": "Moved to Recently deleted",
+  "movedToName": "Moved to \"{name}\"",
+  "@movedToName": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "noFolder": "No folder",
+  "crypt": "Crypt",
+  "cryptLockedSecret": "Locked, secret",
+  "noFoldersYetCreate": "No folders yet — create one in Cortex.",
+  "noFoldersYet": "No folders yet",
+  "unlockCrypt": "Unlock Crypt",
+  "unlockFailed": "Unlock failed",
+
+  "newSpace": "New space",
+  "editSpace": "Edit space",
+  "spaceName": "Space name",
+  "addThumbnail": "Add thumbnail",
+  "editNamed": "Edit \"{name}\"",
+  "@editNamed": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "archiveFolder": "Archive folder",
+  "archiveFolderSubtitle": "Hidden from Cortex; contents stay put",
+  "deleteFolder": "Delete folder",
+  "folderArchived": "Folder archived",
+  "addToName": "Add to {name}",
+  "@addToName": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "addRemoveHint": "Tap an item to add or remove it from this folder.",
+  "noNotesOrCards": "No notes or cards yet.",
+  "addExisting": "Add existing",
+  "nothingInFolder": "Nothing in this folder yet",
+  "useButtonsToAdd": "Use the + buttons to add a note or existing items.",
+
+  "title": "Title",
+  "writeSomething": "Write something…",
+  "tapLineToFormat": "Tap a line to format text",
+  "savedAutomatically": "Saved automatically",
+  "addPhotos": "Add photos",
+  "background": "Background",
+  "noteBackground": "Note background",
+  "copyNote": "Copy note",
+  "noteCopied": "Note copied to clipboard",
+  "undo": "Undo",
+  "redo": "Redo",
+  "bold": "Bold",
+  "italic": "Italic",
+  "underline": "Underline",
+  "highlight": "Highlight",
+  "bulletList": "Bullet list",
+  "numberedList": "Numbered list",
+  "heading": "Heading",
+  "subHeading": "Sub",
+  "body": "Body",
+  "tapLineHint": "Tap a line to format text",
+
+  "addATitle": "Add a title",
+  "refreshPreview": "Refresh preview",
+  "deleteCard": "Delete card",
+  "linkCopied": "Link copied",
+  "couldNotOpenLink": "Could not open link",
+
+  "archiveTitle": "Archive",
+  "nothingArchived": "Nothing archived",
+  "archiveHint": "Long-press a note, card or folder to archive it.",
+  "longPressToRestore": "Long-press anything to restore it.",
+  "noteUnarchived": "Note unarchived",
+  "cardUnarchived": "Card unarchived",
+  "folderUnarchived": "Folder unarchived",
+
+  "recentlyDeleted": "Recently deleted",
+  "nothingHere": "Nothing here",
+  "deletedKept30": "Deleted items are kept for 30 days.",
+  "trashHint": "Items are deleted forever after 30 days. Tap one to restore it.",
+  "deletePermanently": "Delete permanently",
+  "emptyTrashTitle": "Empty Recently deleted?",
+  "emptyTrashBody": "All notes, cards and folders here are permanently deleted.",
+
+  "settings": "Settings",
+  "appearance": "Appearance",
+  "darkMode": "Dark mode",
+  "followSystem": "Follow system",
+  "appearanceSystem": "System",
+  "appearanceLight": "Light",
+  "appearanceDark": "Dark",
+  "clearSearch": "Clear search",
+  "sortBy": "Sort by",
+  "sortRecent": "Recently added",
+  "sortOldest": "Oldest first",
+  "sortAz": "Alphabetical (A–Z)",
+  "sortZa": "Alphabetical (Z–A)",
+  "checklist": "Checklist",
+  "noteColor": "Colour",
+  "backupReminderTitle": "Keep your notes safe",
+  "backupReminderBody": "Back up now so a lost phone doesn't mean lost notes.",
+  "backupNow": "Back up",
+  "dismiss": "Dismiss",
+  "lastBackupNever": "Not backed up yet",
+  "lastBackupAgo": "{count, plural, =0{Backed up today} =1{Backed up yesterday} other{Backed up {count} days ago}}",
+  "@lastBackupAgo": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "backupSection": "Backup",
+  "backupTitle": "Back up (data + images)",
+  "backupSubtitle": "Share to Google Drive, Files, …",
+  "restoreFromBackup": "Restore from backup",
+  "restoreSubtitle": "Pick a .zip backup file",
+  "preparingBackup": "Preparing backup…",
+  "backupFailed": "Backup failed: {error}",
+  "@backupFailed": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "restoreFailed": "Restore failed: {error}",
+  "@restoreFailed": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "backupRestored": "Backup restored",
+  "restoreBackupTitle": "Restore backup?",
+  "restoreBackupBody": "This replaces your current notes, cards and folders with the ones in the backup.",
+  "storageSection": "Storage",
+  "statNotes": "Notes",
+  "statCortex": "Cortex",
+  "statCards": "Cards",
+  "clearAllData": "Clear all data",
+  "clearAllDataTitle": "Clear all data?",
+  "clearAllDataBody": "This permanently deletes every note, space and card on this device.",
+  "aboutSection": "About",
+  "aboutLine": "A glassy notes app · v1.0",
+
+  "savedToCards": "Saved to Cards",
+  "saveToBraim": "Save to Braim",
+  "noLinkFound": "No link found in the shared text",
+  "savedToName": "Saved to {name}",
+  "@savedToName": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "createAndSave": "Create & save",
+  "folderName": "Folder name",
+
+  "tutWelcomeTitle": "Welcome to Braim",
+  "tutWelcomeBody": "Your notes live on Home. Tap the pencil to write one — it saves automatically. Long-press any note for quick actions.",
+  "tutCardsTitle": "Cards",
+  "tutCardsBody": "Share a link from any app to Braim and a small popup saves it as a card — no app switching. Duplicates merge automatically. Switch the feed between Open and Blocks views with the toggle.",
+  "tutCortexTitle": "Cortex",
+  "tutCortexBody": "Folders for your notes and cards. Create one with the + button, give it a photo thumbnail, or file things from the long-press menu.",
+  "tutCryptTitle": "Crypt",
+  "tutCryptBody": "A folder that only opens with your fingerprint or screen lock — its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and included readable in backups. Don't keep passwords or bank details in it.",
+  "tutTipsTitle": "Good to know",
+  "tutTipsBody": "Search finds notes, cards and folders in one place. Pin up to 10 favourites per feed. Archive hides without deleting; deleted items wait 30 days in Recently deleted. Back up everything from Settings — and there's a dark mode in there too."
+}

@@ -27,7 +27,7 @@ class AppBackground extends StatelessWidget {
 
   Widget _backgroundLayer() {
     return Image.asset(
-      kBackgroundAsset,
+      AppPalette.dark ? 'assets/darkbg2.jpg' : kBackgroundAsset,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => _orbs(),
     );
@@ -212,6 +212,42 @@ class TopFade extends StatelessWidget {
         colors: [Color(0x00FFFFFF), Colors.white],
       ).createShader(Rect.fromLTWH(0, 0, rect.width, height)),
       blendMode: BlendMode.dstIn,
+      child: child,
+    );
+  }
+}
+
+/// A flat, opaque Keep-style tile surface: solid fill, hairline outline, no
+/// gradients, no shadow. Feed tiles use this so scrolling and the open/close
+/// morph stay cheap — the glass look lives only in the floating chrome
+/// (islands, search bar, bubbles, side pane).
+class FlatCard extends StatelessWidget {
+  const FlatCard({
+    super.key,
+    required this.child,
+    this.borderRadius = 22,
+    this.padding,
+    this.fill,
+  });
+
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+
+  /// Overrides the default tile surface (used for note colour tags).
+  final Color? fill;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(borderRadius);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: fill ?? AppPalette.cardSolid,
+        borderRadius: radius,
+        border: Border.all(color: AppPalette.cardOutline),
+      ),
+      padding: padding,
       child: child,
     );
   }

@@ -18,7 +18,11 @@ class TweetCard {
     this.authorHandle = '',
     this.siteName = '',
     this.fetched = false,
+    this.enrichAttempts = 0,
     this.spaceId,
+    this.pinned = false,
+    this.archived = false,
+    this.deletedAt,
     this.noteTitle = '',
     List<NoteBlock>? blocks,
     DateTime? createdAt,
@@ -48,6 +52,19 @@ class TweetCard {
   /// Whether a preview was successfully fetched.
   bool fetched;
 
+  /// How many launch-time preview fetches have been attempted (capped so a
+  /// permanently-failing link doesn't refetch forever).
+  int enrichAttempts;
+
+  /// Pinned cards sort to the top of the feed (max 10).
+  bool pinned;
+
+  /// Archived cards are hidden from the feed and live in the Archive.
+  bool archived;
+
+  /// When set, the card is in Recently Deleted (kept ~30 days, then purged).
+  DateTime? deletedAt;
+
   /// User-added note attached to this card.
   String noteTitle;
   List<NoteBlock> blocks;
@@ -72,7 +89,11 @@ class TweetCard {
         'authorHandle': authorHandle,
         'siteName': siteName,
         'fetched': fetched,
+        'enrichAttempts': enrichAttempts,
         'spaceId': spaceId,
+        'pinned': pinned,
+        'archived': archived,
+        'deletedAt': deletedAt?.toIso8601String(),
         'noteTitle': noteTitle,
         'blocks': blocks.map((b) => b.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
@@ -88,7 +109,11 @@ class TweetCard {
         authorHandle: (json['authorHandle'] as String?) ?? '',
         siteName: (json['siteName'] as String?) ?? '',
         fetched: (json['fetched'] as bool?) ?? false,
+        enrichAttempts: (json['enrichAttempts'] as int?) ?? 0,
         spaceId: json['spaceId'] as String?,
+        pinned: (json['pinned'] as bool?) ?? false,
+        archived: (json['archived'] as bool?) ?? false,
+        deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),
         noteTitle: (json['noteTitle'] as String?) ?? '',
         blocks: ((json['blocks'] as List?) ?? [])
             .map((e) => NoteBlock.fromJson(e as Map<String, dynamic>))

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
@@ -53,8 +55,8 @@ class SidePane extends StatelessWidget {
             child: GlassPanel(
               borderRadius: 30,
               blur: 26,
-              color: const Color(0xCCFFFFFF),
-              borderColor: Colors.white.withValues(alpha: 0.55),
+              color: AppPalette.paneFill,
+              borderColor: AppPalette.paneBorder,
               child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -81,7 +83,7 @@ class SidePane extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Text('Braim',
+                    Text(context.t.appTitle,
                         style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
@@ -89,17 +91,20 @@ class SidePane extends StatelessWidget {
                   ],
                 ),
               ),
-              _navItem(Icons.home_rounded, 'Home', currentIndex == 0,
+              _navItem(context, Icons.home_rounded, context.t.tabHome,
+                  currentIndex == 0,
                   () => onSelectTab(0)),
-              _navItem(Icons.style_rounded, 'Cards', currentIndex == 1,
+              _navItem(context, Icons.style_rounded, context.t.tabCards,
+                  currentIndex == 1,
                   () => onSelectTab(1)),
-              _navItem(Icons.grid_view_rounded, 'Cortex', currentIndex == 2,
+              _navItem(context, Icons.grid_view_rounded, context.t.tabCortex,
+                  currentIndex == 2,
                   () => onSelectTab(2)),
               const SizedBox(height: 8),
               _divider(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(22, 16, 22, 8),
-                child: Text('YOUR CORTEX',
+                child: Text(context.t.sectionYourCortex,
                     style: TextStyle(
                         fontSize: 11,
                         letterSpacing: 1.2,
@@ -110,7 +115,7 @@ class SidePane extends StatelessWidget {
                 child: spaces.isEmpty
                     ? Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 22),
-                        child: Text('No folders yet',
+                        child: Text(context.t.noFoldersYet,
                             style:
                                 TextStyle(color: AppPalette.inkSecondary)),
                       )
@@ -118,17 +123,21 @@ class SidePane extends StatelessWidget {
                         padding: EdgeInsets.zero,
                         children: [
                           for (final s in spaces)
-                            _navItem(Icons.folder_rounded, s.name, false,
+                            _navItem(context, Icons.folder_rounded, s.name,
+                                false,
                                 () => onOpenSpace(s.id)),
                         ],
                       ),
               ),
               _divider(),
-              _navItem(Icons.archive_outlined, 'Archive', false,
+              _navItem(context, Icons.archive_outlined,
+                  context.t.archiveTitle, false,
                   onOpenArchive),
-              _navItem(Icons.delete_outline_rounded, 'Recently deleted', false,
+              _navItem(context, Icons.delete_outline_rounded,
+                  context.t.recentlyDeleted, false,
                   onOpenTrash),
-              _navItem(Icons.settings_rounded, 'Settings', false,
+              _navItem(context, Icons.settings_rounded, context.t.settings,
+                  false,
                   onOpenSettings),
               const SizedBox(height: 12),
             ],
@@ -141,20 +150,18 @@ class SidePane extends StatelessWidget {
   }
 
   Widget _divider() => Divider(
-        color: Colors.black.withValues(alpha: 0.08),
+        color: AppPalette.selFill,
         height: 1,
         indent: 16,
         endIndent: 16,
       );
 
-  Widget _navItem(
-      IconData icon, String label, bool selected, VoidCallback onTap) {
+  Widget _navItem(BuildContext context, IconData icon, String label,
+      bool selected, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Material(
-        color: selected
-            ? Colors.black.withValues(alpha: 0.07)
-            : Colors.transparent,
+        color: selected ? AppPalette.selFill : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),

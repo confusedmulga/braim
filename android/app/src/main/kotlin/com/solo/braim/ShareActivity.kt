@@ -1,4 +1,4 @@
-package com.keepy.keepy
+package com.solo.braim
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity

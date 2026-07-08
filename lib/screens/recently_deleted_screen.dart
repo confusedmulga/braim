@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
+
+import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../models/note.dart';
+import '../models/space.dart';
+import '../models/tweet_card.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
 import '../widgets/note_card.dart';
+import '../widgets/space_tile.dart';
+import '../widgets/tweet_card_widget.dart';
 
-/// Recently Deleted — notes are kept here for 30 days, then purged. Tap a note
-/// to restore it or delete it permanently.
+/// Recently Deleted — notes, cards and folders are kept for 30 days, then
+/// purged. Tap an item to restore it or delete it permanently.
 class RecentlyDeletedScreen extends StatelessWidget {
   const RecentlyDeletedScreen({super.key});
 
-  Future<void> _actions(BuildContext context, Note note) async {
-    final action = await showModalBottomSheet<String>(
+  Future<String?> _ask(BuildContext context) {
+    return showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => SafeArea(
@@ -27,16 +33,16 @@ class RecentlyDeletedScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.restore_rounded,
+                  leading: Icon(Icons.restore_rounded,
                       color: AppPalette.inkPrimary),
-                  title: const Text('Restore to feed',
+                  title: Text(context.t.restore,
                       style: TextStyle(color: AppPalette.inkPrimary)),
                   onTap: () => Navigator.pop(context, 'restore'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.delete_forever_rounded,
                       color: Color(0xFFE5557A)),
-                  title: const Text('Delete permanently',
+                  title: Text(context.t.deletePermanently,
                       style: TextStyle(color: Color(0xFFE5557A))),
                   onTap: () => Navigator.pop(context, 'delete'),
                 ),
@@ -46,11 +52,35 @@ class RecentlyDeletedScreen extends StatelessWidget {
         ),
       ),
     );
-    if (!context.mounted) return;
+  }
+
+  Future<void> _noteActions(BuildContext context, Note note) async {
+    final state = context.read<AppState>();
+    final action = await _ask(context);
     if (action == 'restore') {
-      await context.read<AppState>().restoreNote(note.id);
+      await state.restoreNote(note.id);
     } else if (action == 'delete') {
-      await context.read<AppState>().permanentlyDeleteNote(note.id);
+      await state.permanentlyDeleteNote(note.id);
+    }
+  }
+
+  Future<void> _cardActions(BuildContext context, TweetCard card) async {
+    final state = context.read<AppState>();
+    final action = await _ask(context);
+    if (action == 'restore') {
+      await state.restoreCard(card.id);
+    } else if (action == 'delete') {
+      await state.permanentlyDeleteCard(card.id);
+    }
+  }
+
+  Future<void> _spaceActions(BuildContext context, Space space) async {
+    final state = context.read<AppState>();
+    final action = await _ask(context);
+    if (action == 'restore') {
+      await state.restoreSpace(space.id);
+    } else if (action == 'delete') {
+      await state.permanentlyDeleteSpace(space.id);
     }
   }
 
@@ -58,6 +88,8 @@ class RecentlyDeletedScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final notes = state.deletedNotes;
+    final cards = state.deletedCards;
+    final spaces = state.deletedSpaces;
 
     final left = <Note>[];
     final right = <Note>[];
@@ -74,13 +106,15 @@ class RecentlyDeletedScreen extends StatelessWidget {
                   child: NoteCard(
                     note: n,
                     space: state.spaceById(n.spaceId),
-                    onTap: () => _actions(context, n),
-                    onLongPress: () => _actions(context, n),
+                    onTap: () => _noteActions(context, n),
+                    onLongPress: () => _noteActions(context, n),
                   ),
                 ),
             ],
           ),
         );
+
+    final isEmpty = notes.isEmpty && cards.isEmpty && spaces.isEmpty;
 
     return AppBackground(
       child: Scaffold(
@@ -88,10 +122,10 @@ class RecentlyDeletedScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           foregroundColor: AppPalette.inkPrimary,
-          title: const Text('Recently deleted',
+          title: Text(context.t.recentlyDeleted,
               style: TextStyle(fontWeight: FontWeight.w800)),
           actions: [
-            if (notes.isNotEmpty)
+            if (!isEmpty)
               TextButton(
                 onPressed: () async {
                   final ok = await _confirmEmpty(context);
@@ -99,23 +133,23 @@ class RecentlyDeletedScreen extends StatelessWidget {
                     await context.read<AppState>().emptyTrash();
                   }
                 },
-                child: const Text('Empty',
+                child: Text(context.t.empty,
                     style: TextStyle(color: Color(0xFFE5557A))),
               ),
           ],
         ),
-        body: notes.isEmpty
-            ? const Center(
+        body: isEmpty
+            ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.delete_outline_rounded,
                         size: 56, color: AppPalette.inkSecondary),
-                    SizedBox(height: 12),
-                    Text('Nothing here',
+                    const SizedBox(height: 12),
+                    Text(context.t.nothingHere,
                         style: TextStyle(color: AppPalette.inkSecondary)),
-                    SizedBox(height: 4),
-                    Text('Deleted notes are kept for 30 days.',
+                    const SizedBox(height: 4),
+                    Text(context.t.deletedKept30,
                         style: TextStyle(
                             color: AppPalette.inkSecondary, fontSize: 12.5)),
                   ],
@@ -123,21 +157,87 @@ class RecentlyDeletedScreen extends StatelessWidget {
               )
             : TopFade(
                 child: ListView(
-                padding: const EdgeInsets.fromLTRB(14, 34, 14, 24),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
-                    child: Text('Notes are deleted forever after 30 days.',
-                        style: TextStyle(
-                            color: AppPalette.inkSecondary, fontSize: 12.5)),
-                  ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [column(left), column(right)],
-                  ),
-                ],
+                  padding: const EdgeInsets.fromLTRB(14, 34, 14, 24),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
+                      child: Text(
+                          context.t.trashHint,
+                          style: TextStyle(
+                              color: AppPalette.inkSecondary,
+                              fontSize: 12.5)),
+                    ),
+                    if (spaces.isNotEmpty) ...[
+                      _label(context, context.t.sectionFolders),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(children: [
+                              for (var i = 0; i < spaces.length; i += 2)
+                                _spaceTile(context, state, spaces[i]),
+                            ]),
+                          ),
+                          Expanded(
+                            child: Column(children: [
+                              for (var i = 1; i < spaces.length; i += 2)
+                                _spaceTile(context, state, spaces[i]),
+                            ]),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (notes.isNotEmpty) ...[
+                      _label(context, context.t.sectionNotes),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [column(left), column(right)],
+                      ),
+                    ],
+                    if (cards.isNotEmpty) ...[
+                      _label(context, context.t.sectionCards),
+                      for (final c in cards)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 0, 6, 12),
+                          child: TweetCardWidget(
+                            card: c,
+                            folderName: state.spaceById(c.spaceId)?.name,
+                            onTap: () => _cardActions(context, c),
+                            onLongPress: () => _cardActions(context, c),
+                            onDelete: () => _cardActions(context, c),
+                          ),
+                        ),
+                    ],
+                  ],
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _spaceTile(BuildContext context, AppState state, Space space) {
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: SpaceTile(
+        space: space,
+        itemCount: state.itemCountForSpace(space.id),
+        onTap: () => _spaceActions(context, space),
+        onLongPress: () => _spaceActions(context, space),
+      ),
+    );
+  }
+
+  Widget _label(BuildContext context, String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 12, 6, 8),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          letterSpacing: 1.2,
+          fontWeight: FontWeight.w700,
+          color: AppPalette.inkSecondary,
+        ),
       ),
     );
   }
@@ -155,28 +255,28 @@ class RecentlyDeletedScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Empty recently deleted?',
+              Text(context.t.emptyTrashTitle,
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
               const SizedBox(height: 8),
-              const Text('This permanently deletes all notes in the trash.',
+              Text(
+                  context.t.emptyTrashBody,
                   style: TextStyle(color: AppPalette.inkSecondary)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel'),
-                  ),
+                      onPressed: () => Navigator.pop(context, false),
+                      child: Text(context.t.cancel)),
                   const SizedBox(width: 8),
                   FilledButton(
                     style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFE5557A)),
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Empty'),
+                    child: Text(context.t.empty),
                   ),
                 ],
               ),

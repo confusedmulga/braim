@@ -42,8 +42,8 @@ class IslandNav extends StatelessWidget {
         ),
         child: FakeGlass(
         shape: const LiquidRoundedSuperellipse(borderRadius: 30),
-        settings: const LiquidGlassSettings(
-          glassColor: Color(0xA6FFFFFF),
+        settings: LiquidGlassSettings(
+          glassColor: AppPalette.bubbleGlass,
           blur: 14,
         ),
         child: Padding(
@@ -83,14 +83,16 @@ class _NavButton extends StatelessWidget {
       curve: Curves.easeOutCubic,
       margin: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
-        color: selected
-            ? Colors.black.withValues(alpha: 0.08)
-            : Colors.transparent,
+        color: selected ? AppPalette.selFill : Colors.transparent,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: item.label,
+          child: InkWell(
           borderRadius: BorderRadius.circular(24),
           onTap: onTap,
           child: Padding(
@@ -115,7 +117,7 @@ class _NavButton extends StatelessWidget {
                           padding: const EdgeInsets.only(left: 8),
                           child: Text(
                             item.label,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               color: AppPalette.inkPrimary,
                             ),
@@ -125,6 +127,7 @@ class _NavButton extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

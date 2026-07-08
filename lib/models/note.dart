@@ -37,7 +37,9 @@ class Note {
     List<NoteBlock>? blocks,
     this.spaceId,
     this.backgroundAsset,
+    this.colorValue,
     this.archived = false,
+    this.pinned = false,
     this.deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -56,8 +58,15 @@ class Note {
   /// Optional per-note background image asset (one of the BACK## assets).
   String? backgroundAsset;
 
+  /// Optional Keep-style colour tag (ARGB int of the light swatch); null =
+  /// default surface.
+  int? colorValue;
+
   /// Archived notes are hidden from the feed and live in the Archive.
   bool archived;
+
+  /// Pinned notes sort to the top of the feed (max 10).
+  bool pinned;
 
   /// When set, the note is in Recently Deleted (kept ~30 days, then purged).
   DateTime? deletedAt;
@@ -103,7 +112,9 @@ class Note {
         'blocks': blocks.map((b) => b.toJson()).toList(),
         'spaceId': spaceId,
         'backgroundAsset': backgroundAsset,
+        'colorValue': colorValue,
         'archived': archived,
+        'pinned': pinned,
         'deletedAt': deletedAt?.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -117,7 +128,9 @@ class Note {
             .toList(),
         spaceId: json['spaceId'] as String?,
         backgroundAsset: json['backgroundAsset'] as String?,
+        colorValue: json['colorValue'] as int?,
         archived: (json['archived'] as bool?) ?? false,
+        pinned: (json['pinned'] as bool?) ?? false,
         deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
         updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),

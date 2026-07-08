@@ -1,0 +1,15 @@
+# Normalize all text files to LF in the repository.
+* text=auto eol=lf
+
+# Binaries — never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.jks binary
+*.keystore binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.apk binary

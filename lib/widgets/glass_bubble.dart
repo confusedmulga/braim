@@ -1,34 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
+import '../theme/app_theme.dart';
+
 /// A circular liquid-glass "bubble" around an icon button (back, menu, …).
 class GlassBubble extends StatelessWidget {
   const GlassBubble({
     super.key,
     required this.icon,
     required this.onTap,
-    this.iconColor = const Color(0xFF1B1C22),
-    this.glassColor = const Color(0xA6FFFFFF),
+    this.iconColor,
+    this.glassColor,
     this.size = 44,
     this.iconSize = 24,
     this.shadow = true,
+    this.tooltip,
   });
 
   final IconData icon;
   final VoidCallback onTap;
-  final Color iconColor;
+  final Color? iconColor;
 
   /// Tint of the glass — a faint white over dark backgrounds, a faint dark over
-  /// light backgrounds so the bubble stays visible.
-  final Color glassColor;
+  /// light backgrounds so the bubble stays visible. Defaults to the theme's
+  /// bubble glass.
+  final Color? glassColor;
   final double size;
   final double iconSize;
 
   /// Disable inside AppBars: their tight leading box clips the shadow.
   final bool shadow;
 
+  /// Accessibility label + long-press tooltip.
+  final String? tooltip;
+
   @override
   Widget build(BuildContext context) {
+    Widget bubble = _bubble();
+    if (tooltip != null) {
+      bubble = Tooltip(
+        message: tooltip!,
+        child: Semantics(button: true, label: tooltip, child: bubble),
+      );
+    }
+    return bubble;
+  }
+
+  Widget _bubble() {
     return DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -45,7 +63,7 @@ class GlassBubble extends StatelessWidget {
       child: FakeGlass(
       shape: const LiquidOval(),
       settings: LiquidGlassSettings(
-        glassColor: glassColor,
+        glassColor: glassColor ?? AppPalette.bubbleGlass,
         blur: 10,
       ),
       child: SizedBox(
@@ -57,7 +75,8 @@ class GlassBubble extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
-            child: Icon(icon, color: iconColor, size: iconSize),
+            child: Icon(icon,
+                color: iconColor ?? AppPalette.inkPrimary, size: iconSize),
           ),
         ),
       ),

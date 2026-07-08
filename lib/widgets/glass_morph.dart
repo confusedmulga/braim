@@ -1,31 +1,16 @@
-import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
-/// A soft spring curve: gentle acceleration, ~2–3% overshoot, no wobble —
-/// a droplet finding equilibrium rather than a ball bouncing.
-class _SoftSpring extends Curve {
-  const _SoftSpring();
+import '../theme/app_theme.dart';
 
-  /// Overshoot strength (easeOutBack's c1): 0.55 ≈ a 2–3% overshoot.
-  static const double back = 0.55;
-
-  @override
-  double transformInternal(double t) {
-    final c3 = back + 1;
-    final p = t - 1.0;
-    return 1 + c3 * p * p * p + back * p * p;
-  }
-}
-
-/// Wraps a feed card so it morphs into a full screen like a sheet of living
-/// glass (Keep-style spatial continuity), and collapses back into its exact
-/// place in the feed when closed.
+/// Wraps a feed card so it expands into a full screen and collapses back into
+/// its exact place in the feed — Google Keep's container transform, kept
+/// deliberately simple: one standard curve, a plain surface, content
+/// crossfade, nothing flashy.
 ///
 /// Built for smoothness: the opened screen is laid out ONCE at its final size
-/// and revealed by a growing clip, so nothing relayouts per frame; the spring,
-/// sheen and shadow are paint-time only.
+/// and revealed by a growing clip, so nothing relayouts per frame.
 class GlassMorph extends StatefulWidget {
   const GlassMorph({
     super.key,
@@ -43,6 +28,15 @@ class GlassMorph extends StatefulWidget {
   /// Corner radius of the collapsed card.
   final double closedRadius;
 
+  /// Call from inside a morph-opened screen before popping it: the route
+  /// slides down off-screen unchanged instead of collapsing back into its
+  /// source. Used when a NEW note was actually created — collapsing into the
+  /// + button it came from would read as the note being discarded.
+  static void slideCloseOf(BuildContext context) {
+    final route = ModalRoute.of(context);
+    if (route is _GlassMorphRoute) route.slideClose = true;
+  }
+
   @override
   State<GlassMorph> createState() => _GlassMorphState();
 }
@@ -50,8 +44,8 @@ class GlassMorph extends StatefulWidget {
 class _GlassMorphState extends State<GlassMorph> {
   final _key = GlobalKey();
 
-  /// The original card hides while its glass twin flies; it reappears the
-  /// moment the twin lands back on it.
+  /// The original card hides while its twin flies; it reappears the moment
+  /// the twin lands back on it.
   bool _hidden = false;
 
   void _open() {
@@ -68,7 +62,11 @@ class _GlassMorphState extends State<GlassMorph> {
     setState(() => _hidden = true);
     Navigator.of(context).push(route);
     route.animation!.addStatusListener((s) {
-      if (s == AnimationStatus.dismissed && mounted) {
+      if (!mounted || !_hidden) return;
+      // On a slide-close the source reappears immediately, revealed as the
+      // sheet rides down, instead of blinking in at the end.
+      if (s == AnimationStatus.dismissed ||
+          (s == AnimationStatus.reverse && route.slideClose)) {
         setState(() => _hidden = false);
       }
     });
@@ -102,6 +100,10 @@ class _GlassMorphRoute<T> extends PageRoute<T> {
   final Widget closedFace;
   final WidgetBuilder builder;
 
+  /// When set (just before pop), the reverse transition slides the sheet
+  /// down off-screen at full size rather than collapsing into [sourceRect].
+  bool slideClose = false;
+
   @override
   Color? get barrierColor => null;
   @override
@@ -110,15 +112,12 @@ class _GlassMorphRoute<T> extends PageRoute<T> {
   bool get opaque => false;
   @override
   bool get maintainState => true;
+  // M3 container-transform timing: a touch longer so the emphasized curve's
+  // gentle settle has room to breathe.
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 360);
+  Duration get transitionDuration => const Duration(milliseconds: 340);
   @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 290);
-
-  // Width leads, height lags ~40ms behind — the sheet unfolds rather than
-  // uniformly scales.
-  static const _xCurve = Interval(0.0, 0.90, curve: _SoftSpring());
-  static const _yCurve = Interval(0.10, 1.0, curve: _SoftSpring());
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 260);
 
   @override
   Widget buildPage(BuildContext context, Animation<double> animation,
@@ -133,62 +132,93 @@ class _GlassMorphRoute<T> extends PageRoute<T> {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
-        final t = animation.value;
-        final tc = t.clamp(0.0, 1.0);
-        final tx = _xCurve.transform(tc);
-        final ty = _yCurve.transform(tc);
+        if (slideClose) {
+          // The note was kept: the sheet rides down off-screen unchanged
+          // (M3 emphasized-accelerate — the exit-motion token), while the
+          // feed brightens behind it.
+          final v = animation.value.clamp(0.0, 1.0);
+          final drop =
+              const Cubic(0.3, 0, 0.8, 0.15).transform(1 - v) * screen.height;
+          return Material(
+            type: MaterialType.transparency,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                        color: Colors.black.withValues(alpha: 0.08 * v)),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  top: drop,
+                  width: screen.width,
+                  height: screen.height,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.20),
+                          blurRadius: 22,
+                          offset: const Offset(0, -4),
+                        ),
+                      ]),
+                      // Raster the sheet once; each slide frame then only
+                      // re-composites the cached layer at a new offset.
+                      child: RepaintBoundary(
+                          child: ColoredBox(
+                              color: AppPalette.sheet, child: child)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
-        final left = lerpDouble(sourceRect.left, 0, tx)!;
-        final width = lerpDouble(sourceRect.width, screen.width, tx)!;
-        final top = lerpDouble(sourceRect.top, 0, ty)!;
-        final height = lerpDouble(sourceRect.height, screen.height, ty)!;
+        // M3's emphasized easing — the motion token the container-transform
+        // guideline specifies: quick departure, long graceful settle.
+        final t = Curves.easeInOutCubicEmphasized.transform(
+          animation.value.clamp(0.0, 1.0),
+        );
+
+        final left = lerpDouble(sourceRect.left, 0, t)!;
+        final top = lerpDouble(sourceRect.top, 0, t)!;
+        final width = lerpDouble(sourceRect.width, screen.width, t)!;
+        final height = lerpDouble(sourceRect.height, screen.height, t)!;
 
         // Corners hold their roundness early and straighten near the end.
-        final radius =
-            lerpDouble(closedRadius, 0, Curves.easeInQuad.transform(tc))!;
+        final radius = lerpDouble(closedRadius, 0, Curves.easeInQuad.transform(t))!;
 
-        // Microscopic compression as the glass gathers itself, then release.
-        final squash = tc < 0.08
-            ? lerpDouble(1.0, 0.988, tc / 0.08)!
-            : lerpDouble(0.988, 1.0, ((tc - 0.08) / 0.92).clamp(0.0, 1.0))!;
-
-        final shadowT = Curves.easeOut.transform(tc);
-        // Highlight travels across the surface, peaking mid-flight.
-        final sheen = math.sin(math.pi * tc);
         // The card face carries the first frames, then dissolves into content.
-        final faceO = (1 - (tc / 0.42)).clamp(0.0, 1.0);
-        final bodyO = ((tc - 0.16) / 0.5).clamp(0.0, 1.0);
-        // The feed dims a touch but never disappears — context is preserved.
-        final scrim = 0.10 * Curves.easeOut.transform(tc);
+        final faceO = (1 - (t / 0.4)).clamp(0.0, 1.0);
+        final bodyO = ((t - 0.15) / 0.45).clamp(0.0, 1.0);
+        // The feed dims slightly but never disappears.
+        final scrim = 0.08 * t;
 
-        // Material ancestor so the card face's text/ink render normally
-        // inside the route (outside it, they'd get the yellow fallback style).
         return Material(
           type: MaterialType.transparency,
           child: Stack(
-          children: [
-            Positioned.fill(
-              child: IgnorePointer(
-                child:
-                    ColoredBox(color: Colors.black.withValues(alpha: scrim)),
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child:
+                      ColoredBox(color: Colors.black.withValues(alpha: scrim)),
+                ),
               ),
-            ),
-            Positioned(
-              left: left,
-              top: top,
-              width: width,
-              height: height,
-              child: Transform.scale(
-                scale: squash,
+              Positioned(
+                left: left,
+                top: top,
+                width: width,
+                height: height,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(radius),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black
-                            .withValues(alpha: 0.10 + 0.16 * shadowT),
-                        blurRadius: 16 + 26 * shadowT,
-                        offset: Offset(0, 6 + 8 * shadowT),
+                        color: Colors.black.withValues(alpha: 0.10 + 0.12 * t),
+                        blurRadius: 14 + 20 * t,
+                        offset: Offset(0, 5 + 7 * t),
                       ),
                     ],
                   ),
@@ -197,27 +227,26 @@ class _GlassMorphRoute<T> extends PageRoute<T> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // The glass sheet's own surface.
-                        const ColoredBox(color: Color(0xF7FFFFFF)),
+                        // The sheet's surface.
+                        ColoredBox(color: AppPalette.sheet),
                         // The live screen, laid out once at final size and
-                        // revealed by the growing clip — zero relayout. It
-                        // emerges from a white veil (cheap alpha paint) rather
-                        // than a whole-layer Opacity fade.
+                        // revealed by the growing clip — zero relayout. The
+                        // RepaintBoundary rasters it once as its own layer,
+                        // so the per-frame clip change only re-composites a
+                        // cached texture instead of repainting the whole
+                        // screen (images, panels, text) every frame.
                         OverflowBox(
                           alignment: Alignment.topLeft,
                           minWidth: screen.width,
                           maxWidth: screen.width,
                           minHeight: screen.height,
                           maxHeight: screen.height,
-                          child: Transform.translate(
-                            offset: Offset(0, 10 * (1 - ty).clamp(0.0, 1.0)),
-                            child: child,
-                          ),
+                          child: RepaintBoundary(child: child),
                         ),
                         if (bodyO < 1)
                           IgnorePointer(
                             child: ColoredBox(
-                              color: Colors.white
+                              color: AppPalette.sheet
                                   .withValues(alpha: 1 - bodyO),
                             ),
                           ),
@@ -231,45 +260,12 @@ class _GlassMorphRoute<T> extends PageRoute<T> {
                               child: IgnorePointer(child: closedFace),
                             ),
                           ),
-                        // Specular highlight sweeping with the motion.
-                        if (sheen > 0.02)
-                          IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment(-1.4 + 2.4 * tc, -1),
-                                  end: Alignment(-0.4 + 2.4 * tc, 1),
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0),
-                                    Colors.white
-                                        .withValues(alpha: 0.10 * sheen),
-                                    Colors.white.withValues(alpha: 0),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        // A whisper of edge glow that stretches with motion.
-                        if (radius > 1)
-                          IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(radius),
-                                border: Border.all(
-                                  color: Colors.white
-                                      .withValues(alpha: 0.35 * sheen),
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                          ),
                       ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
           ),
         );
       },
