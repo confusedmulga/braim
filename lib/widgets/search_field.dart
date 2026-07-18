@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 
-/// A compact, deliberately-narrow liquid-glass search field (same glass as the
-/// navigation island). [widthFactor] keeps it less wide than the full screen.
-/// Shows a clear ✕ on the right whenever there is text.
+/// A compact, deliberately-narrow search field (same flat near-opaque surface
+/// as the navigation island). [widthFactor] keeps it less wide than the full
+/// screen. Shows a clear ✕ on the right whenever there is text.
 class SearchField extends StatefulWidget {
   const SearchField({
     super.key,
@@ -46,7 +45,9 @@ class _SearchFieldState extends State<SearchField> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+      // No bottom padding: the gap below the bar belongs to the feeds' top
+      // padding, so their fade band starts flush at the bar's edge.
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
       child: Row(
         children: [
           Expanded(
@@ -54,9 +55,11 @@ class _SearchFieldState extends State<SearchField> {
         alignment: Alignment.centerLeft,
         child: FractionallySizedBox(
           widthFactor: widget.widthFactor,
-          child: DecoratedBox(
+          child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
+              color: AppPalette.bubbleGlass,
+              border: Border.all(color: AppPalette.cardOutline),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.18),
@@ -64,12 +67,6 @@ class _SearchFieldState extends State<SearchField> {
                   offset: const Offset(0, 6),
                 ),
               ],
-            ),
-            child: FakeGlass(
-            shape: const LiquidRoundedSuperellipse(borderRadius: 22),
-            settings: LiquidGlassSettings(
-              glassColor: AppPalette.bubbleGlass,
-              blur: 14,
             ),
             child: SizedBox(
               height: 46,
@@ -119,7 +116,6 @@ class _SearchFieldState extends State<SearchField> {
                   ],
                 ),
               ),
-            ),
             ),
           ),
         ),

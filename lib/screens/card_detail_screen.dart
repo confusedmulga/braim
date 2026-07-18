@@ -156,22 +156,33 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                tooltip: context.t.refreshPreview,
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: () => context.read<AppState>().refreshCard(_card.id),
-              ),
-              IconButton(
-                tooltip: context.t.deleteCard,
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () {
-                  final state = context.read<AppState>();
-                  setState(() => _closing = true);
-                  Navigator.of(context).pop();
-                  Future.delayed(const Duration(milliseconds: 380), () {
-                    state.deleteCard(_card.id);
-                  });
-                },
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                // One pill around the actions, on the back bubble's line.
+                child: BubblePill(
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: context.t.refreshPreview,
+                      icon: const Icon(Icons.refresh_rounded),
+                      onPressed: () =>
+                          context.read<AppState>().refreshCard(_card.id),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: context.t.deleteCard,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () {
+                        final state = context.read<AppState>();
+                        setState(() => _closing = true);
+                        Navigator.of(context).pop();
+                        Future.delayed(const Duration(milliseconds: 380), () {
+                          state.deleteCard(_card.id);
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -184,6 +195,10 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                   const SizedBox(height: 10),
                   _LinkBar(
                       url: _card.url, onOpen: _openLink, onCopy: _copyLink),
+                  if (_card.articleText.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _ArticleReader(text: _card.articleText),
+                  ],
                   const SizedBox(height: 16),
                   TextField(
                     controller: _titleCtrl,
@@ -245,19 +260,11 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                   top: 0,
                   left: 0,
                   right: 0,
-                  // Fewer blur bands: each one is a live BackdropFilter that
-                  // resamples the content on every scroll frame.
-                  child: ProgressiveBlur(
-                      height: topInset + 10, fromTop: true, bands: 4),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  // The island covers most of this zone; a shorter, coarser
-                  // fade reads the same and filters far fewer pixels.
-                  child:
-                      ProgressiveBlur(height: 130, fromTop: false, bands: 4),
+                  // Scrim confined to the status bar so the clock/battery stay
+                  // readable over whatever scrolls beneath; the card content
+                  // itself stays fully visible under the toolbar.
+                  child: TopScrimFade(
+                      height: MediaQuery.of(context).padding.top + 8),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
@@ -386,6 +393,78 @@ class _CardPreview extends StatelessWidget {
         errorBuilder: (_, _, _) => fallback,
         loadingBuilder: (context, child, progress) =>
             progress == null ? child : fallback,
+      ),
+    );
+  }
+}
+
+/// The page's captured article text, readable in place (no browser needed).
+/// Collapsible so a long read doesn't bury the user's own note below it.
+class _ArticleReader extends StatefulWidget {
+  const _ArticleReader({required this.text});
+  final String text;
+
+  @override
+  State<_ArticleReader> createState() => _ArticleReaderState();
+}
+
+class _ArticleReaderState extends State<_ArticleReader> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      borderRadius: 22,
+      blur: 0,
+      color: Colors.black.withValues(alpha: 0.05),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.chrome_reader_mode_outlined,
+                      size: 18, color: AppPalette.inkSecondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(context.t.readerSection,
+                        style: TextStyle(
+                            fontSize: 12,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w700,
+                            color: AppPalette.inkSecondary)),
+                  ),
+                  Icon(
+                    _expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    size: 20,
+                    color: AppPalette.inkSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: SelectionArea(
+                child: Text(
+                  widget.text,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    height: 1.55,
+                    color: AppPalette.inkPrimary,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

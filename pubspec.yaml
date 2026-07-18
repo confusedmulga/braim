@@ -91,6 +91,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/wallpapers/
     # OFL requires the license to travel with the font.
     - assets/fonts/OFL-SpaceGrotesk.txt
 

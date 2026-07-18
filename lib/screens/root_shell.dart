@@ -23,6 +23,7 @@ import '../widgets/universal_search.dart';
 import 'archive_screen.dart';
 import 'cards_screen.dart';
 import 'home_screen.dart';
+import 'journal_screen.dart';
 import 'note_editor_screen.dart';
 import 'recently_deleted_screen.dart';
 import 'settings_screen.dart';
@@ -67,7 +68,11 @@ class _RootShellState extends State<RootShell>
     ScrollController(),
     ScrollController(),
     ScrollController(),
+    ScrollController(),
   ];
+
+  /// Lets the title tap snap the journal's week strip back to today.
+  final _journalKey = GlobalKey<JournalScreenState>();
 
   /// Drives the side pane + scrim together so a finger can drag the pane
   /// partway and it settles open or closed from wherever it was released.
@@ -174,6 +179,24 @@ class _RootShellState extends State<RootShell>
     _paneCtrl.animateBack(0, curve: Curves.easeOutCubic);
   }
 
+  /// How far the screen is pushed right while the drawer is out (old-Discord
+  /// push style): the drawer owns the left two thirds of the screen.
+  double get _paneWidth => MediaQuery.of(context).size.width * (2 / 3);
+
+  void _paneDragUpdate(DragUpdateDetails d) {
+    _paneCtrl.value =
+        (_paneCtrl.value + d.delta.dx / _paneWidth).clamp(0.0, 1.0);
+  }
+
+  void _paneDragEnd(DragEndDetails d) {
+    final fling = d.velocity.pixelsPerSecond.dx;
+    if (fling < -350 || (fling < 350 && _paneCtrl.value < 0.55)) {
+      _closePane();
+    } else {
+      _openPane();
+    }
+  }
+
   void _selectTab(int i) {
     _closePane();
     if (i == _index) {
@@ -189,6 +212,9 @@ class _RootShellState extends State<RootShell>
   }
 
   void _scrollFeedToTop(int i) {
+    // On the journal, coming "back to the top" also means coming back to
+    // the current week after swiping into the past or future.
+    if (i == 2) _journalKey.currentState?.resetToToday();
     final c = _feedScrolls[i];
     if (!c.hasClients) return;
     c.animateTo(
@@ -241,16 +267,22 @@ class _RootShellState extends State<RootShell>
   }
 
   Widget _topBar() {
-    final titles = [context.t.tabHome, context.t.tabCards, context.t.tabCortex];
+    final titles = [
+      context.t.tabHome,
+      context.t.tabCards,
+      context.t.tabJournal,
+      context.t.tabCortex,
+    ];
     final subtitles = [
       context.t.subtitleHome,
       context.t.subtitleCards,
+      context.t.subtitleJournal,
       context.t.subtitleCortex,
     ];
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
         child: Row(
           children: [
             GlassBubble(
@@ -312,6 +344,25 @@ class _RootShellState extends State<RootShell>
         tooltip: context.t.saveALink,
         onTap: _addLink,
       );
+    } else if (_index == 2) {
+      button = GlassMorph(
+        key: const ValueKey('fab-journal'),
+        closedRadius: 34,
+        // Entries are written on the day they happen: always today, never a
+        // past or future date, whatever day is selected in the journal.
+        openBuilder: (_) => NoteEditorScreen(
+          note: Note(journalDate: AppState.journalKey(DateTime.now())),
+          isNew: true,
+        ),
+        closedBuilder: (context, open) => BubbleButton(
+            icon: Icons.edit_rounded,
+            tooltip: context.t.newEntry,
+            onTap: () {
+              // Snap the journal to today so the new entry is in view.
+              _journalKey.currentState?.resetToToday();
+              open();
+            }),
+      );
     } else {
       button = BubbleButton(
         key: const ValueKey('fab-folder'),
@@ -340,7 +391,11 @@ class _RootShellState extends State<RootShell>
         if (!didPop && _paneOpen) _closePane();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.light
+        // Status icons follow the surface: dark icons on the light theme,
+        // light icons on the dark one.
+        value: (AppPalette.dark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark)
             .copyWith(statusBarColor: Colors.transparent),
         child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -358,158 +413,171 @@ class _RootShellState extends State<RootShell>
           },
           child: Stack(
           children: [
+            // Plain base so nothing bleeds through the drawer's rounded edge.
             const Positioned.fill(child: AppBackground()),
-            Column(
-              children: [
-                _topBar(),
-                KeyedSubtree(
-                  key: _searchKey,
-                  child: SearchField(
-                    hint: context.t.searchHint,
-                    onChanged: _onSearchChanged,
-                    // Sort applies to the notes and cards feeds, not folders.
-                    trailing: _index == 2 ? null : const SortButton(),
-                  ),
-                ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      // Content dissolves upward under the header instead of
-                      // clipping hard against it.
-                      TopFade(
-                        child: Stack(
-                          children: [
-                            PageView(
-                              controller: _pageController,
-                              physics: const _SpringPagePhysics(),
-                              onPageChanged: (i) =>
-                                  setState(() => _index = i),
-                              children: [
-                                _KeepAlive(
-                                    child: HomeScreen(
-                                        controller: _feedScrolls[0])),
-                                _KeepAlive(
-                                    child: CardsScreen(
-                                        controller: _feedScrolls[1])),
-                                _KeepAlive(
-                                    child: SpacesScreen(
-                                        controller: _feedScrolls[2])),
-                              ],
-                            ),
-                            if (searching)
-                              Positioned.fill(
-                                child: AppBackground(
-                                  child:
-                                      UniversalSearchResults(query: _query),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      // The cards Open/Blocks toggle floats fixed in the fade
-                      // zone (outside the mask so it never dims), always
-                      // available while the feed scrolls beneath it.
-                      Positioned(
-                        top: 2,
-                        right: 18,
-                        child: IgnorePointer(
-                          ignoring: _index != 1 || searching,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 180),
-                            opacity: (_index == 1 && !searching) ? 1 : 0,
-                            child: Selector<AppState, bool>(
-                              selector: (_, s) => s.cardsCompact,
-                              builder: (context, compact, _) =>
-                                  CardsViewToggle(
-                                compact: compact,
-                                onChanged: (v) => context
-                                    .read<AppState>()
-                                    .setCardsCompact(v),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            // Floating island nav + the universal action bubble, centred as
-            // one group.
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 18),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      IslandNav(currentIndex: _index, onTap: _selectTab),
-                      const SizedBox(width: 12),
-                      _fab(),
-                    ],
+            // The drawer lives UNDER the screen (old-Discord push style): it
+            // slides in from the left with a slight parallax while the whole
+            // screen above it is pushed right by the drawer's width.
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: _paneWidth,
+              child: AnimatedBuilder(
+                animation: _paneCtrl,
+                builder: (context, child) {
+                  final v = _paneCtrl.value;
+                  if (v == 0) return const SizedBox.shrink();
+                  return Transform.translate(
+                    offset: Offset(-_paneWidth * 0.3 * (1 - v), 0),
+                    child: child,
+                  );
+                },
+                child: GestureDetector(
+                  onHorizontalDragUpdate: _paneDragUpdate,
+                  onHorizontalDragEnd: _paneDragEnd,
+                  child: SidePane(
+                    currentIndex: _index,
+                    onSelectTab: _selectTab,
+                    onOpenSettings: _openSettings,
+                    onOpenArchive: _openArchive,
+                    onOpenTrash: _openTrash,
+                    onOpenSpace: _openSpace,
+                    onClose: _closePane,
                   ),
                 ),
               ),
             ),
-            // Scrim + side pane, driven by one controller so the pane can
-            // be dragged closed with a finger and settles from wherever it
-            // was released.
+            // The main screen: everything (background, feed, island, fab)
+            // slides right together, leaving the left two thirds to the
+            // drawer.
             AnimatedBuilder(
               animation: _paneCtrl,
-              builder: (context, _) {
+              builder: (context, child) {
                 final v = _paneCtrl.value;
-                return Stack(
+                final content = Stack(
                   fit: StackFit.expand,
                   children: [
+                    child!,
+                    // Dim the pushed screen and catch its taps/drags while
+                    // the drawer is out.
                     if (v > 0)
-                      GestureDetector(
-                        onTap: _closePane,
-                        child: Container(
-                            color:
-                                Colors.black.withValues(alpha: 0.35 * v)),
-                      ),
-                    FractionalTranslation(
-                      translation: Offset(-1.1 * (1 - v), 0),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
+                      Positioned.fill(
                         child: GestureDetector(
-                          onHorizontalDragUpdate: (d) {
-                            // The pane travels 1.1 screen-widths, so scale
-                            // the finger delta to keep it tracking 1:1.
-                            final travel =
-                                MediaQuery.of(context).size.width * 1.1;
-                            _paneCtrl.value = (_paneCtrl.value +
-                                    d.delta.dx / travel)
-                                .clamp(0.0, 1.0);
-                          },
-                          onHorizontalDragEnd: (d) {
-                            final fling = d.velocity.pixelsPerSecond.dx;
-                            if (fling < -350 ||
-                                (fling < 350 && _paneCtrl.value < 0.55)) {
-                              _closePane();
-                            } else {
-                              _openPane();
-                            }
-                          },
-                          child: SidePane(
-                            currentIndex: _index,
-                            onSelectTab: _selectTab,
-                            onOpenSettings: _openSettings,
-                            onOpenArchive: _openArchive,
-                            onOpenTrash: _openTrash,
-                            onOpenSpace: _openSpace,
-                            onClose: _closePane,
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _closePane,
+                          onHorizontalDragUpdate: _paneDragUpdate,
+                          onHorizontalDragEnd: _paneDragEnd,
+                          child: ColoredBox(
+                            color: Colors.black.withValues(alpha: 0.22 * v),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 );
+                // The pushed screen curls its corners in as it slides out,
+                // like a lifted card. The radius reaches its full 24 within
+                // the first sixth of the slide — tying it 1:1 to the slide
+                // left a square grey corner flashing against the light
+                // drawer early in the animation. The ClipRRect must ALWAYS
+                // wrap the content (zero radius only at rest): swapping it
+                // in and out changes the tree shape, which remounts the
+                // feeds and silently resets the PageView to the first tab.
+                return Transform.translate(
+                  offset: Offset(_paneWidth * v, 0),
+                  child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(24 * (v * 6).clamp(0.0, 1.0)),
+                    child: content,
+                  ),
+                );
               },
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const Positioned.fill(
+                      child: AppBackground(wallpaper: true)),
+                  Column(
+                    children: [
+                      _topBar(),
+                      KeyedSubtree(
+                        key: _searchKey,
+                        child: SearchField(
+                          hint: context.t.searchHint,
+                          onChanged: _onSearchChanged,
+                          // Sort applies to the notes and cards feeds only,
+                          // not the journal (fixed by day) or the folder grid.
+                          trailing: _index <= 1 ? const SortButton() : null,
+                        ),
+                      ),
+                      Expanded(
+                        // A short fade dissolves tiles just before the search
+                        // bar so they don't clip against a hard line. Its
+                        // height equals the feeds' 12px top padding, so at
+                        // rest the first row sits fully opaque exactly one
+                        // gap below the bar — the same gap the header row
+                        // keeps above it.
+                        child: TopFade(
+                          height: 12,
+                          child: Stack(
+                            children: [
+                              PageView(
+                                controller: _pageController,
+                                physics: const _SpringPagePhysics(),
+                                onPageChanged: (i) =>
+                                    setState(() => _index = i),
+                                children: [
+                                  _KeepAlive(
+                                      child: HomeScreen(
+                                          controller: _feedScrolls[0])),
+                                  _KeepAlive(
+                                      child: CardsScreen(
+                                          controller: _feedScrolls[1])),
+                                  _KeepAlive(
+                                      child: JournalScreen(
+                                          key: _journalKey,
+                                          controller: _feedScrolls[2])),
+                                  _KeepAlive(
+                                      child: SpacesScreen(
+                                          controller: _feedScrolls[3])),
+                                ],
+                              ),
+                              if (searching)
+                                Positioned.fill(
+                                  child: AppBackground(
+                                    child: UniversalSearchResults(
+                                        query: _query),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Floating island nav + the universal action bubble,
+                  // centred as one group.
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            IslandNav(
+                                currentIndex: _index, onTap: _selectTab),
+                            const SizedBox(width: 12),
+                            _fab(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
           ),

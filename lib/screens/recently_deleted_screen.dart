@@ -156,8 +156,9 @@ class RecentlyDeletedScreen extends StatelessWidget {
                 ),
               )
             : TopFade(
+                height: 12,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 34, 14, 24),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
@@ -245,44 +246,22 @@ class RecentlyDeletedScreen extends StatelessWidget {
   Future<bool?> _confirmEmpty(BuildContext context) {
     return showDialog<bool>(
       context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: GlassEdge(
-          borderRadius: 22,
-          fill: AppPalette.whiteFill,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.t.emptyTrashTitle,
-                  style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.inkPrimary)),
-              const SizedBox(height: 8),
-              Text(
-                  context.t.emptyTrashBody,
-                  style: TextStyle(color: AppPalette.inkSecondary)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text(context.t.cancel)),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFE5557A)),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text(context.t.empty),
-                  ),
-                ],
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: Text(context.t.emptyTrashTitle),
+        content: Text(context.t.emptyTrashBody),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.t.cancel)),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppPalette.scheme.error,
+              foregroundColor: AppPalette.scheme.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.t.empty),
           ),
-        ),
+        ],
       ),
     );
   }

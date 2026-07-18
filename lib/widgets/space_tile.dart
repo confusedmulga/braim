@@ -10,8 +10,8 @@ import 'thumbnail_label.dart';
 /// A folder tile for the Cortex grid.
 ///
 /// Folders with a thumbnail are full squares; folders without one render as
-/// compact half-height tiles with a white glassy fill, so the grid packs
-/// tight like the home feed.
+/// compact half-height tiles tinted with the theme's secondary container so
+/// they read against the plain surface, packing tight like the home feed.
 class SpaceTile extends StatelessWidget {
   const SpaceTile({
     super.key,
@@ -39,7 +39,7 @@ class SpaceTile extends StatelessWidget {
           // The tile is filled by its thumbnail; a live backdrop blur per tile
           // made swiping to Cortex stutter.
           blur: 0,
-          color: _hasThumb ? null : AppPalette.whiteFill,
+          color: _hasThumb ? null : AppPalette.scheme.secondaryContainer,
           padding: EdgeInsets.zero,
           onTap: onTap,
           child: _hasThumb ? _thumbTile(context) : _compactTile(context),
@@ -89,6 +89,7 @@ class SpaceTile extends StatelessWidget {
   }
 
   Widget _compactTile(BuildContext context) {
+    final ink = AppPalette.scheme.onSecondaryContainer;
     return AspectRatio(
       aspectRatio: 2,
       child: Padding(
@@ -99,11 +100,10 @@ class SpaceTile extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: ink.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(Icons.folder_rounded,
-                  size: 20, color: AppPalette.inkSecondary),
+              child: Icon(Icons.folder_rounded, size: 20, color: ink),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -118,7 +118,7 @@ class SpaceTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: AppPalette.inkPrimary,
+                      color: ink,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -126,7 +126,7 @@ class SpaceTile extends StatelessWidget {
                     context.t.itemsCount(itemCount),
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppPalette.inkSecondary,
+                      color: ink.withValues(alpha: 0.8),
                     ),
                   ),
                 ],

@@ -4,7 +4,8 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import '../theme/app_theme.dart';
 
 /// A round liquid-glass "bubble" action button that squishes on press (reacting
-/// like a bubble) before firing [onTap].
+/// like a bubble) before firing [onTap]. Part of the nav-island cluster, so it
+/// keeps the frosted glass look the rest of the app dropped.
 class BubbleButton extends StatefulWidget {
   const BubbleButton({
     super.key,
@@ -59,7 +60,9 @@ class _BubbleButtonState extends State<BubbleButton> {
           child: FakeGlass(
             shape: const LiquidOval(),
             settings: LiquidGlassSettings(
-              glassColor: widget.glassColor ?? AppPalette.bubbleGlass,
+              // whiteFill is the nav island's translucent frost, so the two
+              // stay visually paired in both modes.
+              glassColor: widget.glassColor ?? AppPalette.whiteFill,
               blur: 12,
             ),
             child: SizedBox(

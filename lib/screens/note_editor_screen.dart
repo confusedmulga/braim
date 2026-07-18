@@ -9,6 +9,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
 
 import '../models/note.dart';
+import '../services/journal_format.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
@@ -47,6 +48,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   /// True while collapsing back into the feed: the frosted backdrop blur is
   /// dropped for the collapse so the shrinking glass stays perfectly paced.
   bool _closing = false;
+
+  /// Journal entries get a centered date header instead of the folder chip
+  /// and no folder controls; everything else works like a note.
+  bool get _isJournal => _note.journalDate != null;
 
   @override
   void initState() {
@@ -204,32 +209,45 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                tooltip: context.t.copyNote,
-                icon: const Icon(Icons.copy_all_rounded),
-                onPressed: _copyNote,
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                // One pill around the actions, on the back bubble's line.
+                child: BubblePill(
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: context.t.copyNote,
+                      icon: const Icon(Icons.copy_all_rounded),
+                      onPressed: _copyNote,
+                    ),
+                    if (!widget.isNew && !_isJournal)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        tooltip: _note.archived
+                            ? context.t.unarchive
+                            : context.t.archive,
+                        icon: Icon(_note.archived
+                            ? Icons.unarchive_outlined
+                            : Icons.archive_outlined),
+                        onPressed: () {
+                          _note.archived = !_note.archived;
+                          _close();
+                        },
+                      ),
+                    if (!widget.isNew)
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        onPressed: () {
+                          final state = context.read<AppState>();
+                          setState(() => _closing = true);
+                          Navigator.of(context).pop();
+                          _persistLater(state, delete: true);
+                        },
+                      ),
+                  ],
+                ),
               ),
-              if (!widget.isNew)
-                IconButton(
-                  tooltip: _note.archived ? context.t.unarchive : context.t.archive,
-                  icon: Icon(_note.archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined),
-                  onPressed: () {
-                    _note.archived = !_note.archived;
-                    _close();
-                  },
-                ),
-              if (!widget.isNew)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  onPressed: () {
-                    final state = context.read<AppState>();
-                    setState(() => _closing = true);
-                    Navigator.of(context).pop();
-                    _persistLater(state, delete: true);
-                  },
-                ),
             ],
           ),
           body: Stack(
@@ -263,34 +281,83 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                         ),
                       ),
                     ),
-                  _Entrance(
-                    animation: routeAnim,
-                    interval: const Interval(0.30, 0.72, curve: Curves.easeOut),
-                    blur: true,
-                    child: TextField(
-                      controller: _titleCtrl,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppPalette.inkPrimary,
+                  if (_isJournal)
+                    _Entrance(
+                      animation: routeAnim,
+                      interval:
+                          const Interval(0.30, 0.72, curve: Curves.easeOut),
+                      blur: true,
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 4),
+                          // The entry's default identity: its day.
+                          Text(
+                            formatJournalDate(
+                                DateTime.parse(_note.journalDate!)),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.4,
+                              color: AppPalette.journalAccent,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          TextField(
+                            controller: _titleCtrl,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: AppPalette.inkPrimary,
+                            ),
+                            maxLines: null,
+                            scrollPhysics:
+                                const NeverScrollableScrollPhysics(),
+                            decoration: InputDecoration(
+                              hintText: context.t.addATitle,
+                              hintStyle: TextStyle(
+                                color: AppPalette.inkSecondary
+                                    .withValues(alpha: 0.6),
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              border: InputBorder.none,
+                            ),
+                          ),
+                        ],
                       ),
-                      maxLines: null,
-                      // The field grows with its text; without this, the
-                      // app-wide bouncy physics let the title rubber-band
-                      // on its own instead of scrolling with the note.
-                      scrollPhysics: const NeverScrollableScrollPhysics(),
-                      decoration: InputDecoration(
-                        hintText: context.t.title,
-                        hintStyle: TextStyle(
-                          color:
-                              AppPalette.inkSecondary.withValues(alpha: 0.6),
+                    )
+                  else
+                    _Entrance(
+                      animation: routeAnim,
+                      interval:
+                          const Interval(0.30, 0.72, curve: Curves.easeOut),
+                      blur: true,
+                      child: TextField(
+                        controller: _titleCtrl,
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
+                          color: AppPalette.inkPrimary,
                         ),
-                        border: InputBorder.none,
+                        maxLines: null,
+                        // The field grows with its text; without this, the
+                        // app-wide bouncy physics let the title rubber-band
+                        // on its own instead of scrolling with the note.
+                        scrollPhysics: const NeverScrollableScrollPhysics(),
+                        decoration: InputDecoration(
+                          hintText: context.t.title,
+                          hintStyle: TextStyle(
+                            color:
+                                AppPalette.inkSecondary.withValues(alpha: 0.6),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          border: InputBorder.none,
+                        ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 8),
                   _Entrance(
                     animation: routeAnim,
@@ -314,13 +381,16 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   top: 0,
                   left: 0,
                   right: 0,
-                  child: ProgressiveBlur(height: topInset + 10, fromTop: true),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: ProgressiveBlur(height: 170, fromTop: false),
+                  // Scrim confined to the status bar so the clock/battery stay
+                  // readable over whatever scrolls beneath; the note text
+                  // itself stays fully visible under the toolbar.
+                  child: TopScrimFade(
+                    height: MediaQuery.of(context).padding.top + 8,
+                    color: _note.backgroundAsset == null
+                        ? (NoteColors.resolve(_note.colorValue) ??
+                            AppPalette.sheet)
+                        : AppPalette.sheet,
+                  ),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,

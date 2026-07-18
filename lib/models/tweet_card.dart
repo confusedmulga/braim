@@ -17,6 +17,7 @@ class TweetCard {
     this.authorName = '',
     this.authorHandle = '',
     this.siteName = '',
+    this.articleText = '',
     this.fetched = false,
     this.enrichAttempts = 0,
     this.spaceId,
@@ -45,6 +46,10 @@ class TweetCard {
   String authorName;
   String authorHandle;
   String siteName;
+
+  /// Reader-mode capture: the page's full article text, extracted when the
+  /// link was saved, so the card reads offline without a browser.
+  String articleText;
 
   /// Id of the space (folder) this card belongs to, or null.
   String? spaceId;
@@ -88,6 +93,7 @@ class TweetCard {
         'authorName': authorName,
         'authorHandle': authorHandle,
         'siteName': siteName,
+        'articleText': articleText,
         'fetched': fetched,
         'enrichAttempts': enrichAttempts,
         'spaceId': spaceId,
@@ -108,6 +114,7 @@ class TweetCard {
         authorName: (json['authorName'] as String?) ?? '',
         authorHandle: (json['authorHandle'] as String?) ?? '',
         siteName: (json['siteName'] as String?) ?? '',
+        articleText: (json['articleText'] as String?) ?? '',
         fetched: (json['fetched'] as bool?) ?? false,
         enrichAttempts: (json['enrichAttempts'] as int?) ?? 0,
         spaceId: json['spaceId'] as String?,
