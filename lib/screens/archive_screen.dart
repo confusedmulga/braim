@@ -96,8 +96,9 @@ class ArchiveScreen extends StatelessWidget {
                 ),
               )
             : TopFade(
+                height: 12,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 38, 14, 24),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
                   children: [
                     Padding(
                       padding: const EdgeInsets.fromLTRB(6, 0, 6, 10),

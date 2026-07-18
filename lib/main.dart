@@ -35,24 +35,40 @@ class BraimApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState()..init(),
-      child: Consumer<AppState>(
-        builder: (context, state, _) => MaterialApp(
-          title: 'Braim',
-          debugShowCheckedModeBanner: false,
-          theme: buildTheme(),
-          scrollBehavior: const _NoStretchScrollBehavior(),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            ...FlutterQuillLocalizations.localizationsDelegates,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          // Remount the tree when the theme flips so every widget re-reads
-          // the mode-aware palette.
-          home: KeyedSubtree(
-            key: ValueKey(state.effectiveDark),
-            child: const _Root(),
-          ),
-        ),
+      child: const _ThemedApp(),
+    );
+  }
+}
+
+class _ThemedApp extends StatelessWidget {
+  const _ThemedApp();
+
+  /// One ThemeData per mode, built lazily and reused. Rebuilding the theme
+  /// on every AppState notification handed the whole app a new Theme — an
+  /// app-wide rebuild for every note save, pin or archive.
+  static final Map<bool, ThemeData> _themes = {};
+
+  @override
+  Widget build(BuildContext context) {
+    // Only the effective brightness matters here; AppPalette.scheme is
+    // already flipped by AppState before it notifies.
+    final dark = context.select<AppState, bool>((s) => s.effectiveDark);
+    final theme = _themes.putIfAbsent(dark, buildTheme);
+    return MaterialApp(
+      title: 'Braim',
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      scrollBehavior: const _NoStretchScrollBehavior(),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        ...FlutterQuillLocalizations.localizationsDelegates,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      // Remount the tree when the theme flips so every widget re-reads
+      // the mode-aware palette.
+      home: KeyedSubtree(
+        key: ValueKey(dark),
+        child: const _Root(),
       ),
     );
   }

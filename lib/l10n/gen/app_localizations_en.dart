@@ -18,6 +18,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tabCards => 'Cards';
 
   @override
+  String get tabJournal => 'Journal';
+
+  @override
   String get tabCortex => 'Cortex';
 
   @override
@@ -25,6 +28,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get subtitleCards => 'Tweets & links you saved';
+
+  @override
+  String get subtitleJournal => 'One day at a time';
 
   @override
   String get subtitleCortex => 'Folders for notes & cards';
@@ -76,6 +82,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get newFolder => 'New folder';
+
+  @override
+  String get newEntry => 'New entry';
+
+  @override
+  String get sectionEntries => 'ENTRIES';
+
+  @override
+  String get sectionYears => 'YEARS';
+
+  @override
+  String get noEntriesForDay => 'Nothing written this day';
+
+  @override
+  String get noEntriesThisMonth => 'Nothing written this month';
+
+  @override
+  String get tapPencilToWrite => 'Tap the pencil to write an entry.';
+
+  @override
+  String get untitledEntry => 'Untitled entry';
+
+  @override
+  String get jumpToDate => 'Jump to a date';
+
+  @override
+  String get chooseCover => 'Choose a cover';
+
+  @override
+  String get coverAutomatic => 'Automatic';
+
+  @override
+  String get searchThisFolder => 'Search this folder';
 
   @override
   String get pasteTweetOrUrl => 'Paste a tweet or any URL.';
@@ -543,6 +582,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get folderName => 'Folder name';
+
+  @override
+  String get readerSection => 'Reader';
+
+  @override
+  String get themeLabel => 'Theme';
+
+  @override
+  String get wallpaper => 'Background';
+
+  @override
+  String get wallpaperGreen => 'Green blooms';
+
+  @override
+  String get wallpaperRed => 'Red blooms';
+
+  @override
+  String get wallpaperBlue => 'Blue blooms';
+
+  @override
+  String get wallpaperBlack => 'Black blooms';
 
   @override
   String get tutWelcomeTitle => 'Welcome to Braim';

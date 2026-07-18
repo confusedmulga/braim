@@ -19,10 +19,39 @@ import '../widgets/tweet_card_widget.dart';
 import 'card_detail_screen.dart';
 import 'note_editor_screen.dart';
 
-class SpaceDetailScreen extends StatelessWidget {
+class SpaceDetailScreen extends StatefulWidget {
   const SpaceDetailScreen({super.key, required this.spaceId});
 
   final String spaceId;
+
+  @override
+  State<SpaceDetailScreen> createState() => _SpaceDetailScreenState();
+}
+
+class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
+  String get spaceId => widget.spaceId;
+
+  /// In-folder search: toggled by the magnifier in the bar; filters this
+  /// folder's notes and cards live.
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) {
+        _searchCtrl.clear();
+        _query = '';
+      }
+    });
+  }
 
   Future<void> _noteActions(BuildContext context, Note note) async {
     final state = context.read<AppState>();
@@ -62,8 +91,23 @@ class SpaceDetailScreen extends StatelessWidget {
       });
       return const AppBackground();
     }
-    final notes = state.notesForSpace(spaceId);
-    final cards = state.cardsForSpace(spaceId);
+    var notes = state.notesForSpace(spaceId);
+    var cards = state.cardsForSpace(spaceId);
+    final q = _query.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      notes = notes
+          .where((n) =>
+              n.title.toLowerCase().contains(q) ||
+              n.textPreview.toLowerCase().contains(q))
+          .toList();
+      cards = cards
+          .where((c) =>
+              c.noteTitle.toLowerCase().contains(q) ||
+              c.text.toLowerCase().contains(q) ||
+              c.authorName.toLowerCase().contains(q) ||
+              c.url.toLowerCase().contains(q))
+          .toList();
+    }
 
     final left = <Note>[];
     final right = <Note>[];
@@ -122,6 +166,53 @@ class SpaceDetailScreen extends StatelessWidget {
 
     // The feed content, shared by the plain and cover-header layouts.
     final sections = <Widget>[
+      if (_searching)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 4, 6, 10),
+          child: Container(
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: AppPalette.bubbleGlass,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppPalette.cardOutline),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.search_rounded,
+                    size: 18, color: AppPalette.inkSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtrl,
+                    autofocus: true,
+                    onChanged: (v) => setState(() => _query = v),
+                    style: TextStyle(
+                        fontSize: 14, color: AppPalette.inkPrimary),
+                    cursorColor: AppPalette.inkPrimary,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: context.t.searchThisFolder,
+                      hintStyle: TextStyle(
+                          fontSize: 14, color: AppPalette.inkSecondary),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(vertical: 11),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      if (q.isNotEmpty && notes.isEmpty && cards.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 26, 6, 0),
+          child: Center(
+            child: Text(context.t.noMatches,
+                style: TextStyle(color: AppPalette.inkSecondary)),
+          ),
+        ),
       if (notes.isNotEmpty)
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,9 +239,16 @@ class SpaceDetailScreen extends StatelessWidget {
       ],
     ];
 
-    final isEmpty = notes.isEmpty && cards.isEmpty;
+    // While searching, the sections always render (they hold the search bar
+    // and the no-matches note), so the empty-folder placeholder stays out.
+    final isEmpty = !_searching && notes.isEmpty && cards.isEmpty;
     final cover = space.thumbnailPath;
     final hasCover = cover != null && cover.isNotEmpty;
+    final searchAction = IconButton(
+      tooltip: context.t.searchThisFolder,
+      icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
+      onPressed: _toggleSearch,
+    );
 
     return AppBackground(
       child: Scaffold(
@@ -163,6 +261,7 @@ class SpaceDetailScreen extends StatelessWidget {
                 foregroundColor: AppPalette.inkPrimary,
                 title: Text(space.name,
                     style: const TextStyle(fontWeight: FontWeight.w800)),
+                actions: [searchAction],
               ),
         floatingActionButton: Column(
           mainAxisSize: MainAxisSize.min,
@@ -190,7 +289,10 @@ class SpaceDetailScreen extends StatelessWidget {
         body: hasCover
             ? CustomScrollView(
                 slivers: [
-                  _CoverHeader(name: space.name, imagePath: cover),
+                  _CoverHeader(
+                      name: space.name,
+                      imagePath: cover,
+                      actions: [searchAction]),
                   if (isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
@@ -208,8 +310,9 @@ class SpaceDetailScreen extends StatelessWidget {
             : (isEmpty
                 ? _emptyBody(context)
                 : TopFade(
+                    height: 12,
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(14, 38, 14, 120),
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 120),
                       children: sections,
                     ),
                   )),
@@ -240,10 +343,12 @@ class SpaceDetailScreen extends StatelessWidget {
 /// A collapsing cover-photo header for a folder that has a thumbnail: the image
 /// fills an expanded app bar and tucks up into the toolbar as the feed scrolls.
 class _CoverHeader extends StatelessWidget {
-  const _CoverHeader({required this.name, required this.imagePath});
+  const _CoverHeader(
+      {required this.name, required this.imagePath, this.actions});
 
   final String name;
   final String imagePath;
+  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +356,7 @@ class _CoverHeader extends StatelessWidget {
       expandedHeight: 210,
       pinned: true,
       stretch: true,
+      actions: actions,
       foregroundColor: Colors.white,
       // Dark bar so that once the photo scrolls away on full collapse, the
       // white title and back arrow stay legible (over both themes).

@@ -57,6 +57,19 @@ class AppState extends ChangeNotifier {
   static NoteSort _sortFromName(String s) => NoteSort.values
       .firstWhere((e) => e.name == s, orElse: () => NoteSort.recent);
 
+  /// User-chosen journal month covers, keyed 'yyyy-MM'.
+  final Map<String, String> _journalMonthCovers = {};
+
+  /// Which bundled feed wallpaper is active (index into kFeedWallpapers).
+  int _feedWallpaper = 0;
+  int get feedWallpaper => _feedWallpaper;
+
+  Future<void> setFeedWallpaper(int index) async {
+    if (index == _feedWallpaper) return;
+    _feedWallpaper = index;
+    await _persist();
+  }
+
   bool _darkMode = false;
   bool get darkMode => _darkMode;
 
@@ -109,13 +122,15 @@ class AppState extends ChangeNotifier {
   DateTime? _lastBackupAt;
   DateTime? get lastBackupAt => _lastBackupAt;
 
-  /// Dismissed for this session only (a safety nudge should return next launch
-  /// if the library still isn't backed up).
-  bool _backupReminderDismissed = false;
-  bool get backupReminderDismissed => _backupReminderDismissed;
+  /// When the user last dismissed the backup nudge with the cross; the nudge
+  /// stays away for a week from then (persisted across launches).
+  DateTime? _backupReminderDismissedAt;
 
   /// Reminder threshold: nudge once a backup is this stale (or never taken).
   static const Duration _backupStaleAfter = Duration(days: 14);
+
+  /// Dismissing the nudge snoozes it for this long.
+  static const Duration _backupSnooze = Duration(days: 7);
 
   /// True when there is something worth losing and it hasn't been backed up
   /// recently.
@@ -126,15 +141,24 @@ class AppState extends ChangeNotifier {
     return DateTime.now().difference(last) > _backupStaleAfter;
   }
 
-  void dismissBackupReminder() {
-    _backupReminderDismissed = true;
-    notifyListeners();
+  /// The feed banner: shown when a backup is overdue, at most once a week —
+  /// a cross-dismiss keeps it away for the next seven days.
+  bool get showBackupReminder {
+    if (!backupOverdue) return false;
+    final dismissed = _backupReminderDismissedAt;
+    if (dismissed == null) return true;
+    return DateTime.now().difference(dismissed) >= _backupSnooze;
+  }
+
+  Future<void> dismissBackupReminder() async {
+    _backupReminderDismissedAt = DateTime.now();
+    await _persist();
   }
 
   /// Records that a backup was just taken; clears the nudge.
   Future<void> markBackedUp() async {
     _lastBackupAt = DateTime.now();
-    _backupReminderDismissed = false;
+    _backupReminderDismissedAt = null;
     await _persist();
   }
 
@@ -160,7 +184,12 @@ class AppState extends ChangeNotifier {
     _darkFollowSystem = data.darkFollowSystem;
     _tutorialSeen = data.tutorialSeen;
     _lastBackupAt = data.lastBackupAt;
+    _backupReminderDismissedAt = data.backupReminderDismissedAt;
     _sortMode = _sortFromName(data.sortMode);
+    _feedWallpaper = data.feedWallpaper;
+    _journalMonthCovers
+      ..clear()
+      ..addAll(data.journalMonthCovers);
     _rev++;
     AppPalette.dark = effectiveDark;
     await _purgeExpiredTrash();
@@ -180,9 +209,95 @@ class AppState extends ChangeNotifier {
 
   // ---- Reads -------------------------------------------------------------
 
-  /// A note is on the "home feed" when it isn't archived, deleted, or in Crypt.
+  /// A note is on the "home feed" when it isn't archived, deleted, in Crypt,
+  /// or a journal entry (those live only in the Journal tab).
   bool _isFeedNote(Note n) =>
-      !n.archived && n.deletedAt == null && n.spaceId != kCryptSpaceId;
+      !n.archived &&
+      n.deletedAt == null &&
+      n.spaceId != kCryptSpaceId &&
+      n.journalDate == null;
+
+  // ---- Journal -------------------------------------------------------------
+
+  /// Canonical journal key for a calendar day: 'yyyy-MM-dd'.
+  static String journalKey(DateTime day) =>
+      '${day.year.toString().padLeft(4, '0')}-'
+      '${day.month.toString().padLeft(2, '0')}-'
+      '${day.day.toString().padLeft(2, '0')}';
+
+  /// A journal entry visible in journal lists: not deleted and not hidden
+  /// away in Crypt (entries filed there only show inside Crypt itself).
+  bool _isLiveJournalEntry(Note n) =>
+      n.journalDate != null &&
+      n.deletedAt == null &&
+      n.spaceId != kCryptSpaceId;
+
+  /// Live journal entries written on [day], newest first.
+  List<Note> journalEntriesOn(DateTime day) {
+    final key = journalKey(day);
+    return _notes
+        .where((n) => _isLiveJournalEntry(n) && n.journalDate == key)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  static String _monthPrefix(int year, int month) =>
+      '${year.toString().padLeft(4, '0')}-'
+      '${month.toString().padLeft(2, '0')}-';
+
+  /// Days of [month] in [year] that have at least one live journal entry
+  /// (used for the calendar's entry dots).
+  Set<int> journalDaysIn(int year, int month) {
+    final prefix = _monthPrefix(year, month);
+    final days = <int>{};
+    for (final n in _notes) {
+      final d = n.journalDate;
+      if (d == null || !_isLiveJournalEntry(n) || !d.startsWith(prefix)) {
+        continue;
+      }
+      final day = int.tryParse(d.substring(prefix.length));
+      if (day != null) days.add(day);
+    }
+    return days;
+  }
+
+  /// Live journal entries of a whole month, newest day first.
+  List<Note> journalEntriesInMonth(int year, int month) {
+    final prefix = _monthPrefix(year, month);
+    return _notes
+        .where((n) =>
+            _isLiveJournalEntry(n) && n.journalDate!.startsWith(prefix))
+        .toList()
+      ..sort((a, b) {
+        final byDay = b.journalDate!.compareTo(a.journalDate!);
+        return byDay != 0 ? byDay : b.createdAt.compareTo(a.createdAt);
+      });
+  }
+
+  /// Years that have at least one live journal entry, newest first. A year
+  /// with nothing written doesn't get a card.
+  List<int> journalYears() {
+    final years = <int>{};
+    for (final n in _notes) {
+      final d = n.journalDate;
+      if (d == null || !_isLiveJournalEntry(n)) continue;
+      final y = int.tryParse(d.substring(0, 4));
+      if (y != null) years.add(y);
+    }
+    return years.toList()..sort((a, b) => b.compareTo(a));
+  }
+
+  /// The user-chosen cover for a journal month ('yyyy-MM'), if any.
+  String? journalMonthCover(String monthKey) => _journalMonthCovers[monthKey];
+
+  Future<void> setJournalMonthCover(String monthKey, String? path) async {
+    if (path == null) {
+      _journalMonthCovers.remove(monthKey);
+    } else {
+      _journalMonthCovers[monthKey] = path;
+    }
+    await _persist();
+  }
 
   bool _isFeedCard(TweetCard c) =>
       !c.archived && c.deletedAt == null && c.spaceId != kCryptSpaceId;
@@ -430,7 +545,10 @@ class AppState extends ChangeNotifier {
         darkFollowSystem: _darkFollowSystem,
         tutorialSeen: _tutorialSeen,
         lastBackupAt: _lastBackupAt,
-        sortMode: _sortMode.name));
+        backupReminderDismissedAt: _backupReminderDismissedAt,
+        sortMode: _sortMode.name,
+        feedWallpaper: _feedWallpaper,
+        journalMonthCovers: _journalMonthCovers));
   }
 
   Future<void> moveNoteToSpace(String noteId, String? spaceId) async {
@@ -716,7 +834,10 @@ class AppState extends ChangeNotifier {
       darkFollowSystem: _darkFollowSystem,
       tutorialSeen: _tutorialSeen,
       lastBackupAt: _lastBackupAt,
+      backupReminderDismissedAt: _backupReminderDismissedAt,
       sortMode: _sortMode.name,
+      feedWallpaper: _feedWallpaper,
+      journalMonthCovers: Map.of(_journalMonthCovers),
     );
     // Chain writes so they never interleave.
     _writeChain = _writeChain.then((_) => _storage.save(snapshot));

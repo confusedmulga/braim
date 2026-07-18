@@ -1,17 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Central palette + theme for the glassy look.
+/// Central palette + theme.
 ///
-/// Mode-dependent colors are getters over [dark]: light mode is white glass
-/// with dark ink, dark mode flips to smoky glass with white ink. The flag is
-/// driven by AppState; the app remounts on toggle so every widget re-reads it.
+/// The app follows Material 3: a [ColorScheme] seeded from [AppPalette.seed]
+/// supplies every color role, and the getters below map the app's named
+/// surfaces onto those roles so all screens restyle together. The exceptions
+/// that deliberately stay custom: the frosted nav island, the glass (blur)
+/// surfaces, and the editor's floating format island.
 class AppPalette {
+  static bool _dark = false;
+
+  /// The active Material 3 scheme (recomputed when [dark] flips).
+  static ColorScheme scheme =
+      ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
+
   /// Global dark-mode flag (set by AppState before it notifies).
-  static bool dark = false;
+  static bool get dark => _dark;
+  static set dark(bool value) {
+    _dark = value;
+    scheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: value ? Brightness.dark : Brightness.light,
+    );
+  }
 
   static const seed = Color(0xFF6C8CFF);
 
-  // Background gradient stops (a soft aurora behind the frosted glass).
+  // Background gradient stops (fallback when the wallpaper asset is missing).
   static const bgTop = Color(0xFF12131A);
   static const bgBottom = Color(0xFF1B1430);
 
@@ -20,68 +36,57 @@ class AppPalette {
   static const blobC = Color(0xFFFF6CA8); // pink
   static const blobD = Color(0xFF38E0C8); // teal
 
-  // Glass surfaces (read fine over both backgrounds).
-  static Color glassFill = Colors.white.withValues(alpha: 0.10);
-  static Color glassFillStrong = Colors.white.withValues(alpha: 0.16);
-  static Color glassBorder = Colors.white.withValues(alpha: 0.22);
+  /// Legacy aliases (sheets and empty states used to sit on dark glass);
+  /// they now resolve to the scheme's ink roles.
+  static Color get textPrimary => scheme.onSurface;
+  static Color get textSecondary => scheme.onSurfaceVariant;
 
-  static const textPrimary = Color(0xFFF4F5FA);
-  static Color textSecondary = const Color(0xFFF4F5FA).withValues(alpha: 0.66);
+  // ---- Material 3 roles ----------------------------------------------------
 
-  // "Ink" colours for the main glass surfaces (cards, editors, islands):
-  // near-black on white glass, near-white on dark glass.
-  static Color get inkPrimary =>
-      dark ? const Color(0xFFF0F1F6) : const Color(0xFF1B1C22);
-  static Color get inkSecondary =>
-      dark ? const Color(0xFFB4B6C0) : const Color(0xFF5E5F69);
+  /// Body ink on app surfaces.
+  static Color get inkPrimary => scheme.onSurface;
+  static Color get inkSecondary => scheme.onSurfaceVariant;
 
-  /// Translucent fill shared by the glass islands/search bar.
-  static Color get whiteFill =>
-      dark ? const Color(0xA6222530) : const Color(0xA6FFFFFF);
+  /// Translucent fill under the nav island's blur (kept translucent so the
+  /// frost shows; tinted by the scheme so both modes harmonise).
+  static Color get whiteFill => dark
+      ? scheme.surfaceContainerHigh.withValues(alpha: 0.66)
+      : scheme.surface.withValues(alpha: 0.66);
 
-  /// Near-opaque fill for feed cards — no backdrop blur needed, so the
-  /// scrolling feed stays smooth.
-  static Color get cardFill =>
-      dark ? const Color(0xF21D1F27) : const Color(0xF2FFFFFF);
+  /// Near-opaque fill for cards that sit over the wallpaper without blur.
+  static Color get cardFill => scheme.surface.withValues(alpha: 0.95);
 
-  /// Fully opaque Keep-style tile surface: zero blending with the wallpaper
-  /// while scrolling, and it matches the morph sheet so open/close reads as
-  /// one continuous surface.
-  static Color get cardSolid =>
-      dark ? const Color(0xFF1E2028) : Colors.white;
+  /// Opaque feed-tile surface; matches the morph sheet so open/close reads
+  /// as one continuous surface.
+  static Color get cardSolid => scheme.surface;
 
-  /// Hairline outline for the flat tiles (Keep uses an outline, no shadow).
-  static Color get cardOutline =>
-      dark ? const Color(0x24FFFFFF) : const Color(0x1F000000);
+  /// Hairline outline for tiles and flat chrome (M3 outline-variant).
+  static Color get cardOutline => scheme.outlineVariant;
 
   /// Opaque sheet behind opened notes/cards (and the morph surface).
-  static Color get sheet => dark ? const Color(0xFF15161C) : Colors.white;
+  static Color get sheet => scheme.surface;
 
-  /// Fill for the liquid-glass bubbles (menu, FABs, island, search).
-  static Color get bubbleGlass =>
-      dark ? const Color(0xB31C1E28) : const Color(0xA6FFFFFF);
+  /// Fill for the flat floating chrome (menu, search, sort) — the M3
+  /// search-bar / tonal icon-button surface.
+  static Color get bubbleGlass => scheme.surfaceContainerHigh;
 
-  /// Fill for the editor's floating format island.
+  /// Fill for the editor's floating format island (kept as-is: part of the
+  /// text editor chrome that stays unchanged).
   static Color get islandGlass =>
       dark ? const Color(0xCC191B23) : const Color(0xCCFFFFFF);
 
-  /// Side pane glass fill/border.
-  static Color get paneFill =>
-      dark ? const Color(0xCC15161D) : const Color(0xCCFFFFFF);
-  static Color get paneBorder =>
-      dark ? const Color(0x24FFFFFF) : const Color(0x8CFFFFFF);
+  /// Side pane surface (M3 navigation-drawer container).
+  static Color get paneFill => scheme.surfaceContainerLow;
+  static Color get paneBorder => scheme.outlineVariant;
 
-  /// Frosted scrim behind the settings overlay.
-  static Color get scrimFill =>
-      dark ? const Color(0x8C0E0F14) : const Color(0x99FFFFFF);
+  /// Near-opaque backdrop of the settings overlay.
+  static Color get scrimFill => scheme.surface.withValues(alpha: 0.97);
 
-  /// Panels on the settings screen.
-  static Color get surfaceGlass =>
-      dark ? const Color(0x8C232630) : const Color(0xB3FFFFFF);
+  /// Panels on the settings screen (M3 surface container).
+  static Color get surfaceGlass => scheme.surfaceContainerLow;
 
-  /// Small chips / icon boxes on card surfaces.
-  static Color get chipFill =>
-      dark ? const Color(0x14FFFFFF) : const Color(0x0F000000);
+  /// Small chips / icon boxes on card surfaces (M3 neutral container).
+  static Color get chipFill => scheme.surfaceContainerHighest;
 
   /// Selected pill fills (nav island, toggles, dividers on glass).
   static Color get selFill =>
@@ -90,6 +95,22 @@ class AppPalette {
   /// Whitening/darkening tint over a themed note's background image.
   static Color get noteTint =>
       dark ? const Color(0x99000000) : const Color(0xADFFFFFF);
+
+  /// Warm amber accent for the Journal (selected day, entry dates).
+  static const journalAccent = Color(0xFFEBA23C);
+
+  /// Diagonal gradient for the journal's month calendar card: lightest
+  /// lavender into sky blue (dark mode uses tints of the same hues).
+  static List<Color> get journalCalendarGradient => dark
+      ? [
+          Color.alphaBlend(
+              const Color(0xFFB9A8FF).withValues(alpha: 0.16),
+              const Color(0xFF1E2028)),
+          Color.alphaBlend(
+              const Color(0xFF7CC6FF).withValues(alpha: 0.16),
+              const Color(0xFF1E2028)),
+        ]
+      : [const Color(0xFFF2EDFF), const Color(0xFFDDF1FF)];
 }
 
 /// Keep-style note colour tags. Stored as the ARGB of the light swatch; dark
@@ -124,34 +145,77 @@ class NoteColors {
 }
 
 ThemeData buildTheme() {
+  final scheme = AppPalette.scheme;
   final base = ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: AppPalette.seed,
-      brightness: Brightness.dark,
-    ),
+    colorScheme: scheme,
     scaffoldBackgroundColor: Colors.transparent,
     fontFamily: 'SpaceGrotesk',
   );
 
   return base.copyWith(
     canvasColor: Colors.transparent,
-    dialogTheme: const DialogThemeData(backgroundColor: Colors.transparent),
-    textTheme: base.textTheme.apply(
-      bodyColor: AppPalette.textPrimary,
-      displayColor: AppPalette.textPrimary,
-    ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      foregroundColor: AppPalette.textPrimary,
+      // No shadow/tint band when content scrolls under a bar — text should
+      // only ever fade at the status-bar scrim.
+      scrolledUnderElevation: 0,
+      shadowColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      foregroundColor: scheme.onSurface,
       centerTitle: false,
+      // The transparent background makes Flutter estimate the bar as "dark"
+      // and paint white status icons; follow the surface brightness instead.
+      systemOverlayStyle: (AppPalette.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark)
+          .copyWith(statusBarColor: Colors.transparent),
+    ),
+    // M3 dialogs: extra-large shape on a high surface container.
+    dialogTheme: DialogThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(28)),
+      ),
+      titleTextStyle: TextStyle(
+        fontFamily: 'SpaceGrotesk',
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: scheme.onSurface,
+      ),
+      contentTextStyle: TextStyle(
+        fontFamily: 'SpaceGrotesk',
+        fontSize: 14.5,
+        height: 1.4,
+        color: scheme.onSurfaceVariant,
+      ),
+    ),
+    listTileTheme: ListTileThemeData(
+      iconColor: scheme.onSurfaceVariant,
+      textColor: scheme.onSurface,
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: AppPalette.bgBottom.withValues(alpha: 0.95),
-      contentTextStyle: const TextStyle(color: AppPalette.textPrimary),
+      backgroundColor: scheme.inverseSurface,
+      contentTextStyle: TextStyle(
+        fontFamily: 'SpaceGrotesk',
+        color: scheme.onInverseSurface,
+      ),
       behavior: SnackBarBehavior.floating,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(14)),
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        textStyle: WidgetStatePropertyAll(TextStyle(
+          fontFamily: 'SpaceGrotesk',
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        )),
+      ),
     ),
   );
 }

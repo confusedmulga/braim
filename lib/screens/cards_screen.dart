@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import '../models/tweet_card.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
-import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/item_actions_sheet.dart';
 import '../widgets/tweet_card_widget.dart';
@@ -50,7 +49,6 @@ class CardsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final cards = state.cards;
-    final compact = state.cardsCompact;
 
     if (cards.isEmpty) return const _EmptyCards();
 
@@ -63,11 +61,9 @@ class CardsScreen extends StatelessWidget {
       mainAxisMargin: 46,
       child: CustomScrollView(
         controller: controller,
-      slivers: [
-        // Top padding clears the header fade band + the floating view toggle.
-        if (compact)
+        slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 44, 14, 150),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 150),
             // Lazy masonry: builds only visible tiles and packs each into the
             // shortest column (true height balancing).
             sliver: SliverMasonryGrid.count(
@@ -90,112 +86,13 @@ class CardsScreen extends StatelessWidget {
                 );
               },
             ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(18, 44, 18, 150),
-            sliver: SliverList.separated(
-              itemCount: cards.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 14),
-              itemBuilder: (context, i) {
-                final card = cards[i];
-                return GlassMorph(
-                  key: ValueKey(card.id),
-                  openBuilder: (_) => CardDetailScreen(card: card),
-                  closedBuilder: (context, open) => TweetCardWidget(
-                    card: card,
-                    folderName: state.spaceById(card.spaceId)?.name,
-                    onTap: open,
-                    onLongPress: () => _cardActions(context, card),
-                    onDelete: () =>
-                        context.read<AppState>().deleteCard(card.id),
-                  ),
-                );
-              },
-            ),
           ),
-      ],
-      ),
-    );
-  }
-}
-
-/// The Open/Blocks segmented toggle for the cards feed (hosted by the shell
-/// so it stays fixed while the feed scrolls).
-class CardsViewToggle extends StatelessWidget {
-  const CardsViewToggle(
-      {super.key, required this.compact, required this.onChanged});
-
-  final bool compact;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassEdge(
-      borderRadius: 20,
-      blur: 0,
-      fill: AppPalette.whiteFill,
-      padding: const EdgeInsets.all(3),
-      shadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.18),
-          blurRadius: 14,
-          offset: const Offset(0, 6),
-        ),
-      ],
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _segment(context, context.t.viewOpen, Icons.view_agenda_outlined,
-              !compact, () => onChanged(false)),
-          _segment(context, context.t.viewBlocks, Icons.grid_view_rounded,
-              compact, () => onChanged(true)),
         ],
       ),
     );
   }
-
-  Widget _segment(BuildContext context, String label, IconData icon,
-      bool selected, VoidCallback onTap) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppPalette.selFill : Colors.transparent,
-          borderRadius: BorderRadius.circular(17),
-        ),
-        child: Row(
-          children: [
-            Icon(icon,
-                size: 14,
-                color: selected
-                    ? AppPalette.inkPrimary
-                    : AppPalette.inkSecondary),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected
-                    ? AppPalette.inkPrimary
-                    : AppPalette.inkSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
 }
+
 
 class _AddLinkDialog extends StatefulWidget {
   const _AddLinkDialog({required this.initial});
@@ -217,64 +114,39 @@ class _AddLinkDialogState extends State<_AddLinkDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-      child: GlassPanel(
-        borderRadius: 24,
-        strong: true,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.t.saveALink,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: AppPalette.textPrimary,
+    return AlertDialog(
+      title: Text(context.t.saveALink),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(context.t.pasteTweetOrUrl),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            style: TextStyle(color: AppPalette.inkPrimary),
+            decoration: InputDecoration(
+              hintText: context.t.urlHint,
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              context.t.pasteTweetOrUrl,
-              style: TextStyle(color: AppPalette.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _ctrl,
-              autofocus: true,
-              style: const TextStyle(color: AppPalette.textPrimary),
-              decoration: InputDecoration(
-                hintText: context.t.urlHint,
-                hintStyle: TextStyle(color: AppPalette.textSecondary),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.08),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(context.t.cancel),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => Navigator.pop(context, _ctrl.text),
-                  child: Text(context.t.save),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.t.cancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _ctrl.text),
+          child: Text(context.t.save),
+        ),
+      ],
     );
   }
 }

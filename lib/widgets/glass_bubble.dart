@@ -1,9 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../theme/app_theme.dart';
 
-/// A circular liquid-glass "bubble" around an icon button (back, menu, …).
+/// A pill-shaped bubble wrapping a row of action icons (the editor top
+/// bars). Matches [GlassBubble]'s faint fill so the back bubble and the
+/// action cluster read as one aligned line of chrome.
+class BubblePill extends StatelessWidget {
+  const BubblePill({super.key, required this.children, this.glassColor});
+
+  final List<Widget> children;
+  final Color? glassColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: glassColor ?? const Color(0x14000000),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppPalette.cardOutline),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: children),
+      ),
+    );
+  }
+}
+
+/// A circular "bubble" around an icon button (back, menu, …). A flat
+/// near-opaque fill, no live blur: these float over scrolling feeds, and a
+/// backdrop filter here re-samples the feed on every frame.
 class GlassBubble extends StatelessWidget {
   const GlassBubble({
     super.key,
@@ -47,9 +74,13 @@ class GlassBubble extends StatelessWidget {
   }
 
   Widget _bubble() {
-    return DecoratedBox(
+    return Container(
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
+        color: glassColor ?? AppPalette.bubbleGlass,
+        border: Border.all(color: AppPalette.cardOutline),
         boxShadow: shadow
             ? [
                 BoxShadow(
@@ -60,26 +91,15 @@ class GlassBubble extends StatelessWidget {
               ]
             : null,
       ),
-      child: FakeGlass(
-      shape: const LiquidOval(),
-      settings: LiquidGlassSettings(
-        glassColor: glassColor ?? AppPalette.bubbleGlass,
-        blur: 10,
-      ),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Icon(icon,
-                color: iconColor ?? AppPalette.inkPrimary, size: iconSize),
-          ),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Icon(icon,
+              color: iconColor ?? AppPalette.inkPrimary, size: iconSize),
         ),
-      ),
       ),
     );
   }

@@ -38,6 +38,7 @@ class Note {
     this.spaceId,
     this.backgroundAsset,
     this.colorValue,
+    this.journalDate,
     this.archived = false,
     this.pinned = false,
     this.deletedAt,
@@ -62,6 +63,10 @@ class Note {
   /// default surface.
   int? colorValue;
 
+  /// The journal day this note belongs to as 'yyyy-MM-dd', or null for a
+  /// regular note. Journal entries never appear in the Home feed or search.
+  String? journalDate;
+
   /// Archived notes are hidden from the feed and live in the Archive.
   bool archived;
 
@@ -82,7 +87,8 @@ class Note {
     return null;
   }
 
-  /// Concatenated plain text preview for the feed.
+  /// Concatenated plain text preview for the feed (and search): text blocks
+  /// plus the titles of inline link cards.
   String get textPreview {
     final buffer = StringBuffer();
     for (final b in blocks) {
@@ -92,6 +98,9 @@ class Note {
           if (buffer.isNotEmpty) buffer.write('\n');
           buffer.write(plain);
         }
+      } else if (b.isLink) {
+        if (buffer.isNotEmpty) buffer.write('\n');
+        buffer.write(b.linkTitle.isNotEmpty ? b.linkTitle : b.url);
       }
     }
     return buffer.toString();
@@ -113,6 +122,7 @@ class Note {
         'spaceId': spaceId,
         'backgroundAsset': backgroundAsset,
         'colorValue': colorValue,
+        'journalDate': journalDate,
         'archived': archived,
         'pinned': pinned,
         'deletedAt': deletedAt?.toIso8601String(),
@@ -129,6 +139,7 @@ class Note {
         spaceId: json['spaceId'] as String?,
         backgroundAsset: json['backgroundAsset'] as String?,
         colorValue: json['colorValue'] as int?,
+        journalDate: json['journalDate'] as String?,
         archived: (json['archived'] as bool?) ?? false,
         pinned: (json['pinned'] as bool?) ?? false,
         deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),

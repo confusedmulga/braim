@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -26,21 +24,22 @@ class SettingsScreen extends StatelessWidget {
   static Route<void> route() {
     return PageRouteBuilder(
       opaque: false,
-      barrierColor: Colors.black.withValues(alpha: 0.15),
-      transitionDuration: const Duration(milliseconds: 280),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: const Duration(milliseconds: 300),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (_, _, _) => const SettingsScreen(),
+      // Slides in from the right edge; closing slides it back out to the
+      // right, landing on the feed.
       transitionsBuilder: (_, animation, _, child) {
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.04),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(
-                parent: animation, curve: Curves.easeOutCubic)),
-            child: child,
-          ),
+        return SlideTransition(
+          position: Tween(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          )),
+          child: child,
         );
       },
     );
@@ -57,29 +56,13 @@ class SettingsScreen extends StatelessWidget {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: GlassPanel(
-          borderRadius: 22,
-          color: AppPalette.surfaceGlass,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.t.preparingBackup,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.inkPrimary)),
-              const SizedBox(height: 14),
-              ValueListenableBuilder<double?>(
-                valueListenable: progress,
-                builder: (_, v, _) => ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: LinearProgressIndicator(value: v, minHeight: 6),
-                ),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: Text(context.t.preparingBackup),
+        content: ValueListenableBuilder<double?>(
+          valueListenable: progress,
+          builder: (_, v, _) => ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(value: v, minHeight: 6),
           ),
         ),
       ),
@@ -131,40 +114,17 @@ class SettingsScreen extends StatelessWidget {
   Future<bool?> _confirmRestore(BuildContext context) {
     return showDialog<bool>(
       context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: GlassPanel(
-          borderRadius: 22,
-          strong: true,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.t.restoreBackupTitle,
-                  style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.inkPrimary)),
-              const SizedBox(height: 8),
-              Text(context.t.restoreBackupBody,
-                  style: TextStyle(color: AppPalette.inkSecondary)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text(context.t.cancel)),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: Text(context.t.restore)),
-                ],
-              ),
-            ],
-          ),
-        ),
+      builder: (context) => AlertDialog(
+        title: Text(context.t.restoreBackupTitle),
+        content: Text(context.t.restoreBackupBody),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.t.cancel)),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(context.t.restore)),
+        ],
       ),
     );
   }
@@ -172,45 +132,22 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _confirmClear(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: GlassPanel(
-          borderRadius: 22,
-          strong: true,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.t.clearAllDataTitle,
-                  style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.inkPrimary)),
-              const SizedBox(height: 8),
-              Text(
-                context.t.clearAllDataBody,
-                style: TextStyle(color: AppPalette.inkSecondary),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text(context.t.cancel)),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFE5557A)),
-                    onPressed: () => Navigator.pop(context, true),
-                    child: Text(context.t.delete),
-                  ),
-                ],
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: Text(context.t.clearAllDataTitle),
+        content: Text(context.t.clearAllDataBody),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(context.t.cancel)),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppPalette.scheme.error,
+              foregroundColor: AppPalette.scheme.onError,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.t.delete),
           ),
-        ),
+        ],
       ),
     );
     if (ok == true && context.mounted) {
@@ -224,10 +161,9 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: BackdropFilter(
-        // Blurs whatever screen is painted behind this transparent route.
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: Container(
+      // A near-opaque backdrop instead of a live blur: animating a full-screen
+      // BackdropFilter made the overlay stutter as it opened.
+      body: Container(
           color: AppPalette.scrimFill,
           child: SafeArea(
             child: Column(
@@ -255,55 +191,93 @@ class SettingsScreen extends StatelessWidget {
                       _SectionLabel(context.t.appearance),
                       GlassPanel(
                         borderRadius: 20,
+                        // The backdrop is flat and near-opaque; blurring it
+                        // would burn a BackdropFilter per panel for nothing.
+                        blur: 0,
                         color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        child: ListTile(
-                          leading: Icon(Icons.brightness_6_outlined,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.appearance,
-                              style:
-                                  TextStyle(color: AppPalette.inkPrimary)),
-                          trailing: DropdownButton<String>(
-                            value: state.darkFollowSystem
-                                ? 'system'
-                                : (state.darkMode ? 'dark' : 'light'),
-                            underline: const SizedBox.shrink(),
-                            borderRadius: BorderRadius.circular(16),
-                            dropdownColor: AppPalette.sheet,
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppPalette.inkPrimary,
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.brightness_6_outlined,
+                                    color: AppPalette.inkSecondary),
+                                const SizedBox(width: 14),
+                                Text(context.t.themeLabel,
+                                    style: TextStyle(
+                                        fontSize: 15.5,
+                                        color: AppPalette.inkPrimary)),
+                              ],
                             ),
-                            iconEnabledColor: AppPalette.inkSecondary,
-                            items: [
-                              DropdownMenuItem(
-                                value: 'system',
-                                child: Text(context.t.appearanceSystem),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              child: SegmentedButton<String>(
+                                selected: {
+                                  state.darkFollowSystem
+                                      ? 'system'
+                                      : (state.darkMode ? 'dark' : 'light')
+                                },
+                                segments: [
+                                  ButtonSegment(
+                                    value: 'system',
+                                    label:
+                                        Text(context.t.appearanceSystem),
+                                    icon: const Icon(
+                                        Icons.brightness_auto_outlined),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'light',
+                                    label: Text(context.t.appearanceLight),
+                                    icon: const Icon(
+                                        Icons.light_mode_outlined),
+                                  ),
+                                  ButtonSegment(
+                                    value: 'dark',
+                                    label: Text(context.t.appearanceDark),
+                                    icon:
+                                        const Icon(Icons.dark_mode_outlined),
+                                  ),
+                                ],
+                                onSelectionChanged: (sel) {
+                                  final v = sel.first;
+                                  context.read<AppState>().setAppearance(
+                                        followSystem: v == 'system',
+                                        dark: v == 'dark',
+                                      );
+                                },
                               ),
-                              DropdownMenuItem(
-                                value: 'light',
-                                child: Text(context.t.appearanceLight),
-                              ),
-                              DropdownMenuItem(
-                                value: 'dark',
-                                child: Text(context.t.appearanceDark),
-                              ),
-                            ],
-                            onChanged: (v) {
-                              if (v == null) return;
-                              context.read<AppState>().setAppearance(
-                                    followSystem: v == 'system',
-                                    dark: v == 'dark',
-                                  );
-                            },
-                          ),
+                            ),
+                            const SizedBox(height: 18),
+                            Row(
+                              children: [
+                                Icon(Icons.wallpaper_rounded,
+                                    color: AppPalette.inkSecondary),
+                                const SizedBox(width: 14),
+                                Text(context.t.wallpaper,
+                                    style: TextStyle(
+                                        fontSize: 15.5,
+                                        color: AppPalette.inkPrimary)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _WallpaperPicker(
+                              selected: state.feedWallpaper,
+                              onSelect: (i) => context
+                                  .read<AppState>()
+                                  .setFeedWallpaper(i),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 24),
                       _SectionLabel(context.t.backupSection),
                       GlassPanel(
                         borderRadius: 20,
+                        // The backdrop is flat and near-opaque; blurring it
+                        // would burn a BackdropFilter per panel for nothing.
+                        blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
                         onTap: () => _backup(context),
@@ -321,6 +295,9 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       GlassPanel(
                         borderRadius: 20,
+                        // The backdrop is flat and near-opaque; blurring it
+                        // would burn a BackdropFilter per panel for nothing.
+                        blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
                         onTap: () => _restore(context),
@@ -338,6 +315,9 @@ class SettingsScreen extends StatelessWidget {
                       _SectionLabel(context.t.storageSection),
                       GlassPanel(
                         borderRadius: 20,
+                        // The backdrop is flat and near-opaque; blurring it
+                        // would burn a BackdropFilter per panel for nothing.
+                        blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: const EdgeInsets.all(8),
                         child: Column(
@@ -356,6 +336,9 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       GlassPanel(
                         borderRadius: 20,
+                        // The backdrop is flat and near-opaque; blurring it
+                        // would burn a BackdropFilter per panel for nothing.
+                        blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
                         onTap: () => _confirmClear(context),
@@ -370,6 +353,9 @@ class SettingsScreen extends StatelessWidget {
                       _SectionLabel(context.t.aboutSection),
                       GlassPanel(
                         borderRadius: 20,
+                        // The backdrop is flat and near-opaque; blurring it
+                        // would burn a BackdropFilter per panel for nothing.
+                        blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -395,7 +381,6 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 
@@ -429,6 +414,63 @@ class _SectionLabel extends StatelessWidget {
           color: AppPalette.inkSecondary,
         ),
       ),
+    );
+  }
+}
+
+/// Thumbnails of the four bundled feed wallpapers; the active one carries a
+/// primary-colored ring.
+class _WallpaperPicker extends StatelessWidget {
+  const _WallpaperPicker({required this.selected, required this.onSelect});
+
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = [
+      context.t.wallpaperGreen,
+      context.t.wallpaperRed,
+      context.t.wallpaperBlue,
+      context.t.wallpaperBlack,
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < kFeedWallpapers.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: Semantics(
+              button: true,
+              selected: i == selected,
+              label: names[i],
+              child: Tooltip(
+                message: names[i],
+                child: GestureDetector(
+                  onTap: () => onSelect(i),
+                  child: Container(
+                    height: 96,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: i == selected
+                            ? AppPalette.scheme.primary
+                            : AppPalette.cardOutline,
+                        width: i == selected ? 2.5 : 1,
+                      ),
+                    ),
+                    child: Image.asset(
+                      kFeedWallpapers[i],
+                      fit: BoxFit.cover,
+                      cacheWidth: 200,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

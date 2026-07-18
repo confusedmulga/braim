@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,11 +6,14 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill/quill_delta.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../models/note_block.dart';
 import '../services/image_service.dart';
+import '../services/link_preview_service.dart';
 import '../theme/app_theme.dart';
 
 /// A reusable rich-text + image block editor. It edits the [blocks] list in
@@ -40,6 +44,13 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   final Map<String, QuillController> _quillCtrls = {};
   final Map<String, FocusNode> _focusNodes = {};
   final Map<String, ScrollController> _scrollCtrls = {};
+  final Map<String, StreamSubscription> _docSubs = {};
+  final Set<String> _fetchingLinks = {};
+  Timer? _linkScanTimer;
+
+  /// A line that is nothing but a URL, as left behind by a paste.
+  /// Case-insensitive: keyboards auto-capitalize a typed "Https://…".
+  static final _urlLine = RegExp(r'^https?://\S+$', caseSensitive: false);
 
   List<NoteBlock> get _blocks => widget.blocks;
 
@@ -57,6 +68,10 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
 
   @override
   void dispose() {
+    _linkScanTimer?.cancel();
+    for (final s in _docSubs.values) {
+      s.cancel();
+    }
     for (final c in _quillCtrls.values) {
       c.dispose();
     }
@@ -70,7 +85,27 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   }
 
   void _ensure(NoteBlock b) {
-    _quillCtrls.putIfAbsent(b.id, () => _controllerFor(b));
+    _quillCtrls.putIfAbsent(b.id, () {
+      final c = _controllerFor(b);
+      // Watch for URLs: a paste arrives as one big insert (convert right
+      // away); typed URLs convert when Enter finishes the line.
+      _docSubs[b.id]?.cancel();
+      _docSubs[b.id] = c.document.changes.listen((change) {
+        for (final op in change.change.toList()) {
+          final data = op.data;
+          if (!op.isInsert || data is! String) continue;
+          if (data.length >= 12 && data.toLowerCase().contains('http')) {
+            _scheduleLinkScan(b.id, allowCursorLine: true);
+            break;
+          }
+          if (data.contains('\n')) {
+            _scheduleLinkScan(b.id, allowCursorLine: false);
+            break;
+          }
+        }
+      });
+      return c;
+    });
     _scrollCtrls.putIfAbsent(b.id, () => ScrollController());
     _focusNodes.putIfAbsent(b.id, () {
       final node = FocusNode();
@@ -104,7 +139,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   }
 
   void _ensureTrailingText() {
-    if (_blocks.isEmpty || _blocks.last.isImage) {
+    if (_blocks.isEmpty || !_blocks.last.isText) {
       final b = NoteBlock(type: NoteBlockType.text);
       _blocks.add(b);
       _ensure(b);
@@ -147,6 +182,210 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     widget.onRemoveImagePath?.call(block.imagePath);
   }
 
+  // ---- Pasted-link cards ---------------------------------------------------
+
+  void _scheduleLinkScan(String blockId, {required bool allowCursorLine}) {
+    _linkScanTimer?.cancel();
+    _linkScanTimer = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        _scanForPastedLink(blockId, allowCursorLine: allowCursorLine);
+      }
+    });
+  }
+
+  /// Finds a line that is exactly a URL and turns it into a link block,
+  /// splitting the text block around it. Unless [allowCursorLine] (paste),
+  /// the line the cursor is on is left alone so a URL mid-typing survives.
+  void _scanForPastedLink(String blockId, {required bool allowCursorLine}) {
+    final idx = _blocks.indexWhere((b) => b.id == blockId);
+    final c = _quillCtrls[blockId];
+    if (idx < 0 || c == null) return;
+    final plain = c.document.toPlainText();
+    final cursor = c.selection.baseOffset;
+    var lineStart = 0;
+    for (final line in plain.split('\n')) {
+      final lineEnd = lineStart + line.length;
+      final url = line.trim();
+      final cursorHere = cursor >= lineStart && cursor <= lineEnd;
+      if (url.length > 11 &&
+          _urlLine.hasMatch(url) &&
+          (allowCursorLine || !cursorHere)) {
+        _convertUrlLine(idx, _blocks[idx], c, lineStart, line.length, url);
+        return;
+      }
+      lineStart = lineEnd + 1;
+    }
+  }
+
+  void _convertUrlLine(int idx, NoteBlock block, QuillController c, int start,
+      int lineLen, String url) {
+    final full = c.document.toDelta();
+    final docLen = c.document.length;
+    final before = start > 0 ? full.slice(0, start) : Delta();
+    final afterStart = start + lineLen + 1;
+    final after = afterStart < docLen ? full.slice(afterStart) : Delta();
+
+    final linkBlock = NoteBlock(type: NoteBlockType.link, url: url);
+    setState(() {
+      block.text = jsonEncode(_normalized(before).toJson());
+      _disposeBlockEditors(block.id);
+      _ensure(block);
+
+      _blocks.insert(idx + 1, linkBlock);
+      if (_hasContent(after)) {
+        final tail = NoteBlock(
+            type: NoteBlockType.text,
+            text: jsonEncode(_normalized(after).toJson()));
+        _blocks.insert(idx + 2, tail);
+        _ensure(tail);
+      }
+      _ensureTrailingText();
+    });
+    _fetchLinkPreview(linkBlock);
+  }
+
+  /// Quill documents must end with a newline insert.
+  Delta _normalized(Delta d) {
+    final ops = d.toList();
+    if (ops.isEmpty) return Delta()..insert('\n');
+    final last = ops.last.data;
+    if (last is String && last.endsWith('\n')) return d;
+    return d..insert('\n');
+  }
+
+  bool _hasContent(Delta d) {
+    for (final op in d.toList()) {
+      final data = op.data;
+      if (data is String) {
+        if (data.replaceAll('\n', '').trim().isNotEmpty) return true;
+      } else if (data != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _disposeBlockEditors(String id) {
+    final c = _quillCtrls.remove(id);
+    if (widget.activeController.value == c) {
+      widget.activeController.value = null;
+    }
+    _docSubs.remove(id)?.cancel();
+    c?.dispose();
+    _focusNodes.remove(id)?.dispose();
+    _scrollCtrls.remove(id)?.dispose();
+  }
+
+  void _fetchLinkPreview(NoteBlock b) {
+    if (b.linkFetched || !_fetchingLinks.add(b.id)) return;
+    LinkPreviewService.fetchBasicPreview(b.url).then((p) {
+      _fetchingLinks.remove(b.id);
+      if (!mounted || p == null) return;
+      setState(() {
+        b.linkTitle = p.title;
+        b.linkImage = p.imageUrl;
+        b.linkSite = p.siteName;
+        b.linkFetched = true;
+      });
+    });
+  }
+
+  Future<void> _openLink(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Leave the card in place; nothing else to do.
+    }
+  }
+
+  /// A pasted link as a small horizontal preview card (1500x400-ish ratio).
+  Widget _linkCard(NoteBlock block) {
+    if (!block.linkFetched) _fetchLinkPreview(block);
+    final domain = block.linkSite.isNotEmpty
+        ? block.linkSite
+        : (Uri.tryParse(block.url)?.host ?? block.url);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: GestureDetector(
+        onTap: () => _openLink(block.url),
+        child: AspectRatio(
+          aspectRatio: 1500 / 270,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AppPalette.bubbleGlass,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppPalette.cardOutline),
+            ),
+            child: Row(
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: block.linkImage.isNotEmpty
+                      ? Image.network(block.linkImage,
+                          fit: BoxFit.cover,
+                          cacheWidth: 300,
+                          gaplessPlayback: true,
+                          errorBuilder: (_, _, _) => _linkIconBox())
+                      : _linkIconBox(),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          block.linkTitle.isNotEmpty
+                              ? block.linkTitle
+                              : block.url,
+                          // The slim card fits one title line comfortably.
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppPalette.inkPrimary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          domain,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppPalette.inkSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: context.t.dismiss,
+                  icon: Icon(Icons.close_rounded,
+                      size: 16, color: AppPalette.inkSecondary),
+                  onPressed: () => setState(() {
+                    _blocks.removeWhere((b) => b.id == block.id);
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _linkIconBox() => ColoredBox(
+        color: Colors.black.withValues(alpha: 0.06),
+        child: Icon(Icons.link_rounded, color: AppPalette.inkSecondary),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -156,6 +395,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   }
 
   Widget _buildBlock(NoteBlock block) {
+    if (block.isLink) return _linkCard(block);
     if (block.isImage) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -280,14 +520,16 @@ class EditorBottomBar extends StatelessWidget {
     super.key,
     required this.activeController,
     required this.onAddPhotos,
-    required this.onPickSpace,
+    this.onPickSpace,
     this.onPickTheme,
     this.onPickColor,
   });
 
   final ValueNotifier<QuillController?> activeController;
   final VoidCallback onAddPhotos;
-  final VoidCallback onPickSpace;
+
+  /// Move-to-cortex; hidden when null (journal entries don't join folders).
+  final VoidCallback? onPickSpace;
   final VoidCallback? onPickColor;
 
   /// When provided (note editor only), shows a button to change the note's
@@ -328,12 +570,13 @@ class EditorBottomBar extends StatelessWidget {
                           color: _islandPrimary),
                       onPressed: onPickTheme,
                     ),
-                  IconButton(
-                    tooltip: context.t.tabCortex,
-                    icon: Icon(Icons.folder_outlined,
-                        color: _islandPrimary),
-                    onPressed: onPickSpace,
-                  ),
+                  if (onPickSpace != null)
+                    IconButton(
+                      tooltip: context.t.tabCortex,
+                      icon: Icon(Icons.folder_outlined,
+                          color: _islandPrimary),
+                      onPressed: onPickSpace,
+                    ),
                   const Spacer(),
                   Padding(
                     padding: EdgeInsets.only(right: 8),

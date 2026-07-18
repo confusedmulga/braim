@@ -187,4 +187,109 @@ void main() {
     final reloaded = await StorageService.instance.load();
     expect(reloaded.notes.single.colorValue, 0xFFFFF1B8);
   });
+
+  test('journal entries stay out of the feed and query by day', () async {
+    final day = DateTime(2026, 7, 11);
+    final state = await boot(AppData(
+      notes: [
+        Note(title: 'plain'),
+        Note(title: 'entry', journalDate: AppState.journalKey(day)),
+        Note(
+            title: 'binned entry',
+            journalDate: AppState.journalKey(day),
+            deletedAt: DateTime.now()),
+      ],
+      spaces: [],
+      cards: [],
+    ));
+
+    expect(state.notes.map((n) => n.title), ['plain']);
+    expect(state.journalEntriesOn(day).map((n) => n.title), ['entry']);
+    expect(state.journalEntriesOn(DateTime(2026, 7, 12)), isEmpty);
+    expect(state.journalDaysIn(2026, 7), {11});
+    expect(state.journalDaysIn(2026, 8), isEmpty);
+
+    // The date string survives storage.
+    await state.flushNow();
+    final reloaded = await StorageService.instance.load();
+    expect(
+        reloaded.notes.firstWhere((n) => n.title == 'entry').journalDate,
+        '2026-07-11');
+  });
+
+  test('journal months, years, crypt hiding and covers', () async {
+    final state = await boot(AppData(
+      notes: [
+        Note(title: 'july A', journalDate: '2026-07-11'),
+        Note(title: 'july B', journalDate: '2026-07-03'),
+        Note(title: 'old year', journalDate: '2024-02-01'),
+        Note(
+            title: 'hidden',
+            journalDate: '2026-07-11',
+            spaceId: kCryptSpaceId),
+      ],
+      spaces: [],
+      cards: [],
+    ));
+
+    // Whole-month query, newest day first; Crypt entries stay hidden.
+    expect(state.journalEntriesInMonth(2026, 7).map((n) => n.title),
+        ['july A', 'july B']);
+    expect(state.journalEntriesOn(DateTime(2026, 7, 11)).map((n) => n.title),
+        ['july A']);
+    expect(state.journalDaysIn(2026, 7), {11, 3});
+
+    // Years: only years that have entries, newest first.
+    expect(state.journalYears(), [2026, 2024]);
+
+    // Month covers persist.
+    await state.setJournalMonthCover('2026-07', '/tmp/cover.jpg');
+    await state.flushNow();
+    final reloaded = await StorageService.instance.load();
+    expect(reloaded.journalMonthCovers['2026-07'], '/tmp/cover.jpg');
+  });
+
+  test('a year with no entries never appears in the year list', () async {
+    final state = await boot(AppData(
+      notes: [Note(title: 'only 2023', journalDate: '2023-05-05')],
+      spaces: [],
+      cards: [],
+    ));
+    // Exactly the entry year — the current (entry-less) year is absent.
+    expect(state.journalYears(), [2023]);
+  });
+
+  test('backup nudge dismissal snoozes it for a week, persisted', () async {
+    final state = await boot(AppData(
+      notes: [Note(title: 'something worth backing up')],
+      spaces: [],
+      cards: [],
+    ));
+    // Never backed up: the nudge shows.
+    expect(state.showBackupReminder, isTrue);
+
+    await state.dismissBackupReminder();
+    expect(state.showBackupReminder, isFalse);
+    await state.flushNow();
+
+    // The dismissal survives a restart (still inside the snooze week).
+    final reloaded = await StorageService.instance.load();
+    expect(reloaded.backupReminderDismissedAt, isNotNull);
+
+    // Backing up clears the snooze and the overdue state entirely.
+    await state.markBackedUp();
+    expect(state.showBackupReminder, isFalse);
+    expect(state.backupOverdue, isFalse);
+  });
+
+  test('feed wallpaper choice persists', () async {
+    final state = await boot(AppData(notes: [], spaces: [], cards: []));
+    expect(state.feedWallpaper, 0);
+
+    await state.setFeedWallpaper(2);
+    await state.flushNow();
+
+    final reloaded = await StorageService.instance.load();
+    expect(reloaded.feedWallpaper, 2);
+  });
 }

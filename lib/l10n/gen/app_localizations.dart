@@ -112,6 +112,12 @@ abstract class AppLocalizations {
   /// **'Cards'**
   String get tabCards;
 
+  /// No description provided for @tabJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'Journal'**
+  String get tabJournal;
+
   /// No description provided for @tabCortex.
   ///
   /// In en, this message translates to:
@@ -129,6 +135,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tweets & links you saved'**
   String get subtitleCards;
+
+  /// No description provided for @subtitleJournal.
+  ///
+  /// In en, this message translates to:
+  /// **'One day at a time'**
+  String get subtitleJournal;
 
   /// No description provided for @subtitleCortex.
   ///
@@ -231,6 +243,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New folder'**
   String get newFolder;
+
+  /// No description provided for @newEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'New entry'**
+  String get newEntry;
+
+  /// No description provided for @sectionEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'ENTRIES'**
+  String get sectionEntries;
+
+  /// No description provided for @sectionYears.
+  ///
+  /// In en, this message translates to:
+  /// **'YEARS'**
+  String get sectionYears;
+
+  /// No description provided for @noEntriesForDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing written this day'**
+  String get noEntriesForDay;
+
+  /// No description provided for @noEntriesThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing written this month'**
+  String get noEntriesThisMonth;
+
+  /// No description provided for @tapPencilToWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the pencil to write an entry.'**
+  String get tapPencilToWrite;
+
+  /// No description provided for @untitledEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled entry'**
+  String get untitledEntry;
+
+  /// No description provided for @jumpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to a date'**
+  String get jumpToDate;
+
+  /// No description provided for @chooseCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a cover'**
+  String get chooseCover;
+
+  /// No description provided for @coverAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get coverAutomatic;
+
+  /// No description provided for @searchThisFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Search this folder'**
+  String get searchThisFolder;
 
   /// No description provided for @pasteTweetOrUrl.
   ///
@@ -1071,6 +1149,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Folder name'**
   String get folderName;
+
+  /// No description provided for @readerSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Reader'**
+  String get readerSection;
+
+  /// No description provided for @themeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get themeLabel;
+
+  /// No description provided for @wallpaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get wallpaper;
+
+  /// No description provided for @wallpaperGreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Green blooms'**
+  String get wallpaperGreen;
+
+  /// No description provided for @wallpaperRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red blooms'**
+  String get wallpaperRed;
+
+  /// No description provided for @wallpaperBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue blooms'**
+  String get wallpaperBlue;
+
+  /// No description provided for @wallpaperBlack.
+  ///
+  /// In en, this message translates to:
+  /// **'Black blooms'**
+  String get wallpaperBlack;
 
   /// No description provided for @tutWelcomeTitle.
   ///

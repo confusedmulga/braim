@@ -46,8 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (notes.isEmpty) return const _EmptyState();
 
-    final showBackupBanner =
-        state.backupOverdue && !state.backupReminderDismissed;
+    final showBackupBanner = state.showBackupReminder;
 
     // Left-edge scrollbar: appears while scrolling, hugs the left side so
     // it never fights the right-hand fade/toggle area.
@@ -64,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (showBackupBanner)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 40, 14, 2),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 2),
               child: _BackupBanner(
                 onBackup: () {
                   state.dismissBackupReminder();
@@ -75,9 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         SliverPadding(
-          // Top padding clears the header fade band so resting cards aren't
-          // dimmed; they only fade once scrolled up into it.
-          padding: EdgeInsets.fromLTRB(14, showBackupBanner ? 8 : 40, 14, 150),
+          // Just enough top padding to clear the (short) header fade band.
+          padding: EdgeInsets.fromLTRB(14, showBackupBanner ? 8 : 12, 14, 150),
           // Lazy masonry: builds only visible tiles and packs each new tile
           // into the currently-shortest column (true height balancing).
           sliver: SliverMasonryGrid.count(

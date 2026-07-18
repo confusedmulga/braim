@@ -107,7 +107,13 @@ class StorageService {
         tutorialSeen: (json['tutorialSeen'] as bool?) ?? false,
         lastBackupAt:
             DateTime.tryParse(json['lastBackupAt'] as String? ?? ''),
+        backupReminderDismissedAt: DateTime.tryParse(
+            json['backupReminderDismissedAt'] as String? ?? ''),
         sortMode: (json['sortMode'] as String?) ?? 'recent',
+        feedWallpaper: (json['feedWallpaper'] as num?)?.toInt() ?? 0,
+        journalMonthCovers:
+            ((json['journalMonthCovers'] as Map?) ?? const {})
+                .map((k, v) => MapEntry(k.toString(), v.toString())),
       );
     } catch (_) {
       return null;
@@ -133,7 +139,11 @@ class StorageService {
       'darkFollowSystem': data.darkFollowSystem,
       'tutorialSeen': data.tutorialSeen,
       'lastBackupAt': data.lastBackupAt?.toIso8601String(),
+      'backupReminderDismissedAt':
+          data.backupReminderDismissedAt?.toIso8601String(),
       'sortMode': data.sortMode,
+      'feedWallpaper': data.feedWallpaper,
+      'journalMonthCovers': data.journalMonthCovers,
     };
     final filePath = file.path;
     final bakPath = bak.path;
@@ -195,8 +205,11 @@ class AppData {
     this.darkFollowSystem = true,
     this.tutorialSeen = false,
     this.lastBackupAt,
+    this.backupReminderDismissedAt,
     this.sortMode = 'recent',
-  });
+    this.feedWallpaper = 0,
+    Map<String, String>? journalMonthCovers,
+  }) : journalMonthCovers = journalMonthCovers ?? {};
   factory AppData.empty() => AppData(notes: [], spaces: [], cards: []);
 
   final List<Note> notes;
@@ -218,6 +231,15 @@ class AppData {
   /// When the user last exported a backup (null = never).
   DateTime? lastBackupAt;
 
+  /// When the backup nudge was last cross-dismissed (snoozes it a week).
+  DateTime? backupReminderDismissedAt;
+
   /// Feed sort order name (see NoteSort).
   String sortMode;
+
+  /// Which bundled feed wallpaper is active (index into kFeedWallpapers).
+  int feedWallpaper;
+
+  /// User-chosen cover image per journal month, keyed 'yyyy-MM'.
+  Map<String, String> journalMonthCovers;
 }

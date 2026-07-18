@@ -1,5 +1,6 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../theme/app_theme.dart';
 
@@ -10,7 +11,10 @@ class IslandNavItem {
   final String label;
 }
 
-/// The floating, frosted "island" tab bar that hovers above the content.
+/// The floating "island" tab bar that hovers above the content. The one piece
+/// of chrome that keeps a real frosted blur — a single BackdropFilter clipped
+/// tightly to the island's small pill, so the per-frame cost stays tiny
+/// (unlike the stacked, screen-wide filters that were removed elsewhere).
 class IslandNav extends StatelessWidget {
   const IslandNav({
     super.key,
@@ -24,40 +28,47 @@ class IslandNav extends StatelessWidget {
   static const _items = [
     IslandNavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
     IslandNavItem(Icons.style_outlined, Icons.style_rounded, 'Cards'),
+    IslandNavItem(Icons.book_outlined, Icons.book_rounded, 'Journal'),
     IslandNavItem(Icons.grid_view_outlined, Icons.grid_view_rounded, 'Cortex'),
   ];
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.22),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(30),
+              color: AppPalette.whiteFill,
+              border: Border.all(color: AppPalette.cardOutline),
             ),
-          ],
-        ),
-        child: FakeGlass(
-        shape: const LiquidRoundedSuperellipse(borderRadius: 30),
-        settings: LiquidGlassSettings(
-          glassColor: AppPalette.bubbleGlass,
-          blur: 14,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < _items.length; i++)
-                _NavButton(
-                  item: _items[i],
-                  selected: i == currentIndex,
-                  onTap: () => onTap(i),
-                ),
-            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < _items.length; i++)
+                    _NavButton(
+                      item: _items[i],
+                      selected: i == currentIndex,
+                      onTap: () => onTap(i),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -96,8 +107,10 @@ class _NavButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           onTap: onTap,
           child: Padding(
+            // Tighter than the 3-tab layout so four tabs plus the expanded
+            // label still fit beside the pencil bubble on narrow screens.
             padding: EdgeInsets.symmetric(
-              horizontal: selected ? 18 : 16,
+              horizontal: selected ? 14 : 11,
               vertical: 12,
             ),
             child: Row(

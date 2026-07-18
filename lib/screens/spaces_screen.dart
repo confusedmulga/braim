@@ -88,7 +88,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
       slivers: [
         SliverPadding(
           // Top padding clears the header fade band (see home_screen).
-          padding: const EdgeInsets.fromLTRB(14, 40, 14, 150),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 150),
           // Lazy masonry: square thumbnail tiles and half-height plain tiles
           // pack into whichever column is shorter.
           sliver: SliverMasonryGrid.count(
@@ -242,7 +242,7 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
               widget.existing == null
                   ? context.t.newSpace
                   : context.t.editSpace,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: AppPalette.textPrimary,
@@ -279,7 +279,7 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
             TextField(
               controller: _ctrl,
               autofocus: true,
-              style: const TextStyle(color: AppPalette.textPrimary),
+              style: TextStyle(color: AppPalette.textPrimary),
               decoration: InputDecoration(
                 hintText: context.t.spaceName,
                 hintStyle: TextStyle(color: AppPalette.textSecondary),

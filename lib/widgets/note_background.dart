@@ -56,7 +56,10 @@ class NoteBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(asset!, fit: BoxFit.cover),
+        // Decode at screen size: the BACK assets are multi-thousand-pixel
+        // JPGs, and a full-res decode made themed notes visibly laggy (a
+        // huge texture rescaled every frame of the open/close morph).
+        Image.asset(asset!, fit: BoxFit.cover, cacheWidth: 1440),
         ColoredBox(color: AppPalette.noteTint),
         child,
       ],

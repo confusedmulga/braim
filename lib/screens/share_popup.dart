@@ -202,7 +202,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
           children: [
             ClipOval(
               child: Image.asset('assets/logo.png',
-                  width: 30, height: 30, fit: BoxFit.cover),
+                  width: 30, height: 30, fit: BoxFit.cover, cacheWidth: 90),
             ),
             const SizedBox(width: 10),
             Text(
