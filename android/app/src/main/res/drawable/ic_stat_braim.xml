@@ -1,0 +1,38 @@
+<!-- Braim notification small icon: a monochrome (white-on-transparent) brain
+     inside a circle. Android tints the status-bar small icon, so it must be a
+     white silhouette — never the full-colour adaptive launcher icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Circular badge -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:pathData="M12,2.7 A9.3,9.3 0 1 0 12.001,2.7 Z" />
+    <!-- Brain: central stem -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M12,7.4 L12,16.4" />
+    <!-- Left lobe -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,8.1 C10.6,7.1 8.6,7.5 8.2,9 C6.9,9.3 6.7,11.1 7.8,11.7 C7,12.8 7.8,14.4 9.1,14.4 C9.3,15.5 10.8,16.1 12,15.4" />
+    <!-- Right lobe (mirror) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,8.1 C13.4,7.1 15.4,7.5 15.8,9 C17.1,9.3 17.3,11.1 16.2,11.7 C17,12.8 16.2,14.4 14.9,14.4 C14.7,15.5 13.2,16.1 12,15.4" />
+</vector>

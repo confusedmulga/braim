@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:keepy/models/note.dart';
-import 'package:keepy/models/note_block.dart';
+import 'package:braim/models/note.dart';
+import 'package:braim/models/note_block.dart';
 
 void main() {
   test('Note thumbnail picks the first image block', () {

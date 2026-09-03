@@ -8,24 +8,29 @@ import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../models/note.dart';
+import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_button.dart';
 import '../widgets/glass.dart';
-import '../widgets/glass_bubble.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/island_nav.dart';
-import '../widgets/search_field.dart';
 import '../widgets/side_pane.dart';
-import '../widgets/sort_button.dart';
+import '../widgets/top_bar.dart';
 import '../widgets/tutorial_dialog.dart';
 import '../widgets/universal_search.dart';
 import 'archive_screen.dart';
+import 'book_screen.dart';
+import 'books_screen.dart';
 import 'cards_screen.dart';
+import 'daily_day_screen.dart';
 import 'home_screen.dart';
 import 'journal_screen.dart';
+import 'journal_year_screen.dart';
 import 'note_editor_screen.dart';
+import 'pomodoro_screen.dart';
 import 'recently_deleted_screen.dart';
+import 'reflexes_screen.dart';
 import 'settings_screen.dart';
 import 'space_detail_screen.dart';
 import 'spaces_screen.dart';
@@ -65,10 +70,11 @@ class _RootShellState extends State<RootShell>
   /// One scroll position per feed tab so re-tapping the active tab (or the
   /// screen title) can send that feed back to the top.
   final _feedScrolls = [
-    ScrollController(),
-    ScrollController(),
-    ScrollController(),
-    ScrollController(),
+    ScrollController(), // Home
+    ScrollController(), // Cards
+    ScrollController(), // Narrative (books)
+    ScrollController(), // Journal
+    ScrollController(), // Cortex
   ];
 
   /// Lets the title tap snap the journal's week strip back to today.
@@ -104,6 +110,8 @@ class _RootShellState extends State<RootShell>
     WidgetsBinding.instance.removeObserver(this);
     _shareSub?.cancel();
     _searchDebounce?.cancel();
+    _searchFocus.dispose();
+    _searchCtrl.dispose();
     _pageController.dispose();
     _paneCtrl.dispose();
     for (final c in _feedScrolls) {
@@ -135,7 +143,13 @@ class _RootShellState extends State<RootShell>
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       // Backgrounding: make sure coalesced edits reach disk.
-      context.read<AppState>().flushNow();
+      final app = context.read<AppState>();
+      app.flushNow();
+      // A normal background (not a teardown) is a good moment for a silent
+      // Drive backup — it self-throttles and no-ops when nothing changed.
+      if (state == AppLifecycleState.paused) {
+        app.maybeAutoBackup();
+      }
     }
   }
 
@@ -153,15 +167,42 @@ class _RootShellState extends State<RootShell>
   Future<void> _handleShared(List<SharedMediaFile> files) async {
     if (files.isEmpty || !mounted) return;
     final state = context.read<AppState>();
-    var added = false;
+    var addedCard = false;
+    // Non-link text and any images collapse into a single new note.
+    final imagePaths = <String>[];
+    final textParts = <String>[];
     for (final f in files) {
+      if (f.type == SharedMediaType.image) {
+        try {
+          imagePaths.add(await StorageService.instance.saveImage(f.path));
+        } catch (_) {
+          // Skip an image we couldn't copy.
+        }
+        continue;
+      }
       final match = RegExp(r'https?://\S+').firstMatch(f.path);
       if (match != null) {
         await state.addCardFromUrl(match.group(0)!);
-        added = true;
+        addedCard = true;
+      } else if (f.path.trim().isNotEmpty) {
+        textParts.add(f.path.trim());
       }
     }
-    if (added && mounted) {
+    final addedNote = imagePaths.isNotEmpty || textParts.isNotEmpty;
+    if (addedNote) {
+      await state.addSharedNote(
+        text: textParts.isEmpty ? null : textParts.join('\n\n'),
+        imagePaths: imagePaths,
+      );
+    }
+    if (!mounted) return;
+    // A shared note wins the focus; otherwise land on the new card.
+    if (addedNote) {
+      _selectTab(0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.savedToNotes)),
+      );
+    } else if (addedCard) {
       _selectTab(1);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.t.savedToCards)),
@@ -214,7 +255,7 @@ class _RootShellState extends State<RootShell>
   void _scrollFeedToTop(int i) {
     // On the journal, coming "back to the top" also means coming back to
     // the current week after swiping into the past or future.
-    if (i == 2) _journalKey.currentState?.resetToToday();
+    if (i == 3) _journalKey.currentState?.resetToToday();
     final c = _feedScrolls[i];
     if (!c.hasClients) return;
     c.animateTo(
@@ -250,6 +291,28 @@ class _RootShellState extends State<RootShell>
     );
   }
 
+  void _openJournalYear() {
+    _closePane();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+          builder: (_) => JournalYearScreen(year: DateTime.now().year)),
+    );
+  }
+
+  void _openReflexesShortcut() {
+    _closePane();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ReflexesScreen(date: DateTime.now())),
+    );
+  }
+
+  void _openPomodoro() {
+    _closePane();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PomodoroScreen()),
+    );
+  }
+
   Future<void> _addLink() async {
     final url = await showAddLinkDialog(context);
     if (url != null && url.trim().isNotEmpty && mounted) {
@@ -260,70 +323,229 @@ class _RootShellState extends State<RootShell>
   Future<void> _createFolder() async {
     final result = await showSpaceEditor(context);
     if (result != null && mounted) {
-      await context
-          .read<AppState>()
-          .addSpace(result.name, thumbnailPath: result.thumbnailPath);
+      await context.read<AppState>().addSpace(result.name,
+          thumbnailPath: result.thumbnailPath, colorValue: result.colorValue);
     }
   }
 
-  Widget _topBar() {
-    final titles = [
-      context.t.tabHome,
-      context.t.tabCards,
-      context.t.tabJournal,
-      context.t.tabCortex,
-    ];
-    final subtitles = [
-      context.t.subtitleHome,
-      context.t.subtitleCards,
-      context.t.subtitleJournal,
-      context.t.subtitleCortex,
-    ];
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-        child: Row(
-          children: [
-            GlassBubble(
-              icon: Icons.menu_rounded,
-              tooltip: context.t.menu,
-              onTap: _openPane,
-              size: 46,
-              iconSize: 22,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _scrollFeedToTop(_index),
-                child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    titles[_index],
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: AppPalette.inkPrimary,
-                    ),
-                  ),
-                  Text(
-                    subtitles[_index],
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppPalette.inkSecondary,
-                    ),
-                  ),
-                ],
+  /// Focus for the top search field (used to dismiss the keyboard on an
+  /// outside tap).
+  final FocusNode _searchFocus = FocusNode();
+
+
+  /// Owned here so a back press can drop the search and hand the feed back.
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchCtrl.clear();
+    _searchFocus.unfocus();
+    setState(() => _query = '');
+  }
+
+  /// Long-pressing the Home pencil offers the two things you can write: a
+  /// quick Note or a long-form Article. The sheet pops up right above the
+  /// button it came from.
+  Future<void> _showCreateMenu(
+      BuildContext anchorContext, VoidCallback openNote) async {
+    final box = anchorContext.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+    const menuHeight = 116.0;
+    final choice = await showMenu<String>(
+      context: context,
+      // Softly rounded like the nav island it pops out of.
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(26))),
+      clipBehavior: Clip.antiAlias,
+      // left > right, so the menu's right edge lines up with the pencil's.
+      position: RelativeRect.fromLTRB(
+        topLeft.dx,
+        topLeft.dy - menuHeight - 10,
+        overlay.size.width - topLeft.dx - box.size.width,
+        overlay.size.height - topLeft.dy,
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'note',
+          child: Row(children: [
+            Icon(Icons.edit_outlined, color: AppPalette.inkSecondary),
+            const SizedBox(width: 12),
+            Text(context.t.createNote),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'article',
+          child: Row(children: [
+            Icon(Icons.article_outlined, color: AppPalette.inkSecondary),
+            const SizedBox(width: 12),
+            Text(context.t.createArticle),
+          ]),
+        ),
+      ],
+    );
+    if (!mounted) return;
+    if (choice == 'note') {
+      openNote();
+    } else if (choice == 'article') {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            NoteEditorScreen(note: Note(isArticle: true), isNew: true),
+      ));
+    }
+  }
+
+  /// The journal pencil menu: a bottom-up sheet to add a daily-day task, a new
+  /// reflex, or a journal entry for the selected day.
+  void _showJournalCompose() {
+    final date = _journalKey.currentState?.selectedDate ?? DateTime.now();
+    final state = context.read<AppState>();
+    final pinned = state.pinnedReflex;
+    // The first option adds to whichever reflex is pinned into the feed.
+    final addLabel = state.isDailyDay(pinned.id)
+        ? context.t.composeDailyTask
+        : context.t.addToName(pinned.title.trim().isEmpty
+            ? context.t.untitledImpulse
+            : pinned.title);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: GlassPanel(
+            borderRadius: 26,
+            strong: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _composeTile(
+                  Icons.wb_sunny_rounded,
+                  addLabel,
+                  () {
+                    Navigator.pop(sheetCtx);
+                    openNewThread(context, pinned.id, date);
+                  },
                 ),
-              ),
+                _composeTile(
+                  Icons.bolt_rounded,
+                  context.t.composeReflex,
+                  () {
+                    Navigator.pop(sheetCtx);
+                    showImpulseEditor(context);
+                  },
+                ),
+                _composeTile(
+                  Icons.edit_note_rounded,
+                  context.t.composeEntry,
+                  () {
+                    Navigator.pop(sheetCtx);
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => NoteEditorScreen(
+                        note: Note(journalDate: AppState.journalKey(date)),
+                        isNew: true,
+                      ),
+                    ));
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+
+  /// Lets the user reorder the journal's three sections (daily-day tasks, the
+  /// reflex card, and the diary entries).
+  void _showJournalRearrange() {
+    final state = context.read<AppState>();
+    final order = List<String>.from(state.journalOrder);
+    IconData iconFor(String s) => switch (s) {
+          'tasks' => Icons.wb_sunny_rounded,
+          'card' => Icons.bolt_rounded,
+          _ => Icons.auto_stories_outlined,
+        };
+    String labelFor(String s) => switch (s) {
+          'tasks' => context.t.sectionDailyTasks,
+          'card' => context.t.sectionReflexCard,
+          _ => context.t.sectionDiaryEntries,
+        };
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: GlassPanel(
+              borderRadius: 26,
+              strong: true,
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(context.t.rearrangeJournal,
+                      style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppPalette.inkPrimary)),
+                  const SizedBox(height: 3),
+                  Text(context.t.rearrangeJournalHint,
+                      style: TextStyle(
+                          fontSize: 12.5, color: AppPalette.inkSecondary)),
+                  const SizedBox(height: 10),
+                  ReorderableListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    onReorder: (oldI, newI) {
+                      setSheet(() {
+                        if (newI > oldI) newI -= 1;
+                        order.insert(newI, order.removeAt(oldI));
+                      });
+                      state.setJournalOrder(List.of(order));
+                    },
+                    children: [
+                      for (var i = 0; i < order.length; i++)
+                        ListTile(
+                          key: ValueKey(order[i]),
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(iconFor(order[i]),
+                              color: AppPalette.inkPrimary),
+                          title: Text(labelFor(order[i]),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppPalette.inkPrimary)),
+                          trailing: ReorderableDragStartListener(
+                            index: i,
+                            child: Icon(Icons.drag_handle_rounded,
+                                color: AppPalette.inkSecondary),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _composeTile(IconData icon, String label, VoidCallback onTap) =>
+      ListTile(
+        leading: Icon(icon, color: AppPalette.inkPrimary),
+        title: Text(label,
+            style: TextStyle(
+                color: AppPalette.inkPrimary, fontWeight: FontWeight.w600)),
+        onTap: onTap,
+      );
 
   /// The universal + button: fixed bottom-right in line with the island; only
   /// its icon and action change with the current tab.
@@ -335,7 +557,10 @@ class _RootShellState extends State<RootShell>
         closedRadius: 34,
         openBuilder: (_) => NoteEditorScreen(note: Note(), isNew: true),
         closedBuilder: (context, open) => BubbleButton(
-            icon: Icons.edit_rounded, tooltip: context.t.newNote, onTap: open),
+            icon: Icons.edit_rounded,
+            tooltip: context.t.newNote,
+            onTap: open,
+            onLongPress: () => _showCreateMenu(context, open)),
       );
     } else if (_index == 1) {
       button = BubbleButton(
@@ -345,23 +570,21 @@ class _RootShellState extends State<RootShell>
         onTap: _addLink,
       );
     } else if (_index == 2) {
-      button = GlassMorph(
+      // Narrative: the button starts a new book.
+      button = BubbleButton(
+        key: const ValueKey('fab-book'),
+        icon: Icons.add_rounded,
+        tooltip: context.t.newBook,
+        onTap: () => showCreateBook(context),
+      );
+    } else if (_index == 3) {
+      // The pencil opens a bottom-up menu: a daily-day task, a new reflex, or
+      // a journal entry for the day.
+      button = BubbleButton(
         key: const ValueKey('fab-journal'),
-        closedRadius: 34,
-        // Entries are written on the day they happen: always today, never a
-        // past or future date, whatever day is selected in the journal.
-        openBuilder: (_) => NoteEditorScreen(
-          note: Note(journalDate: AppState.journalKey(DateTime.now())),
-          isNew: true,
-        ),
-        closedBuilder: (context, open) => BubbleButton(
-            icon: Icons.edit_rounded,
-            tooltip: context.t.newEntry,
-            onTap: () {
-              // Snap the journal to today so the new entry is in view.
-              _journalKey.currentState?.resetToToday();
-              open();
-            }),
+        icon: Icons.edit_rounded,
+        tooltip: context.t.add,
+        onTap: _showJournalCompose,
       );
     } else {
       button = BubbleButton(
@@ -386,9 +609,15 @@ class _RootShellState extends State<RootShell>
     final searching = _query.trim().isNotEmpty;
 
     return PopScope(
-      canPop: !_paneOpen,
+      // Back closes the drawer, then leaves a search — only then the app.
+      canPop: !_paneOpen && !searching,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _paneOpen) _closePane();
+        if (didPop) return;
+        if (_paneOpen) {
+          _closePane();
+        } else if (searching) {
+          _clearSearch();
+        }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         // Status icons follow the surface: dark icons on the light theme,
@@ -443,6 +672,9 @@ class _RootShellState extends State<RootShell>
                     onOpenArchive: _openArchive,
                     onOpenTrash: _openTrash,
                     onOpenSpace: _openSpace,
+                    onOpenJournalYear: _openJournalYear,
+                    onOpenReflexes: _openReflexesShortcut,
+                    onOpenPomodoro: _openPomodoro,
                     onClose: _closePane,
                   ),
                 ),
@@ -497,63 +729,84 @@ class _RootShellState extends State<RootShell>
                 children: [
                   const Positioned.fill(
                       child: AppBackground(wallpaper: true)),
-                  Column(
+                  // Feeds reach the top of the screen now; each opens with
+                  // its big greeting instead of a title header.
+                  Stack(
                     children: [
-                      _topBar(),
-                      KeyedSubtree(
-                        key: _searchKey,
-                        child: SearchField(
-                          hint: context.t.searchHint,
-                          onChanged: _onSearchChanged,
-                          // Sort applies to the notes and cards feeds only,
-                          // not the journal (fixed by day) or the folder grid.
-                          trailing: _index <= 1 ? const SortButton() : null,
-                        ),
+                      PageView(
+                        controller: _pageController,
+                        physics: const _SpringPagePhysics(),
+                        onPageChanged: (i) => setState(() => _index = i),
+                        children: [
+                          _KeepAlive(
+                              child:
+                                  HomeScreen(controller: _feedScrolls[0])),
+                          _KeepAlive(
+                              child:
+                                  CardsScreen(controller: _feedScrolls[1])),
+                          _KeepAlive(
+                              child:
+                                  BooksScreen(controller: _feedScrolls[2])),
+                          _KeepAlive(
+                              child: JournalScreen(
+                                  key: _journalKey,
+                                  controller: _feedScrolls[3])),
+                          _KeepAlive(
+                              child:
+                                  SpacesScreen(controller: _feedScrolls[4])),
+                        ],
                       ),
-                      Expanded(
-                        // A short fade dissolves tiles just before the search
-                        // bar so they don't clip against a hard line. Its
-                        // height equals the feeds' 12px top padding, so at
-                        // rest the first row sits fully opaque exactly one
-                        // gap below the bar — the same gap the header row
-                        // keeps above it.
-                        child: TopFade(
-                          height: 12,
-                          child: Stack(
-                            children: [
-                              PageView(
-                                controller: _pageController,
-                                physics: const _SpringPagePhysics(),
-                                onPageChanged: (i) =>
-                                    setState(() => _index = i),
-                                children: [
-                                  _KeepAlive(
-                                      child: HomeScreen(
-                                          controller: _feedScrolls[0])),
-                                  _KeepAlive(
-                                      child: CardsScreen(
-                                          controller: _feedScrolls[1])),
-                                  _KeepAlive(
-                                      child: JournalScreen(
-                                          key: _journalKey,
-                                          controller: _feedScrolls[2])),
-                                  _KeepAlive(
-                                      child: SpacesScreen(
-                                          controller: _feedScrolls[3])),
-                                ],
-                              ),
-                              if (searching)
-                                Positioned.fill(
-                                  child: AppBackground(
-                                    child: UniversalSearchResults(
-                                        query: _query),
-                                  ),
-                                ),
-                            ],
+                      if (searching)
+                        Positioned.fill(
+                          // Keeps the wallpaper: results replace the feed,
+                          // not the backdrop.
+                          child: AppBackground(
+                            wallpaper: true,
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                  top: MediaQuery.of(context).padding.top +
+                                      78),
+                              child: UniversalSearchResults(query: _query),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  // Status-bar scrim: the clock stays readable over tiles
+                  // scrolling beneath it.
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: TopScrimFade(
+                        height: MediaQuery.of(context).padding.top + 8),
+                  ),
+                  // The fixed menu + search + sort + account bar.
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: KeyedSubtree(
+                          key: _searchKey,
+                          child: FloatingTopBar(
+                            onMenu: _openPane,
+                            onQueryChanged: _onSearchChanged,
+                            focusNode: _searchFocus,
+                            controller: _searchCtrl,
+                            // Sort applies to notes, cards and the folder
+                            // grid — not the book shelf or the journal.
+                            showSort: _index != 2 && _index != 3,
+                            // The journal swaps sort for a rearrange control.
+                            onRearrange:
+                                _index == 3 ? _showJournalRearrange : null,
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
                   // Floating island nav + the universal action bubble,
                   // centred as one group.
@@ -562,14 +815,23 @@ class _RootShellState extends State<RootShell>
                     child: SafeArea(
                       top: false,
                       child: Padding(
-                        padding: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 18),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            IslandNav(
-                                currentIndex: _index, onTap: _selectTab),
-                            const SizedBox(width: 12),
+                            // Five tabs plus the action bubble is a lot for
+                            // a narrow phone: let the island shrink to fit
+                            // rather than overflow.
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: IslandNav(
+                                    currentIndex: _index, onTap: _selectTab),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
                             _fab(),
                           ],
                         ),

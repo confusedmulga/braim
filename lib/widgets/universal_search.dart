@@ -23,6 +23,8 @@ class UniversalSearchResults extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final q = query.toLowerCase().trim();
+    // A "#tag" query matches on tags too (with or without the leading #).
+    final qTag = q.replaceAll('#', '');
 
     final spaces =
         state.spaces.where((s) => s.name.toLowerCase().contains(q)).toList();
@@ -30,6 +32,7 @@ class UniversalSearchResults extends StatelessWidget {
       final space = state.spaceById(n.spaceId);
       return n.title.toLowerCase().contains(q) ||
           n.textPreview.toLowerCase().contains(q) ||
+          (qTag.isNotEmpty && n.tags.any((t) => t.contains(qTag))) ||
           (space?.name.toLowerCase().contains(q) ?? false);
     }).toList();
     bool cardMatches(TweetCard c) {
@@ -44,6 +47,7 @@ class UniversalSearchResults extends StatelessWidget {
       final space = state.spaceById(n.spaceId);
       return n.title.toLowerCase().contains(q) ||
           n.textPreview.toLowerCase().contains(q) ||
+          (qTag.isNotEmpty && n.tags.any((t) => t.contains(qTag))) ||
           (space?.name.toLowerCase().contains(q) ?? false);
     }
 

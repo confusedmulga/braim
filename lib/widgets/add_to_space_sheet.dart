@@ -110,7 +110,7 @@ class _AddToSpaceSheet extends StatelessWidget {
     if (t.isNotEmpty) return t;
     final p = n.textPreview.trim();
     if (p.isNotEmpty) return p.split('\n').first;
-    return 'Untitled note';
+    return 'Untitled node';
   }
 
   Widget _label(String text) => Padding(

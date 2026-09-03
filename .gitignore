@@ -54,3 +54,10 @@ app.*.map.json
 android/key.properties
 android/key.properties.ready
 android/upload-keystore.jks
+
+# Firebase / Google credentials — never commit (removed; app is local + Drive backup)
+android/app/google-services.json
+lib/firebase_options.dart
+firebase.json
+.firebaserc
+ios/Runner/GoogleService-Info.plist

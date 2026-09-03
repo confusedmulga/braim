@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:html/parser.dart' as html_parser;
 
-import 'package:keepy/services/article_extractor.dart';
+import 'package:braim/services/article_extractor.dart';
 
 String _para(int i) =>
     '<p>Paragraph $i of the article body, with several clauses, some '

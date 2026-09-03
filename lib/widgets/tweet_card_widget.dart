@@ -19,6 +19,7 @@ class TweetCardWidget extends StatelessWidget {
     required this.onDelete,
     this.onLongPress,
     this.folderName,
+    this.folderColor,
   });
 
   final TweetCard card;
@@ -26,8 +27,16 @@ class TweetCardWidget extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback? onLongPress;
 
-  /// Name of the cortex folder this card lives in, shown as a small chip.
+  /// Name and colour of the cortex folder this card lives in, shown as a small
+  /// chip.
   final String? folderName;
+  final int? folderColor;
+
+  Color get _folderFill =>
+      NoteColors.resolveStrong(folderColor) ??
+      Colors.black.withValues(alpha: 0.06);
+  Color get _folderFg =>
+      folderColor != null ? NoteColors.onSwatch : AppPalette.inkSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -63,8 +72,9 @@ class TweetCardWidget extends StatelessWidget {
             maxLines: 6,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 14.5,
-              height: 1.4,
+              fontFamily: activeBodyFont,
+              fontSize: 18.5,
+              height: 1.25,
               color: AppPalette.inkPrimary,
             ),
           ),
@@ -98,6 +108,7 @@ class TweetCardWidget extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
+                      fontFamily: kNoteHeadingFont,
                       fontSize: 15.5,
                       fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary,
@@ -110,8 +121,9 @@ class TweetCardWidget extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 13.5,
-                        height: 1.35,
+                        fontFamily: activeBodyFont,
+                        fontSize: 17,
+                        height: 1.2,
                         color: AppPalette.inkSecondary,
                       ),
                     ),
@@ -158,8 +170,9 @@ class TweetCardWidget extends StatelessWidget {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 13.5,
-              height: 1.35,
+              fontFamily: activeBodyFont,
+              fontSize: 17,
+              height: 1.2,
               color: AppPalette.inkPrimary,
             ),
           ),
@@ -285,14 +298,14 @@ class TweetCardWidget extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: _folderFill,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.folder_rounded,
-                    size: 11, color: AppPalette.inkSecondary),
+                    size: 11, color: _folderFg.withValues(alpha: 0.85)),
                 const SizedBox(width: 4),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 90),
@@ -300,8 +313,7 @@ class TweetCardWidget extends StatelessWidget {
                     folderName!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 11, color: AppPalette.inkSecondary),
+                    style: TextStyle(fontSize: 11, color: _folderFg),
                   ),
                 ),
               ],
@@ -331,12 +343,17 @@ class CompactCardTile extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.folderName,
+    this.folderColor,
   });
 
   final TweetCard card;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final String? folderName;
+  final int? folderColor;
+
+  Color get _folderFg =>
+      folderColor != null ? NoteColors.onSwatch : AppPalette.inkSecondary;
 
   String _title(AppLocalizations t) {
     if (card.noteTitle.trim().isNotEmpty) return card.noteTitle.trim();
@@ -421,8 +438,9 @@ class CompactCardTile extends StatelessWidget {
                         maxLines: 4,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12.5,
-                          height: 1.35,
+                          fontFamily: activeBodyFont,
+                          fontSize: 16,
+                          height: 1.2,
                           color: AppPalette.inkSecondary,
                         ),
                       ),
@@ -445,7 +463,8 @@ class CompactCardTile extends StatelessWidget {
                             folderName!.isNotEmpty) ...[
                           const SizedBox(width: 4),
                           Icon(Icons.folder_rounded,
-                              size: 10, color: AppPalette.inkSecondary),
+                              size: 10,
+                              color: _folderFg.withValues(alpha: 0.85)),
                           const SizedBox(width: 3),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 60),
@@ -454,8 +473,7 @@ class CompactCardTile extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                  fontSize: 10.5,
-                                  color: AppPalette.inkSecondary),
+                                  fontSize: 10.5, color: _folderFg),
                             ),
                           ),
                         ],

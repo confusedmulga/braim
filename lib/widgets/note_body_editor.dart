@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
@@ -14,6 +16,7 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import '../models/note_block.dart';
 import '../services/image_service.dart';
 import '../services/link_preview_service.dart';
+import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 
 /// A reusable rich-text + image block editor. It edits the [blocks] list in
@@ -27,14 +30,25 @@ class NoteBodyEditor extends StatefulWidget {
     required this.activeController,
     this.onRemoveImagePath,
     this.onLight = false,
+    this.bodyFontFamily,
+    this.onBackspaceAtStart,
   });
 
   final List<NoteBlock> blocks;
   final ValueNotifier<QuillController?> activeController;
   final void Function(String path)? onRemoveImagePath;
 
+  /// Called when Backspace is pressed at the very start of an empty first line,
+  /// so the screen can move the cursor up into the title (Google Keep style).
+  final VoidCallback? onBackspaceAtStart;
+
   /// Use black text for light (white) backgrounds.
   final bool onLight;
+
+  /// When set (a book page), typeset the whole editor — body and headings —
+  /// in this family instead of the handwriting default, so the manuscript
+  /// reads in the book's chosen face.
+  final String? bodyFontFamily;
 
   @override
   State<NoteBodyEditor> createState() => NoteBodyEditorState();
@@ -47,6 +61,17 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   final Map<String, StreamSubscription> _docSubs = {};
   final Set<String> _fetchingLinks = {};
   Timer? _linkScanTimer;
+
+  // ---- @@ / @@@ mention autocomplete --------------------------------------
+  /// The trigger just before the caret: `@@Query` links a node, `@@@Query`
+  /// mentions a thread/impulse. The picker filters live as [_mentionQuery] grows.
+  static final _mentionRe = RegExp(r'(@{2,3})([^@\n]{0,40})$');
+  OverlayEntry? _mentionEntry;
+  String? _mentionBlockId;
+  int _mentionMode = 0; // 0 none, 2 node link, 3 thread/impulse mention
+  int _mentionStart = 0; // plain-text offset where the `@@`/`@@@` begins
+  int _mentionCaret = 0; // plain-text offset of the caret (end of the query)
+  String _mentionQuery = '';
 
   /// A line that is nothing but a URL, as left behind by a paste.
   /// Case-insensitive: keyboards auto-capitalize a typed "Https://…".
@@ -69,6 +94,8 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   @override
   void dispose() {
     _linkScanTimer?.cancel();
+    _mentionEntry?.remove();
+    _mentionEntry = null;
     for (final s in _docSubs.values) {
       s.cancel();
     }
@@ -94,6 +121,8 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
         for (final op in change.change.toList()) {
           final data = op.data;
           if (!op.isInsert || data is! String) continue;
+          // Count this keystroke toward the "time spent writing" analytic.
+          if (mounted) context.read<AppState>().recordTypingActivity();
           if (data.length >= 12 && data.toLowerCase().contains('http')) {
             _scheduleLinkScan(b.id, allowCursorLine: true);
             break;
@@ -104,6 +133,9 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
           }
         }
       });
+      // Watch the caret + text for an @@/@@@ mention trigger (fires on both
+      // typing and cursor moves, so the picker follows the caret).
+      c.addListener(() => _scanMention(b.id));
       return c;
     });
     _scrollCtrls.putIfAbsent(b.id, () => ScrollController());
@@ -116,6 +148,44 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       });
       return node;
     });
+  }
+
+  /// Google Keep-style edits at the start of a line, hooked into the Quill
+  /// editor's own key pipeline (so it also catches the soft keyboard's
+  /// Backspace). Returns null to let the editor handle the key normally.
+  KeyEventResult? _onBlockKey(NoteBlock b, KeyEvent event) {
+    if (event is KeyUpEvent ||
+        event.logicalKey != LogicalKeyboardKey.backspace) {
+      return null;
+    }
+    final c = _quillCtrls[b.id];
+    if (c == null) return null;
+    final sel = c.selection;
+    if (!sel.isCollapsed || sel.baseOffset != 0) return null;
+    final idx = _blocks.indexWhere((x) => x.id == b.id);
+    if (idx < 0) return null;
+
+    // Right after an image (or link) card: delete that block.
+    if (idx > 0 && !_blocks[idx - 1].isText) {
+      final prev = _blocks[idx - 1];
+      sync();
+      setState(() => _blocks.removeAt(idx - 1));
+      if (prev.isImage && prev.imagePath.isNotEmpty) {
+        widget.onRemoveImagePath?.call(prev.imagePath);
+      }
+      _disposeBlockEditors(prev.id);
+      return KeyEventResult.handled;
+    }
+
+    // Empty first line: hand the cursor up to the title.
+    final firstText = _blocks.indexWhere((x) => x.isText);
+    if (idx == firstText &&
+        widget.onBackspaceAtStart != null &&
+        c.document.toPlainText().trim().isEmpty) {
+      widget.onBackspaceAtStart!();
+      return KeyEventResult.handled;
+    }
+    return null;
   }
 
   QuillController _controllerFor(NoteBlock b) {
@@ -135,6 +205,209 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     return QuillController(
       document: doc,
       selection: const TextSelection.collapsed(offset: 0),
+    );
+  }
+
+  // ---- Mention autocomplete -------------------------------------------------
+
+  /// Re-checks the text just before the caret for an `@@`/`@@@` trigger and
+  /// shows, updates or hides the suggestion popup accordingly.
+  void _scanMention(String blockId) {
+    if (!mounted) return;
+    final c = _quillCtrls[blockId];
+    if (c == null) {
+      _hideMention();
+      return;
+    }
+    final sel = c.selection;
+    if (!sel.isCollapsed || sel.baseOffset < 0) {
+      _hideMention();
+      return;
+    }
+    final text = c.document.toPlainText();
+    final caret = sel.baseOffset.clamp(0, text.length);
+    final before = text.substring(0, caret);
+    final m = _mentionRe.firstMatch(before);
+    if (m == null) {
+      _hideMention();
+      return;
+    }
+    _mentionBlockId = blockId;
+    _mentionMode = m.group(1)!.length >= 3 ? 3 : 2;
+    _mentionStart = m.start;
+    _mentionCaret = caret;
+    _mentionQuery = m.group(2)!;
+    if (!_hasMentionResults()) {
+      _hideMention();
+      return;
+    }
+    if (_mentionEntry == null) {
+      _mentionEntry = OverlayEntry(builder: _buildMentionOverlay);
+      Overlay.of(context).insert(_mentionEntry!);
+    } else {
+      _mentionEntry!.markNeedsBuild();
+    }
+  }
+
+  bool _hasMentionResults() {
+    if (_mentionMode == 0) return false;
+    final state = context.read<AppState>();
+    return _mentionMode == 3
+        ? state.searchMentionTargets(_mentionQuery).isNotEmpty
+        : state.searchLinkTargets(_mentionQuery).isNotEmpty;
+  }
+
+  void _hideMention() {
+    _mentionMode = 0;
+    _mentionBlockId = null;
+    _mentionQuery = '';
+    _mentionStart = 0;
+    _mentionCaret = 0;
+    _mentionEntry?.remove();
+    _mentionEntry = null;
+  }
+
+  /// Replaces the `@@`/`@@@` trigger + query with [insert] and re-focuses the
+  /// block so the keyboard stays up.
+  void _applyMention(String insert) {
+    final blockId = _mentionBlockId;
+    final c = blockId == null ? null : _quillCtrls[blockId];
+    if (c == null) {
+      _hideMention();
+      return;
+    }
+    final start = _mentionStart;
+    final end = _mentionCaret;
+    _hideMention();
+    // Guard against the document having shrunk since the last scan.
+    final maxLen = c.document.length;
+    if (end < start || start > maxLen) return;
+    final removeLen = (end - start).clamp(0, maxLen - start);
+    c.replaceText(start, removeLen, insert,
+        TextSelection.collapsed(offset: start + insert.length));
+    _focusNodes[blockId]?.requestFocus();
+  }
+
+  Widget _buildMentionOverlay(BuildContext ctx) {
+    final state = context.read<AppState>();
+    final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+    final rows = <Widget>[];
+    if (_mentionMode == 3) {
+      for (final t in state.searchMentionTargets(_mentionQuery)) {
+        rows.add(_mentionRow(
+          icon: t.isThread
+              ? Icons.check_circle_outline_rounded
+              : Icons.bolt_rounded,
+          title: t.label,
+          subtitle: t.parent,
+          onTap: () => _applyMention('[[@${t.label}]] '),
+        ));
+      }
+    } else {
+      for (final n in state.searchLinkTargets(_mentionQuery)) {
+        final title = n.title.trim();
+        rows.add(_mentionRow(
+          icon: Icons.description_outlined,
+          title: title,
+          subtitle: null,
+          onTap: () => _applyMention('[[$title]] '),
+        ));
+      }
+    }
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final header =
+        _mentionMode == 3 ? context.t.mentionThreadHeader : context.t.mentionNodeHeader;
+    return Positioned(
+      left: 10,
+      right: 10,
+      // Sit above the keyboard and clear the floating format island below.
+      bottom: bottomInset + 170,
+      child: Material(
+        elevation: 12,
+        color: AppPalette.sheet,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppPalette.cardOutline),
+          ),
+          constraints: const BoxConstraints(maxHeight: 244),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                child: Row(
+                  children: [
+                    Icon(
+                        _mentionMode == 3
+                            ? Icons.alternate_email_rounded
+                            : Icons.link_rounded,
+                        size: 15,
+                        color: AppPalette.inkSecondary),
+                    const SizedBox(width: 8),
+                    Text(header.toUpperCase(),
+                        style: TextStyle(
+                            fontSize: 11,
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w700,
+                            color: AppPalette.inkSecondary)),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  children: rows,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mentionRow({
+    required IconData icon,
+    required String title,
+    required String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppPalette.scheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppPalette.inkPrimary)),
+                  if (subtitle != null && subtitle.trim().isNotEmpty)
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11.5, color: AppPalette.inkSecondary)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -447,7 +720,11 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
           expands: false,
           autoFocus: false,
           padding: EdgeInsets.zero,
-          customStyles: _quillStyles(widget.onLight),
+          customStyles: _quillStyles(widget.onLight, widget.bodyFontFamily),
+          // Backspace at the start of a line: delete a preceding image, or on
+          // an empty first line jump up to the title (Google Keep style).
+          // ignore: experimental_member_use
+          onKeyPressed: (event, node) => _onBlockKey(block, event),
         ),
       ),
     );
@@ -455,29 +732,48 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
 }
 
 /// Text styles for the editor, with distinct heading sizes. [onLight] switches
-/// to black text for white backgrounds.
-DefaultStyles _quillStyles(bool onLight) {
+/// to black text for white backgrounds. When [fontFamily] is given (a book
+/// page), the whole editor is typeset in that face at print-like sizes; the
+/// default is the handwriting body with Lora headings used elsewhere.
+DefaultStyles _quillStyles(bool onLight, [String? fontFamily]) {
   final text = onLight ? AppPalette.inkPrimary : AppPalette.textPrimary;
   final placeholder = onLight
       ? AppPalette.inkSecondary.withValues(alpha: 0.7)
       : AppPalette.textSecondary.withValues(alpha: 0.7);
+  // A book reads in one consistent face; a note keeps the handwritten body.
+  final bookFace = fontFamily != null;
+  final bodyFace = fontFamily ?? activeBodyFont;
+  final headingFace = fontFamily ?? kNoteHeadingFont;
+  // Caveat runs small for its point size, so notes sit a notch larger; the
+  // serif book faces are set nearer a real page size.
+  final bodySize = bookFace ? 18.0 : 21.0;
+  final h1Size = bookFace ? 24.0 : 26.0;
+  final h2Size = bookFace ? 20.0 : 21.0;
+  final bodyHeight = bookFace ? 1.5 : 1.35;
   // Quill paints spans directly (no DefaultTextStyle inheritance), so the
   // family must be spelled out here or the editor falls back to Roboto.
-  TextStyle base(double size, FontWeight w) => TextStyle(
+  TextStyle body(double size, FontWeight w) => TextStyle(
       fontSize: size,
-      height: 1.4,
+      height: bodyHeight,
       color: text,
       fontWeight: w,
-      fontFamily: 'SpaceGrotesk');
+      fontFamily: bodyFace);
+  TextStyle heading(double size, FontWeight w) => TextStyle(
+      fontSize: size,
+      height: 1.25,
+      color: text,
+      fontWeight: w,
+      fontFamily: headingFace);
   const hs = HorizontalSpacing(0, 0);
   const vs = VerticalSpacing(6, 0);
   return DefaultStyles(
     paragraph: DefaultTextBlockStyle(
-        base(16.5, FontWeight.w400), hs, vs, const VerticalSpacing(0, 0), null),
+        body(bodySize, FontWeight.w400), hs, vs, const VerticalSpacing(0, 0),
+        null),
     // Without these, list lines and their bullets/numbers fall back to the
     // theme's (white) text style and vanish on the white sheet.
     lists: DefaultListBlockStyle(
-      base(16.5, FontWeight.w400),
+      body(bodySize, FontWeight.w400),
       hs,
       vs,
       const VerticalSpacing(0, 6),
@@ -485,22 +781,36 @@ DefaultStyles _quillStyles(bool onLight) {
       null,
     ),
     leading: DefaultTextBlockStyle(
-      base(16.5, FontWeight.w400),
+      body(bodySize, FontWeight.w400),
       hs,
       const VerticalSpacing(0, 0),
       const VerticalSpacing(0, 0),
       null,
     ),
-    h1: DefaultTextBlockStyle(base(26, FontWeight.w800), hs,
+    // A quoted block: indented with a soft left rule.
+    quote: DefaultTextBlockStyle(
+      body(bodySize, FontWeight.w400).copyWith(
+          color: text.withValues(alpha: 0.72), fontStyle: FontStyle.italic),
+      const HorizontalSpacing(16, 0),
+      const VerticalSpacing(6, 6),
+      const VerticalSpacing(0, 0),
+      BoxDecoration(
+        border: Border(
+          left: BorderSide(
+              color: text.withValues(alpha: 0.28), width: 3),
+        ),
+      ),
+    ),
+    h1: DefaultTextBlockStyle(heading(h1Size, FontWeight.w700), hs,
         const VerticalSpacing(10, 0), const VerticalSpacing(0, 0), null),
-    h2: DefaultTextBlockStyle(base(21, FontWeight.w700), hs,
+    h2: DefaultTextBlockStyle(heading(h2Size, FontWeight.w600), hs,
         const VerticalSpacing(8, 0), const VerticalSpacing(0, 0), null),
     placeHolder: DefaultTextBlockStyle(
       TextStyle(
-          fontSize: 16.5,
-          height: 1.4,
+          fontSize: bodySize,
+          height: bodyHeight,
           color: placeholder,
-          fontFamily: 'SpaceGrotesk'),
+          fontFamily: bodyFace),
       hs,
       vs,
       const VerticalSpacing(0, 0),
@@ -521,8 +831,10 @@ class EditorBottomBar extends StatelessWidget {
     required this.activeController,
     required this.onAddPhotos,
     this.onPickSpace,
-    this.onPickTheme,
     this.onPickColor,
+    this.onReminder,
+    this.reminderSet = false,
+    this.onLinkNote,
   });
 
   final ValueNotifier<QuillController?> activeController;
@@ -530,11 +842,17 @@ class EditorBottomBar extends StatelessWidget {
 
   /// Move-to-cortex; hidden when null (journal entries don't join folders).
   final VoidCallback? onPickSpace;
+
+  /// Opens the combined colour + background menu (note editor only); hidden
+  /// when null (book pages, cards).
   final VoidCallback? onPickColor;
 
-  /// When provided (note editor only), shows a button to change the note's
-  /// background between the add-photos and move-to-cortex buttons.
-  final VoidCallback? onPickTheme;
+  /// Set/clear a reminder for the note; hidden when null (book pages).
+  final VoidCallback? onReminder;
+  final bool reminderSet;
+
+  /// Insert a `[[link]]` to another note; hidden when null (book pages).
+  final VoidCallback? onLinkNote;
 
   @override
   Widget build(BuildContext context) {
@@ -563,13 +881,6 @@ class EditorBottomBar extends StatelessWidget {
                           color: _islandPrimary),
                       onPressed: onPickColor,
                     ),
-                  if (onPickTheme != null)
-                    IconButton(
-                      tooltip: context.t.background,
-                      icon: Icon(Icons.wallpaper_rounded,
-                          color: _islandPrimary),
-                      onPressed: onPickTheme,
-                    ),
                   if (onPickSpace != null)
                     IconButton(
                       tooltip: context.t.tabCortex,
@@ -577,12 +888,35 @@ class EditorBottomBar extends StatelessWidget {
                           color: _islandPrimary),
                       onPressed: onPickSpace,
                     ),
-                  const Spacer(),
-                  Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: Text(
-                      context.t.savedAutomatically,
-                      style: TextStyle(fontSize: 12, color: _islandSecondary),
+                  if (onReminder != null)
+                    IconButton(
+                      tooltip: context.t.reminder,
+                      icon: Icon(
+                          reminderSet
+                              ? Icons.notifications_active_rounded
+                              : Icons.notifications_none_rounded,
+                          color: reminderSet
+                              ? AppPalette.scheme.primary
+                              : _islandPrimary),
+                      onPressed: onReminder,
+                    ),
+                  if (onLinkNote != null)
+                    IconButton(
+                      tooltip: context.t.linkToNote,
+                      icon: Icon(Icons.link_rounded, color: _islandPrimary),
+                      onPressed: onLinkNote,
+                    ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, right: 8),
+                      child: Text(
+                        context.t.savedAutomatically,
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(fontSize: 12, color: _islandSecondary),
+                      ),
                     ),
                   ),
                 ],
@@ -632,7 +966,7 @@ class _RefractiveIsland extends StatelessWidget {
 }
 
 /// Formatting toolbar bound to whichever text block is focused.
-class NoteFormatBar extends StatelessWidget {
+class NoteFormatBar extends StatefulWidget {
   const NoteFormatBar({
     super.key,
     required this.activeController,
@@ -643,6 +977,26 @@ class NoteFormatBar extends StatelessWidget {
 
   /// Use dark-on-white colours for the light floating island.
   final bool onLight;
+
+  @override
+  State<NoteFormatBar> createState() => _NoteFormatBarState();
+}
+
+class _NoteFormatBarState extends State<NoteFormatBar> {
+  // Held here so the toolbar keeps its horizontal scroll position when it
+  // rebuilds on every format toggle — otherwise it would snap back to the
+  // start and hide the indent/align controls each time you tap a button.
+  final ScrollController _barScroll = ScrollController();
+
+  @override
+  void dispose() {
+    _barScroll.dispose();
+    super.dispose();
+  }
+
+  ValueNotifier<QuillController?> get activeController =>
+      widget.activeController;
+  bool get onLight => widget.onLight;
 
   @override
   Widget build(BuildContext context) {
@@ -675,8 +1029,13 @@ class NoteFormatBar extends StatelessWidget {
             final bold = attrs.containsKey(Attribute.bold.key);
             final italic = attrs.containsKey(Attribute.italic.key);
             final underline = attrs.containsKey(Attribute.underline.key);
+            final strike = attrs.containsKey(Attribute.strikeThrough.key);
             final highlight = attrs.containsKey(Attribute.background.key);
+            final quote = attrs.containsKey(Attribute.blockQuote.key);
             final listVal = attrs[Attribute.list.key]?.value;
+            final indentRaw = attrs[Attribute.indent.key]?.value;
+            final indentLevel = indentRaw is int ? indentRaw : 0;
+            final alignVal = attrs[Attribute.align.key]?.value;
 
             void toggle(Attribute attr) {
               final on = attrs.containsKey(attr.key);
@@ -697,7 +1056,31 @@ class NoteFormatBar extends StatelessWidget {
                   : Attribute.unchecked);
             }
 
+            // Paragraph indent, stepped through Quill's three levels.
+            Attribute indentAttr(int level) => switch (level) {
+                  1 => Attribute.indentL1,
+                  2 => Attribute.indentL2,
+                  _ => Attribute.indentL3,
+                };
+            void indentMore() {
+              if (indentLevel >= 3) return;
+              c.formatSelection(indentAttr(indentLevel + 1));
+            }
+            void indentLess() {
+              final next = indentLevel - 1;
+              c.formatSelection(next <= 0
+                  ? Attribute.clone(Attribute.indent, null)
+                  : indentAttr(next));
+            }
+
+            void setAlign(Attribute attr) {
+              c.formatSelection(alignVal == attr.value
+                  ? Attribute.clone(Attribute.align, null)
+                  : attr);
+            }
+
             return SingleChildScrollView(
+              controller: _barScroll,
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
@@ -781,6 +1164,14 @@ class NoteFormatBar extends StatelessWidget {
                       activeFill: activeFill,
                       onTap: () => toggle(Attribute.underline)),
                   _IconToggle(
+                      tooltip: context.t.strikethrough,
+                      icon: Icons.format_strikethrough_rounded,
+                      active: strike,
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => toggle(Attribute.strikeThrough)),
+                  _IconToggle(
                     tooltip: context.t.highlight,
                     icon: Icons.highlight_rounded,
                     active: highlight,
@@ -816,6 +1207,68 @@ class NoteFormatBar extends StatelessWidget {
                       secondary: secondary,
                       activeFill: activeFill,
                       onTap: toggleCheck),
+                  _IconToggle(
+                      tooltip: context.t.quote,
+                      icon: Icons.format_quote_rounded,
+                      active: quote,
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => toggle(Attribute.blockQuote)),
+                  _vsep(sepColor),
+                  _IconToggle(
+                      tooltip: context.t.indentDecrease,
+                      icon: Icons.format_indent_decrease_rounded,
+                      active: false,
+                      primary: primary,
+                      secondary: indentLevel > 0
+                          ? primary
+                          : secondary.withValues(alpha: 0.45),
+                      activeFill: activeFill,
+                      onTap: indentLess),
+                  _IconToggle(
+                      tooltip: context.t.indentIncrease,
+                      icon: Icons.format_indent_increase_rounded,
+                      active: false,
+                      primary: primary,
+                      secondary: indentLevel < 3
+                          ? primary
+                          : secondary.withValues(alpha: 0.45),
+                      activeFill: activeFill,
+                      onTap: indentMore),
+                  _vsep(sepColor),
+                  _IconToggle(
+                      tooltip: context.t.alignLeft,
+                      icon: Icons.format_align_left_rounded,
+                      active: alignVal == null || alignVal == 'left',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => setAlign(Attribute.leftAlignment)),
+                  _IconToggle(
+                      tooltip: context.t.alignCenter,
+                      icon: Icons.format_align_center_rounded,
+                      active: alignVal == 'center',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => setAlign(Attribute.centerAlignment)),
+                  _IconToggle(
+                      tooltip: context.t.alignRight,
+                      icon: Icons.format_align_right_rounded,
+                      active: alignVal == 'right',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => setAlign(Attribute.rightAlignment)),
+                  _IconToggle(
+                      tooltip: context.t.justify,
+                      icon: Icons.format_align_justify_rounded,
+                      active: alignVal == 'justify',
+                      primary: primary,
+                      secondary: secondary,
+                      activeFill: activeFill,
+                      onTap: () => setAlign(Attribute.justifyAlignment)),
                 ],
               ),
             );

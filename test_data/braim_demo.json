@@ -1,0 +1,657 @@
+{
+  "notes": [
+    {
+      "id": "c7d4d89c-b783-4996-b221-1da4533484ce",
+      "title": "Welcome to Braim ✨",
+      "blocks": [
+        {
+          "id": "5624c18b-5e03-42c2-a16d-aa3f78cfe00b",
+          "type": "text",
+          "text": "This is a demo library so you can poke around every corner.\n\n• Home holds your notes — long-press to select several.\n• Cards keeps links you share in.\n• Journal, Cortex and the Crypt are one swipe away.\n• Link anything — tap [[Tide clock app]], [[Lemon pasta]] or the [[Habits worth stealing]] card.\n\nDelete all of this whenever you like from Settings › Clear all data.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "start"
+      ],
+      "archived": false,
+      "pinned": true,
+      "deletedAt": null,
+      "createdAt": "2026-08-07T19:31:17.080523",
+      "updatedAt": "2026-08-08T17:31:17.080523"
+    },
+    {
+      "id": "fd4929e3-5e3a-4766-aa39-22e6e05d775a",
+      "title": "Tide clock app",
+      "blocks": [
+        {
+          "id": "dc1c41c2-100b-410f-ac5a-7bf13009d04b",
+          "type": "text",
+          "text": "A single dial that shows the tide instead of the time. Rising on the left, ebbing on the right, a little boat that drifts with it. Pull data from the NOAA station nearest you.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": "778ec1b4-370b-48c7-b89c-4ef5501c24ed",
+      "backgroundAsset": null,
+      "colorValue": 4293456126,
+      "journalDate": null,
+      "tags": [
+        "idea",
+        "someday"
+      ],
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-05T19:31:17.080523",
+      "updatedAt": "2026-08-05T19:31:17.080523"
+    },
+    {
+      "id": "7eb19441-1679-4851-9a13-9a87afcd1e28",
+      "title": "Groceries",
+      "blocks": [
+        {
+          "id": "ac0135fb-d36b-4192-8f0a-87cc6f786640",
+          "type": "text",
+          "text": "- Oat milk\n- Sourdough\n- Lemons (x4)\n- Parmesan\n- Basil\n- Coffee beans",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": 4294964164,
+      "journalDate": null,
+      "tags": [
+        "errand"
+      ],
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-06T19:31:17.080523",
+      "updatedAt": "2026-08-07T23:31:17.080523"
+    },
+    {
+      "id": "b08163a2-ac62-4161-9b59-c3a4def7cec8",
+      "title": "Call the dentist",
+      "blocks": [
+        {
+          "id": "485634f7-f5e3-46ec-921a-f6491c5dd2e1",
+          "type": "text",
+          "text": "Ask about the 9am slot on Thursday and whether the cleaning is covered.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "todo"
+      ],
+      "reminderAt": "2026-08-08T22:31:17.080523",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-08T13:31:17.080523",
+      "updatedAt": "2026-08-08T13:31:17.080523"
+    },
+    {
+      "id": "d2d4bc67-cabf-46a7-afdb-ab387509fe40",
+      "title": "Water the plants",
+      "blocks": [
+        {
+          "id": "e73f450d-5500-4f0c-baf5-217d18fc76e9",
+          "type": "text",
+          "text": "The fern by the window is thirsty. Fig tree every other day.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "home",
+        "todo"
+      ],
+      "reminderAt": "2026-08-09T21:31:17.080523",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-07T15:31:17.080523",
+      "updatedAt": "2026-08-07T15:31:17.080523"
+    },
+    {
+      "id": "18a717a3-3b98-4f6b-b6ab-b4557eda216d",
+      "title": "Read later",
+      "blocks": [
+        {
+          "id": "13fef53c-a9b6-49e0-ba9f-4e773fefa017",
+          "type": "text",
+          "text": "Bookmarking this to come back to when I have a quiet hour:",
+          "imagePath": ""
+        },
+        {
+          "id": "2f5dccce-020c-4636-ad91-ee2dab41f9a4",
+          "type": "link",
+          "text": "",
+          "imagePath": "",
+          "url": "https://www.calnewport.com/books/deep-work/",
+          "linkTitle": "Deep Work — Cal Newport",
+          "linkSite": "calnewport.com",
+          "linkFetched": true
+        },
+        {
+          "id": "00266c37-e846-4d5b-8f0b-d103f26af385",
+          "type": "text",
+          "text": "The bit about scheduling every minute of the day is worth trying for a week.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "reading"
+      ],
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-03T19:31:17.080523",
+      "updatedAt": "2026-08-03T19:31:17.080523"
+    },
+    {
+      "id": "10276491-2f1e-4c47-af41-bc1703c51358",
+      "title": "Lemon pasta",
+      "blocks": [
+        {
+          "id": "52e46fa1-f762-4f75-8ce6-63545c5afe79",
+          "type": "text",
+          "text": "Serves 2, ready in 15 minutes.\n\n1. Boil spaghetti in well-salted water.\n2. Whisk zest + juice of 1 lemon with a handful of parmesan and a ladle of pasta water into a loose cream.\n3. Toss the drained pasta through it off the heat. Pepper, basil, done.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": "ad285a23-fbe0-4529-8b6f-b2dd5762941f",
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "dinner"
+      ],
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-31T19:31:17.080523",
+      "updatedAt": "2026-07-31T19:31:17.080523"
+    },
+    {
+      "id": "76b64eab-2a3b-426a-b315-773fb6fb08fd",
+      "title": "On slow mornings",
+      "blocks": [
+        {
+          "id": "fb36d7d8-3a35-4968-8504-f78946f99f88",
+          "type": "text",
+          "text": "The best hour of my day is the one nobody knows about.\n\nBefore the phone lights up, before the first message lands, there is a stretch of quiet that belongs entirely to me. I make coffee slowly. I read something on paper. I let the day arrive instead of chasing it.\n\nIt took me years to protect that hour, and it will take the rest of my life to keep it. But a morning spent gently is a day spent well.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "writing"
+      ],
+      "isArticle": true,
+      "articleDraft": false,
+      "articleSavedAt": "2026-08-02T19:31:17.080523",
+      "authorName": "Maya Ellison",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-02T19:31:17.080523",
+      "updatedAt": "2026-08-02T19:31:17.080523"
+    },
+    {
+      "id": "b930650a-5b44-401c-8e4d-b90cabc26207",
+      "title": "Sprint retro — what stuck",
+      "blocks": [
+        {
+          "id": "a37dbb32-ceea-44ec-bd10-b55d674c3ca2",
+          "type": "text",
+          "text": "Keep: shorter standups, pairing on the tricky migration.\nDrop: the Friday deploy freeze, it just moved the rush to Monday.\nTry: a shared \"surprises\" doc so nobody debugs the same trap twice.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": "a92ea55c-6391-4e41-9047-49c997fb3d74",
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "tags": [
+        "work"
+      ],
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-04T19:31:17.080523",
+      "updatedAt": "2026-08-04T19:31:17.080523"
+    },
+    {
+      "id": "37d888db-0d18-45df-80b2-4339736a9f51",
+      "title": "Old meeting notes",
+      "blocks": [
+        {
+          "id": "c4b7af8a-cb79-4042-942a-e851516e001e",
+          "type": "text",
+          "text": "Q2 planning — superseded by the new roadmap. Kept for reference.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "archived": true,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-06-29T19:31:17.080523",
+      "updatedAt": "2026-06-30T19:31:17.080523"
+    },
+    {
+      "id": "c677b9a4-f6bc-4676-b3b9-85fbb0952419",
+      "title": "Scratch",
+      "blocks": [
+        {
+          "id": "da9b151b-a9b2-4d0f-93f2-2deac6bb625d",
+          "type": "text",
+          "text": "asdf testing testing — safe to leave in the bin.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "archived": false,
+      "pinned": false,
+      "deletedAt": "2026-08-06T19:31:17.080523",
+      "createdAt": "2026-08-05T19:31:17.080523",
+      "updatedAt": "2026-08-06T07:31:17.080523"
+    },
+    {
+      "id": "ded3778d-c4c9-46ac-b09d-21b79d61c84a",
+      "title": "",
+      "blocks": [
+        {
+          "id": "340f4e90-9957-45a8-8165-f6e79c26ec02",
+          "type": "text",
+          "text": "Loaded the demo library to give the app a proper shake-down. Everything's in here now — folders, reminders, a little book. Felt good to see it full instead of empty.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": "2026-08-08",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-08T18:31:17.080523",
+      "updatedAt": "2026-08-08T18:31:17.080523"
+    },
+    {
+      "id": "0364691d-4836-4cbf-ab15-9522c7c0cf74",
+      "title": "",
+      "blocks": [
+        {
+          "id": "2c50cbc4-acc3-44d3-b838-68db0b626861",
+          "type": "text",
+          "text": "Rainy one. Stayed in, cooked the lemon pasta again, read two chapters. The quiet kind of day I never regret.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": "2026-08-07",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-08-07T19:31:17.080523",
+      "updatedAt": "2026-08-07T19:31:17.080523"
+    },
+    {
+      "id": "bee53073-0055-4be9-b7b8-1235b9383618",
+      "title": "",
+      "blocks": [
+        {
+          "id": "099eda05-20f9-4f9f-9259-ad33abe08791",
+          "type": "text",
+          "text": "Long walk by the water at dusk. Kept thinking about that tide-clock idea. Some ideas only arrive when you stop reaching for them.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": "2026-07-30",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-30T19:31:17.080523",
+      "updatedAt": "2026-07-30T19:31:17.080523"
+    },
+    {
+      "id": "35fffe56-9093-496e-b434-07f99678323d",
+      "title": "",
+      "blocks": [
+        {
+          "id": "b21e1ed5-91b1-4611-b6b3-e16ea12193be",
+          "type": "text",
+          "text": "A year ago today. Signed the lease on the little flat by the harbour. Terrified and thrilled in equal measure.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": "2025-08-08",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2025-08-08T21:10:00.000",
+      "updatedAt": "2025-08-08T21:10:00.000"
+    },
+    {
+      "id": "b7aa16ea-1b93-4bbe-bdb1-e42bc29ff8c9",
+      "title": "",
+      "blocks": [
+        {
+          "id": "129de581-d776-45fe-bfa8-6065d1c6fecc",
+          "type": "text",
+          "text": "Two years ago today. First morning of the new job. Wore the good shoes, got the bus early, needn’t have worried at all.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": "2024-08-08",
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2024-08-08T08:05:00.000",
+      "updatedAt": "2024-08-08T08:05:00.000"
+    },
+    {
+      "id": "3bd46ed3-9215-432a-9975-56065a471ee8",
+      "title": "Contents",
+      "blocks": [],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "bookId": "28a9172b-6b1c-4132-93a4-e82800b81c96",
+      "bookPageKind": "contents",
+      "bookOrder": 0,
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-24T19:31:17.080523",
+      "updatedAt": "2026-08-06T19:31:17.080523"
+    },
+    {
+      "id": "ab894d1b-70a9-4266-815a-5f06df2f3070",
+      "title": "Introduction",
+      "blocks": [
+        {
+          "id": "f2b203fd-8c09-41e4-ac0e-95617b23f31d",
+          "type": "text",
+          "text": "This is a small story about a lighthouse that stopped working the winter the fog rolled in and would not leave. It is about the girl who kept it, and what she heard when the light went dark. Read it slowly; there is not much of it, and it likes the quiet.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "bookId": "28a9172b-6b1c-4132-93a4-e82800b81c96",
+      "bookPageKind": "intro",
+      "bookOrder": 1,
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-24T19:31:17.080523",
+      "updatedAt": "2026-08-06T19:31:17.080523"
+    },
+    {
+      "id": "85d3b3c1-9a14-4539-bd2a-846f9e63ebd3",
+      "title": "Chapter I — The Keeper’s Daughter",
+      "blocks": [
+        {
+          "id": "0b504275-b328-4a0b-9189-8300fca8e903",
+          "type": "text",
+          "text": "Nora had trimmed the wick every evening since she was nine, which was the winter her father’s hands began to shake. The lamp was a living thing to her: it drank oil, it breathed light, and on the worst nights it sulked.\n\nThe village below called their lighthouse the Lantern, as though it were a single candle a giant might carry down to the water. From the gallery Nora could see the whole curve of the coast, the boats coming home like slow moths, and beyond them the grey wall of the sea.\n\nOn the first night of the fog she climbed the stairs as always, lit the lamp as always, and watched the beam swallowed whole three feet past the glass. It was the first time the light had ever failed to reach the water.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "bookId": "28a9172b-6b1c-4132-93a4-e82800b81c96",
+      "bookPageKind": "chapter",
+      "bookOrder": 2,
+      "bookStatus": "final",
+      "targetWords": 500,
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-24T19:31:17.080523",
+      "updatedAt": "2026-08-06T19:31:17.080523"
+    },
+    {
+      "id": "6f97f063-1ca7-4bf4-8be1-ec1d828c9f6a",
+      "title": "Chapter II — When the Fog Spoke",
+      "blocks": [
+        {
+          "id": "fe711957-9750-4048-b020-d5c74ca3da94",
+          "type": "text",
+          "text": "By the fourth night the fog had a texture to it, wool pulled thin, and Nora had stopped expecting the beam to cut through. She kept it burning anyway. A keeper keeps.\n\nIt was near midnight when she heard her name — not shouted, not urgent, but said, the way you say a word you have been holding a long time. It came from the seaward side, where there was nothing but the drop and the water and the endless soft grey.\n\n“Nora,” the fog said again, and this time she did not tell herself it was the wind. She set down the oil can, and she went to the rail, and she answered.",
+          "imagePath": ""
+        }
+      ],
+      "spaceId": null,
+      "backgroundAsset": null,
+      "colorValue": null,
+      "journalDate": null,
+      "bookId": "28a9172b-6b1c-4132-93a4-e82800b81c96",
+      "bookPageKind": "chapter",
+      "bookOrder": 3,
+      "bookStatus": "draft",
+      "targetWords": 500,
+      "archived": false,
+      "pinned": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-24T19:31:17.080523",
+      "updatedAt": "2026-08-06T19:31:17.080523"
+    }
+  ],
+  "spaces": [
+    {
+      "id": "778ec1b4-370b-48c7-b89c-4ef5501c24ed",
+      "name": "Ideas",
+      "thumbnailPath": null,
+      "colorValue": 4293317631,
+      "archived": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-09T19:31:17.080523",
+      "updatedAt": "2026-07-09T19:31:17.080523"
+    },
+    {
+      "id": "ad285a23-fbe0-4529-8b6f-b2dd5762941f",
+      "name": "Recipes",
+      "thumbnailPath": null,
+      "colorValue": 4290767574,
+      "archived": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-18T19:31:17.080523",
+      "updatedAt": "2026-07-18T19:31:17.080523"
+    },
+    {
+      "id": "a92ea55c-6391-4e41-9047-49c997fb3d74",
+      "name": "Work",
+      "thumbnailPath": null,
+      "colorValue": 4291421439,
+      "archived": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-25T19:31:17.080523",
+      "updatedAt": "2026-07-25T19:31:17.080523"
+    }
+  ],
+  "cards": [
+    {
+      "id": "9f685241-4c9f-44f5-ad25-7767a265f458",
+      "url": "https://www.paulgraham.com/greatwork.html",
+      "text": "How to Do Great Work — a long essay on choosing what to work on and sticking with it.",
+      "imageUrl": "",
+      "avatarUrl": "",
+      "authorName": "Paul Graham",
+      "authorHandle": "",
+      "siteName": "paulgraham.com",
+      "articleText": "If you collected lists of techniques for doing great work in a lot of different fields, what would the intersection look like? I decided to find out.\n\nThe first step is to decide what to work on. The work you choose needs to have three qualities: it has to be something you have a natural aptitude for, that you have a deep interest in, and that offers scope to do great work.\n\nFour steps: choose a field, learn enough to get to the frontier, notice gaps, explore promising ones. This is how practically everyone who's done great work has done it.",
+      "fetched": true,
+      "enrichAttempts": 0,
+      "spaceId": null,
+      "pinned": true,
+      "archived": false,
+      "deletedAt": null,
+      "noteTitle": "",
+      "blocks": [],
+      "createdAt": "2026-08-06T19:31:17.080523",
+      "updatedAt": "2026-08-06T19:31:17.080523"
+    },
+    {
+      "id": "f6c6926f-57c7-4d7c-8b6c-d4873a5fca15",
+      "url": "https://waitbutwhy.com/2018/04/picking-career.html",
+      "text": "How to Pick a Career (That Actually Fits You)",
+      "imageUrl": "",
+      "avatarUrl": "",
+      "authorName": "Tim Urban",
+      "authorHandle": "",
+      "siteName": "Wait But Why",
+      "articleText": "We tend to think our career path is a straight line, but it's really a series of experiments. The trick is to run more of them, and to run them faster.\n\nYour career is the roughly 20,000 to 150,000 working hours you'll spend during your life. Spending a few dozen of them thinking hard about how to spend the rest is time well spent.",
+      "fetched": true,
+      "enrichAttempts": 0,
+      "spaceId": null,
+      "pinned": false,
+      "archived": false,
+      "deletedAt": null,
+      "noteTitle": "",
+      "blocks": [],
+      "createdAt": "2026-08-04T19:31:17.080523",
+      "updatedAt": "2026-08-04T19:31:17.080523"
+    },
+    {
+      "id": "12effff1-94b2-4ee5-8bd5-574ce6485192",
+      "url": "https://en.wikipedia.org/wiki/Cassini%E2%80%93Huygens",
+      "text": "Cassini–Huygens — the twenty-year mission to Saturn and its moons.",
+      "imageUrl": "",
+      "avatarUrl": "",
+      "authorName": "",
+      "authorHandle": "",
+      "siteName": "Wikipedia",
+      "articleText": "Cassini–Huygens was a space-research mission by NASA, ESA and the Italian Space Agency to study Saturn and its system, including its rings and natural satellites.\n\nLaunched in 1997, it reached Saturn in 2004 and studied the planet until 2017, when it was deliberately flown into Saturn's atmosphere to protect the potentially habitable moons Enceladus and Titan.",
+      "fetched": true,
+      "enrichAttempts": 0,
+      "spaceId": null,
+      "pinned": false,
+      "archived": false,
+      "deletedAt": null,
+      "noteTitle": "",
+      "blocks": [],
+      "createdAt": "2026-08-01T19:31:17.080523",
+      "updatedAt": "2026-08-01T19:31:17.080523"
+    },
+    {
+      "id": "b6cbfe36-34cc-4874-846c-ffb3c66309cc",
+      "url": "https://x.com/naval/status/1002103360646823936",
+      "text": "Seek wealth, not money or status. Wealth is having assets that earn while you sleep.",
+      "imageUrl": "",
+      "avatarUrl": "",
+      "authorName": "Naval",
+      "authorHandle": "@naval",
+      "siteName": "",
+      "articleText": "",
+      "fetched": true,
+      "enrichAttempts": 0,
+      "spaceId": null,
+      "pinned": false,
+      "archived": false,
+      "deletedAt": null,
+      "noteTitle": "",
+      "blocks": [],
+      "createdAt": "2026-07-29T19:31:17.080523",
+      "updatedAt": "2026-07-29T19:31:17.080523"
+    },
+    {
+      "id": "43b05741-da1f-4828-910d-91651281c327",
+      "url": "https://jamesclear.com/atomic-habits",
+      "text": "Atomic Habits — tiny changes, remarkable results.",
+      "imageUrl": "",
+      "avatarUrl": "",
+      "authorName": "James Clear",
+      "authorHandle": "",
+      "siteName": "jamesclear.com",
+      "articleText": "You do not rise to the level of your goals. You fall to the level of your systems. Habits are the compound interest of self-improvement.\n\nThe four laws: make it obvious, make it attractive, make it easy, and make it satisfying. Invert them to break a bad habit.",
+      "fetched": true,
+      "enrichAttempts": 0,
+      "spaceId": "a92ea55c-6391-4e41-9047-49c997fb3d74",
+      "pinned": false,
+      "archived": false,
+      "deletedAt": null,
+      "noteTitle": "Habits worth stealing",
+      "blocks": [
+        {
+          "id": "072e333c-576e-462f-8818-eb915d642260",
+          "type": "text",
+          "text": "Two ideas I keep coming back to: make it obvious, make it easy. The two-minute rule is the one that actually changed my mornings. Pairs well with [[On slow mornings]].",
+          "imagePath": ""
+        }
+      ],
+      "createdAt": "2026-07-27T19:31:17.080523",
+      "updatedAt": "2026-08-07T19:31:17.080523"
+    }
+  ],
+  "books": [
+    {
+      "id": "28a9172b-6b1c-4132-93a4-e82800b81c96",
+      "title": "The Lantern in the Fog",
+      "author": "Maya Ellison",
+      "description": "A short seaside tale in two chapters — a keeper’s daughter, a light that will not stay lit, and the night the fog spoke back.",
+      "fontFamily": "Merriweather",
+      "archived": false,
+      "deletedAt": null,
+      "createdAt": "2026-07-24T19:31:17.080523",
+      "updatedAt": "2026-08-07T19:31:17.080523"
+    }
+  ],
+  "cardsCompact": false,
+  "darkMode": false,
+  "darkFollowSystem": true,
+  "tutorialSeen": true,
+  "lastBackupAt": null,
+  "backupReminderDismissedAt": null,
+  "sortMode": "recent",
+  "feedWallpaper": 0,
+  "readerFontScale": 1.0,
+  "readerFont": "Lora",
+  "readerTheme": "original",
+  "journalMonthCovers": {},
+  "readerPositions": {},
+  "readerBookmarks": {}
+}

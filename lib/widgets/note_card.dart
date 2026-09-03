@@ -6,6 +6,7 @@ import '../models/note.dart';
 import '../models/space.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
+import 'note_preview.dart';
 import 'thumbnail_label.dart';
 
 /// A note as it appears in the Home feed: a white liquid-glass card with the
@@ -17,12 +18,16 @@ class NoteCard extends StatelessWidget {
     required this.space,
     required this.onTap,
     this.onLongPress,
+    this.selected = false,
   });
 
   final Note note;
   final Space? space;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+
+  /// True when the feed is in multi-select mode and this note is picked.
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -33,12 +38,33 @@ class NoteCard extends StatelessWidget {
       child: GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      child: FlatCard(
+      child: Container(
+        decoration: selected
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                    color: AppPalette.scheme.primary, width: 2.5))
+            : null,
+        child: FlatCard(
         borderRadius: 22,
         fill: NoteColors.resolve(note.colorValue),
         child: Stack(
           children: [
             _cardBody(context, thumb, preview),
+            if (selected)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppPalette.scheme.primary,
+                  ),
+                  padding: const EdgeInsets.all(3),
+                  child: const Icon(Icons.check_rounded,
+                      size: 15, color: Colors.white),
+                ),
+              ),
             if (note.pinned)
               Positioned(
                 top: 8,
@@ -55,6 +81,7 @@ class NoteCard extends StatelessWidget {
               ),
           ],
         ),
+      ),
       ),
       ),
     );
@@ -82,8 +109,31 @@ class NoteCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (thumb == null && space != null) ...[
-                    _spaceChip(space!.name),
+                    _spaceChip(space!),
                     const SizedBox(height: 8),
+                  ],
+                  // Articles read differently from notes; say so up front.
+                  if (note.isArticle) ...[
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.article_outlined,
+                            size: 14, color: AppPalette.inkSecondary),
+                        const SizedBox(width: 5),
+                        Text(
+                          note.articleDraft
+                              ? context.t.draftLabel
+                              : context.t.articleLabel,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            letterSpacing: 0.6,
+                            fontWeight: FontWeight.w700,
+                            color: AppPalette.inkSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                   ],
                   if (note.title.trim().isNotEmpty)
                     Text(
@@ -91,6 +141,7 @@ class NoteCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
+                        fontFamily: kNoteHeadingFont,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppPalette.inkPrimary,
@@ -99,13 +150,13 @@ class NoteCard extends StatelessWidget {
                   if (note.title.trim().isNotEmpty && preview.isNotEmpty)
                     const SizedBox(height: 6),
                   if (preview.isNotEmpty)
-                    Text(
-                      preview,
-                      maxLines: thumb != null ? 4 : 8,
-                      overflow: TextOverflow.ellipsis,
+                    NotePreview(
+                      note: note,
+                      maxLines: thumb != null ? 4 : 7,
                       style: TextStyle(
-                        fontSize: 14,
-                        height: 1.35,
+                        fontFamily: activeBodyFont,
+                        fontSize: 18,
+                        height: 1.25,
                         color: AppPalette.inkSecondary,
                       ),
                     ),
@@ -136,6 +187,30 @@ class NoteCard extends StatelessWidget {
                       ],
                     ),
                   ],
+                  if (note.tags.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final tag in note.tags.take(4))
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppPalette.scheme.secondaryContainer
+                                  .withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text('#$tag',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppPalette.inkPrimary)),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -143,26 +218,27 @@ class NoteCard extends StatelessWidget {
     );
   }
 
-  Widget _spaceChip(String name) {
+  Widget _spaceChip(Space s) {
+    final tint = NoteColors.resolveStrong(s.colorValue);
+    final fg = tint != null ? NoteColors.onSwatch : AppPalette.inkSecondary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.06),
+        color: tint ?? Colors.black.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.folder_rounded,
-              size: 13, color: AppPalette.inkSecondary),
+              size: 13, color: fg.withValues(alpha: 0.85)),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
-              name,
+              s.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  fontSize: 12, color: AppPalette.inkSecondary),
+              style: TextStyle(fontSize: 12, color: fg),
             ),
           ),
         ],

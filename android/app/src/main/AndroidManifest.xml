@@ -3,6 +3,17 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Biometric / device-credential unlock for the Crypt folder. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- Note reminders (local notifications, rescheduled across reboots). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Fire reminders at the exact chosen time (a reminder app), instead of an
+         inexact window that Doze can defer for hours. USE_EXACT_ALARM is
+         auto-granted on Android 13+; SCHEDULE_EXACT_ALARM covers Android 12. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- Focus timer's Do Not Disturb: a single one-time "DND access" grant the
+         user gives in system settings; nothing is read, only the filter set. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
     <application
         android:label="Braim"
         android:name="${applicationName}"
@@ -35,6 +46,15 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+        <!-- Routes the focus media notification's play/pause button to the
+             MediaSession. -->
+        <receiver
+            android:name="androidx.media.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
         <!-- Translucent popup for shared links: shows a tiny folder picker over
              the sharing app (Pinterest-style) instead of opening the full app. -->
         <activity
@@ -53,6 +73,21 @@
                 <data android:mimeType="text/*" />
             </intent-filter>
         </activity>
+        <!-- flutter_local_notifications: fire scheduled reminders and reschedule
+             them after a reboot or an app update. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

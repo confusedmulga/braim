@@ -31,6 +31,7 @@ class SpaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tint = _hasThumb ? null : NoteColors.resolveStrong(space.colorValue);
     return GestureDetector(
       onLongPress: onLongPress,
       child: RepaintBoundary(
@@ -39,7 +40,8 @@ class SpaceTile extends StatelessWidget {
           // The tile is filled by its thumbnail; a live backdrop blur per tile
           // made swiping to Cortex stutter.
           blur: 0,
-          color: _hasThumb ? null : AppPalette.scheme.secondaryContainer,
+          color:
+              _hasThumb ? null : (tint ?? AppPalette.scheme.secondaryContainer),
           padding: EdgeInsets.zero,
           onTap: onTap,
           child: _hasThumb ? _thumbTile(context) : _compactTile(context),
@@ -89,7 +91,11 @@ class SpaceTile extends StatelessWidget {
   }
 
   Widget _compactTile(BuildContext context) {
-    final ink = AppPalette.scheme.onSecondaryContainer;
+    // A colour swatch is light-toned in both themes, so it takes a fixed dark
+    // ink; the default tile keeps its secondary-container ink.
+    final ink = space.colorValue != null
+        ? NoteColors.onSwatch
+        : AppPalette.scheme.onSecondaryContainer;
     return AspectRatio(
       aspectRatio: 2,
       child: Padding(

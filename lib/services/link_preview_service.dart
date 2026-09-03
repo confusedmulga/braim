@@ -29,7 +29,7 @@ typedef _PageData = ({
 /// required); for everything else it falls back to Open Graph meta tags.
 class LinkPreviewService {
   static const _userAgent =
-      'Mozilla/5.0 (compatible; KeepyBot/1.0; +https://example.com)';
+      'Mozilla/5.0 (compatible; BraimBot/1.0; +https://example.com)';
 
   /// Parses a fetched page and reads its OG tags (and, when [withArticle],
   /// the reader-mode text). Runs inside [Isolate.run]: parsing a large page

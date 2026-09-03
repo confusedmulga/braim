@@ -67,58 +67,137 @@ class NoteBackground extends StatelessWidget {
   }
 }
 
-/// Bottom sheet to pick a note background. Returns the asset path, the sentinel
-/// `'__none__'` for plain white, or null if dismissed.
-Future<String?> showNoteBackgroundPicker(
+/// One bottom sheet to style a note: the colour swatches sit at the top and the
+/// background images below, so both live in a single menu. Each tap is applied
+/// live through [onColor] / [onBackground] and the sheet stays open, so a
+/// colour and a background can be chosen in one visit.
+Future<void> showNoteStylePicker(
   BuildContext context, {
-  required String? current,
+  required int? currentColor,
+  required String? currentBackground,
+  required ValueChanged<int?> onColor,
+  required ValueChanged<String?> onBackground,
 }) {
-  return showModalBottomSheet<String?>(
+  return showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (_) => Padding(
+    builder: (_) => _NoteStyleSheet(
+      currentColor: currentColor,
+      currentBackground: currentBackground,
+      onColor: onColor,
+      onBackground: onBackground,
+    ),
+  );
+}
+
+class _NoteStyleSheet extends StatefulWidget {
+  const _NoteStyleSheet({
+    required this.currentColor,
+    required this.currentBackground,
+    required this.onColor,
+    required this.onBackground,
+  });
+
+  final int? currentColor;
+  final String? currentBackground;
+  final ValueChanged<int?> onColor;
+  final ValueChanged<String?> onBackground;
+
+  @override
+  State<_NoteStyleSheet> createState() => _NoteStyleSheetState();
+}
+
+class _NoteStyleSheetState extends State<_NoteStyleSheet> {
+  late int? _color = widget.currentColor;
+  late String? _background = widget.currentBackground;
+
+  void _selectColor(int? value) {
+    setState(() => _color = value);
+    widget.onColor(value);
+  }
+
+  void _selectBackground(String? value) {
+    setState(() => _background = value);
+    widget.onBackground(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
       padding: const EdgeInsets.all(16),
       child: GlassEdge(
         borderRadius: 28,
         fill: AppPalette.whiteFill,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.only(left: 4, bottom: 12),
-              child: Text(context.t.noteBackground,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      color: AppPalette.inkPrimary)),
-            ),
-            GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.7),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SwatchNone(
-                  selected: current == null,
-                  onTap: () => Navigator.pop(context, '__none__'),
+                // Colours first…
+                _header(context.t.noteColor),
+                GridView.count(
+                  crossAxisCount: 5,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  children: [
+                    _ColorDot(
+                      color: null,
+                      selected: _color == null,
+                      onTap: () => _selectColor(null),
+                    ),
+                    for (final c in NoteColors.swatches)
+                      _ColorDot(
+                        color: Color(c),
+                        selected: _color == c,
+                        onTap: () => _selectColor(c),
+                      ),
+                  ],
                 ),
-                for (final a in kNoteBackgrounds)
-                  _Swatch(
-                    asset: a,
-                    selected: current == a,
-                    onTap: () => Navigator.pop(context, a),
-                  ),
+                const SizedBox(height: 18),
+                // …then the backgrounds beneath them.
+                _header(context.t.noteBackground),
+                GridView.count(
+                  crossAxisCount: 4,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  children: [
+                    _SwatchNone(
+                      selected: _background == null,
+                      onTap: () => _selectBackground(null),
+                    ),
+                    for (final a in kNoteBackgrounds)
+                      _Swatch(
+                        asset: a,
+                        selected: _background == a,
+                        onTap: () => _selectBackground(a),
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _header(String text) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 12),
+        child: Text(text,
+            style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: AppPalette.inkPrimary)),
+      );
 }
 
 class _Swatch extends StatelessWidget {
@@ -174,61 +253,6 @@ class _SwatchNone extends StatelessWidget {
   }
 }
 
-
-/// Bottom sheet to pick a note colour tag. Returns the swatch ARGB int,
-/// [NoteColors.none] to clear it, or null if dismissed.
-Future<int?> showNoteColorPicker(
-  BuildContext context, {
-  required int? current,
-}) {
-  return showModalBottomSheet<int>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (_) => Padding(
-      padding: const EdgeInsets.all(16),
-      child: GlassEdge(
-        borderRadius: 28,
-        fill: AppPalette.whiteFill,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 12),
-              child: Text(context.t.noteColor,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      color: AppPalette.inkPrimary)),
-            ),
-            GridView.count(
-              crossAxisCount: 5,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              children: [
-                _ColorDot(
-                  color: null,
-                  selected: current == null,
-                  onTap: () => Navigator.pop(context, NoteColors.none),
-                ),
-                for (final c in NoteColors.swatches)
-                  _ColorDot(
-                    color: Color(c),
-                    selected: current == c,
-                    onTap: () => Navigator.pop(context, c),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
 
 class _ColorDot extends StatelessWidget {
   const _ColorDot(
