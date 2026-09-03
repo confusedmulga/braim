@@ -1,4 +1,4 @@
-name: keepy
+name: braim
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -55,6 +55,13 @@ dependencies:
   archive: ^4.0.9
   share_plus: ^12.0.2
   file_picker: ^11.0.2
+  # Retained for the Google Drive connection (automated backup); no Firebase.
+  google_sign_in: ^7.2.0
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+  flutter_timezone: ^3.0.1
 
 dev_dependencies:
   flutter_test:
@@ -94,10 +101,30 @@ flutter:
     - assets/wallpapers/
     # OFL requires the license to travel with the font.
     - assets/fonts/OFL-SpaceGrotesk.txt
+    - assets/fonts/OFL-Lora.txt
+    - assets/fonts/OFL-Caveat.txt
+    - assets/fonts/OFL-EBGaramond.txt
+    - assets/fonts/OFL-Merriweather.txt
 
-  # Space Grotesk (OFL) — the closest open-licensed face to the Claude app's
-  # Styrene B; bundled in the same three weights Claude uses.
+  # Lora (OFL) — the app's voice: chrome, greetings and note headings.
   fonts:
+    - family: Lora
+      fonts:
+        - asset: assets/fonts/Lora-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Lora-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Lora-Bold.ttf
+          weight: 700
+    # Caveat (OFL) — the handwriting used for note and card body text.
+    - family: Caveat
+      fonts:
+        - asset: assets/fonts/Caveat-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Caveat-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Caveat-Bold.ttf
+          weight: 700
     - family: SpaceGrotesk
       fonts:
         - asset: assets/fonts/SpaceGrotesk-Regular.ttf
@@ -106,6 +133,32 @@ flutter:
           weight: 500
         - asset: assets/fonts/SpaceGrotesk-Bold.ttf
           weight: 700
+    # EB Garamond (OFL) — a classic literary serif, offered as a book face.
+    - family: EB Garamond
+      fonts:
+        - asset: assets/fonts/EBGaramond-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/EBGaramond-Bold.ttf
+          weight: 700
+    # Merriweather (OFL) — a sturdy, highly readable serif for long-form books.
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/Merriweather-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Merriweather-Bold.ttf
+          weight: 700
+    # Display face for the feed greetings (user-supplied brand font).
+    - family: Brand
+      fonts:
+        - asset: assets/fonts/Brand.ttf
+    # Inter (OFL) — a clean modern sans, offered as a body-font choice.
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+    # Nunito (OFL) — a rounded, friendly sans, offered as a body-font choice.
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

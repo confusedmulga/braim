@@ -99,6 +99,12 @@ class AppPalette {
   /// Warm amber accent for the Journal (selected day, entry dates).
   static const journalAccent = Color(0xFFEBA23C);
 
+  /// Lavender accent for `[[@Name]]` impulse/thread mentions in note bodies —
+  /// distinct from the blue used for node/spark links. Lighter in dark mode so
+  /// it stays legible on the dark surface.
+  static Color get mentionAccent =>
+      dark ? const Color(0xFFC4A7FF) : const Color(0xFF8B5CF6);
+
   /// Diagonal gradient for the journal's month calendar card: lightest
   /// lavender into sky blue (dark mode uses tints of the same hues).
   static List<Color> get journalCalendarGradient => dark
@@ -112,6 +118,27 @@ class AppPalette {
         ]
       : [const Color(0xFFF2EDFF), const Color(0xFFDDF1FF)];
 }
+
+/// The two writing faces: note and card body copy is set in Caveat (a
+/// handwriting face), while their titles and headings use Lora like the rest
+/// of the app.
+const String kNoteBodyFont = 'Caveat';
+const String kNoteHeadingFont = 'Lora';
+
+/// The active body face for nodes & sparks — user-selectable in Settings, set by
+/// AppState on load/change. Titles/chrome stay on [kNoteHeadingFont].
+String activeBodyFont = kNoteBodyFont;
+
+/// The fonts offered in the Settings body-font picker (family, label).
+const List<({String family, String label})> kBodyFontOptions = [
+  (family: 'Caveat', label: 'Caveat (handwriting)'),
+  (family: 'Lora', label: 'Lora (serif)'),
+  (family: 'EB Garamond', label: 'EB Garamond (serif)'),
+  (family: 'Merriweather', label: 'Merriweather (serif)'),
+  (family: 'SpaceGrotesk', label: 'Space Grotesk (sans)'),
+  (family: 'Inter', label: 'Inter (sans)'),
+  (family: 'Nunito', label: 'Nunito (rounded)'),
+];
 
 /// Keep-style note colour tags. Stored as the ARGB of the light swatch; dark
 /// mode shows a restrained tint of that hue over the dark tile instead of the
@@ -134,7 +161,8 @@ class NoteColors {
   ];
 
   /// The fill to paint for a note tagged [value] in the current theme, or null
-  /// for the default surface.
+  /// for the default surface. Muted to a subtle tint in dark mode, which suits
+  /// a large note-card fill.
   static Color? resolve(int? value) {
     if (value == null) return null;
     final base = Color(value);
@@ -142,15 +170,36 @@ class NoteColors {
     return Color.alphaBlend(
         base.withValues(alpha: 0.16), const Color(0xFF1E2028));
   }
+
+  /// A fill that keeps its swatch vivid in both themes — only a touch darker in
+  /// dark mode. Used for folder tiles and folder chips, where the colour needs
+  /// to read at a glance rather than sit as a faint tint.
+  static Color? resolveStrong(int? value) {
+    if (value == null) return null;
+    final base = Color(value);
+    if (!AppPalette.dark) return base;
+    return Color.alphaBlend(Colors.black.withValues(alpha: 0.16), base);
+  }
+
+  /// Legible ink for text/icons placed on a [resolveStrong] swatch. The
+  /// swatches are light-toned in both themes, so this stays dark.
+  static const Color onSwatch = Color(0xFF232530);
 }
 
-ThemeData buildTheme() {
-  final scheme = AppPalette.scheme;
+/// Builds the theme for [dark]. The scheme is computed from the mode here
+/// (not read from the mutable [AppPalette.scheme]), so the cached theme can
+/// never be poisoned by a build that ran before the global flag was flipped —
+/// which showed as dark-on-dark, unreadable ListTile text in dark mode.
+ThemeData buildTheme(bool dark) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: AppPalette.seed,
+    brightness: dark ? Brightness.dark : Brightness.light,
+  );
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: Colors.transparent,
-    fontFamily: 'SpaceGrotesk',
+    fontFamily: 'Lora',
   );
 
   return base.copyWith(
@@ -167,7 +216,7 @@ ThemeData buildTheme() {
       centerTitle: false,
       // The transparent background makes Flutter estimate the bar as "dark"
       // and paint white status icons; follow the surface brightness instead.
-      systemOverlayStyle: (AppPalette.dark
+      systemOverlayStyle: (dark
               ? SystemUiOverlayStyle.light
               : SystemUiOverlayStyle.dark)
           .copyWith(statusBarColor: Colors.transparent),
@@ -180,13 +229,13 @@ ThemeData buildTheme() {
         borderRadius: BorderRadius.all(Radius.circular(28)),
       ),
       titleTextStyle: TextStyle(
-        fontFamily: 'SpaceGrotesk',
+        fontFamily: 'Lora',
         fontSize: 18,
         fontWeight: FontWeight.w700,
         color: scheme.onSurface,
       ),
       contentTextStyle: TextStyle(
-        fontFamily: 'SpaceGrotesk',
+        fontFamily: 'Lora',
         fontSize: 14.5,
         height: 1.4,
         color: scheme.onSurfaceVariant,
@@ -199,7 +248,7 @@ ThemeData buildTheme() {
     snackBarTheme: SnackBarThemeData(
       backgroundColor: scheme.inverseSurface,
       contentTextStyle: TextStyle(
-        fontFamily: 'SpaceGrotesk',
+        fontFamily: 'Lora',
         color: scheme.onInverseSurface,
       ),
       behavior: SnackBarBehavior.floating,
@@ -211,7 +260,7 @@ ThemeData buildTheme() {
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         textStyle: WidgetStatePropertyAll(TextStyle(
-          fontFamily: 'SpaceGrotesk',
+          fontFamily: 'Lora',
           fontSize: 13,
           fontWeight: FontWeight.w600,
         )),

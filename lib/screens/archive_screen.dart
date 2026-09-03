@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/note.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/note_card.dart';
@@ -69,16 +70,9 @@ class ArchiveScreen extends StatelessWidget {
 
     final isEmpty = notes.isEmpty && cards.isEmpty && spaces.isEmpty;
 
-    return AppBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          foregroundColor: AppPalette.inkPrimary,
-          title: Text(context.t.archiveTitle,
-              style: TextStyle(fontWeight: FontWeight.w800)),
-        ),
-        body: isEmpty
+    return FrostedScaffold(
+      title: context.t.archiveTitle,
+      body: isEmpty
             ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -147,6 +141,8 @@ class ArchiveScreen extends StatelessWidget {
                               card: c,
                               folderName:
                                   state.spaceById(c.spaceId)?.name,
+                              folderColor:
+                                  state.spaceById(c.spaceId)?.colorValue,
                               onTap: open,
                               onLongPress: () async {
                                 await context
@@ -166,7 +162,6 @@ class ArchiveScreen extends StatelessWidget {
                   ],
                 ),
               ),
-      ),
     );
   }
 

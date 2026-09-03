@@ -8,6 +8,7 @@ import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/note_card.dart';
 import '../widgets/space_tile.dart';
@@ -116,29 +117,22 @@ class RecentlyDeletedScreen extends StatelessWidget {
 
     final isEmpty = notes.isEmpty && cards.isEmpty && spaces.isEmpty;
 
-    return AppBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          foregroundColor: AppPalette.inkPrimary,
-          title: Text(context.t.recentlyDeleted,
-              style: TextStyle(fontWeight: FontWeight.w800)),
-          actions: [
-            if (!isEmpty)
-              TextButton(
-                onPressed: () async {
-                  final ok = await _confirmEmpty(context);
-                  if (ok == true && context.mounted) {
-                    await context.read<AppState>().emptyTrash();
-                  }
-                },
-                child: Text(context.t.empty,
-                    style: TextStyle(color: Color(0xFFE5557A))),
-              ),
-          ],
-        ),
-        body: isEmpty
+    return FrostedScaffold(
+      title: context.t.recentlyDeleted,
+      actions: [
+        if (!isEmpty)
+          FrostedCircleButton(
+            icon: Icons.delete_sweep_outlined,
+            tooltip: context.t.empty,
+            onTap: () async {
+              final ok = await _confirmEmpty(context);
+              if (ok == true && context.mounted) {
+                await context.read<AppState>().emptyTrash();
+              }
+            },
+          ),
+      ],
+      body: isEmpty
             ? Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -203,6 +197,7 @@ class RecentlyDeletedScreen extends StatelessWidget {
                           child: TweetCardWidget(
                             card: c,
                             folderName: state.spaceById(c.spaceId)?.name,
+                            folderColor: state.spaceById(c.spaceId)?.colorValue,
                             onTap: () => _cardActions(context, c),
                             onLongPress: () => _cardActions(context, c),
                             onDelete: () => _cardActions(context, c),
@@ -212,7 +207,6 @@ class RecentlyDeletedScreen extends StatelessWidget {
                   ],
                 ),
               ),
-      ),
     );
   }
 

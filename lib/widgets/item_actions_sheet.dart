@@ -8,6 +8,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
 import 'move_to_space_sheet.dart';
+import 'quick_actions_menu.dart';
 
 /// Long-press actions for a feed note/card: pin, archive, move to cortex,
 /// create a new folder and file the item into it, or move it to the trash.
@@ -63,6 +64,9 @@ Future<void> showItemActions(
         SnackBar(content: Text(t.movedToName(space.name))),
       );
     case 'delete':
+      if (!context.mounted) return;
+      final sure = await confirmDeleteItems(context, 1);
+      if (!sure) return;
       await onDelete();
       messenger.showSnackBar(
         SnackBar(content: Text(t.movedToTrash)),

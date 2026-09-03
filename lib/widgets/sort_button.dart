@@ -6,31 +6,15 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
-import 'glass_bubble.dart';
 
-/// A compact glass button that sits to the right of the search bar and opens a
-/// sheet to choose the feed sort order. Only its own subtree rebuilds when the
-/// sort changes (via [Selector]), so the shell isn't rebuilt wholesale.
-class SortButton extends StatelessWidget {
-  const SortButton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Selector<AppState, NoteSort>(
-      selector: (_, s) => s.sortMode,
-      builder: (context, mode, _) => GlassBubble(
-        icon: Icons.sort_rounded,
-        tooltip: context.t.sortBy,
-        size: 46,
-        iconSize: 22,
-        onTap: () => showModalBottomSheet<void>(
-          context: context,
-          backgroundColor: Colors.transparent,
-          builder: (_) => _SortSheet(current: mode),
-        ),
-      ),
-    );
-  }
+/// Opens the feed-sort chooser sheet (used by the top bar's sort bubble).
+void showSortSheet(BuildContext context) {
+  final current = context.read<AppState>().sortMode;
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _SortSheet(current: current),
+  );
 }
 
 class _SortSheet extends StatelessWidget {

@@ -16,10 +16,14 @@ class BubbleButton extends StatefulWidget {
     this.iconColor,
     this.glassColor,
     this.tooltip,
+    this.onLongPress,
   });
 
   final IconData icon;
   final VoidCallback onTap;
+
+  /// Optional long-press action (Home uses it for the Note/Article menu).
+  final VoidCallback? onLongPress;
   final double size;
   final double iconSize;
   final Color? iconColor;
@@ -42,6 +46,12 @@ class _BubbleButtonState extends State<BubbleButton> {
         widget.onTap();
       },
       onTapCancel: () => setState(() => _pressed = false),
+      onLongPress: widget.onLongPress == null
+          ? null
+          : () {
+              setState(() => _pressed = false);
+              widget.onLongPress!();
+            },
       child: AnimatedScale(
         scale: _pressed ? 0.86 : 1.0,
         duration: const Duration(milliseconds: 130),

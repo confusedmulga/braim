@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/tweet_card.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/feed_greeting.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/item_actions_sheet.dart';
 import '../widgets/tweet_card_widget.dart';
@@ -62,8 +63,11 @@ class CardsScreen extends StatelessWidget {
       child: CustomScrollView(
         controller: controller,
         slivers: [
+          const SliverToBoxAdapter(
+            child: FeedGreeting(text: kCardsGreeting),
+          ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 150),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 150),
             // Lazy masonry: builds only visible tiles and packs each into the
             // shortest column (true height balancing).
             sliver: SliverMasonryGrid.count(
@@ -80,6 +84,7 @@ class CardsScreen extends StatelessWidget {
                   closedBuilder: (context, open) => CompactCardTile(
                     card: c,
                     folderName: state.spaceById(c.spaceId)?.name,
+                    folderColor: state.spaceById(c.spaceId)?.colorValue,
                     onTap: open,
                     onLongPress: () => _cardActions(context, c),
                   ),

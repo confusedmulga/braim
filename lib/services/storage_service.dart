@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -5,6 +6,8 @@ import 'dart:isolate';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/book.dart';
+import '../models/impulse.dart';
 import '../models/note.dart';
 import '../models/space.dart';
 import '../models/tweet_card.dart';
@@ -101,19 +104,59 @@ class StorageService {
         cards: ((json['cards'] as List?) ?? [])
             .map((e) => TweetCard.fromJson(e as Map<String, dynamic>))
             .toList(),
+        books: ((json['books'] as List?) ?? [])
+            .map((e) => Book.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        impulses: ((json['impulses'] as List?) ?? [])
+            .map((e) => Impulse.fromJson(e as Map<String, dynamic>))
+            .toList(),
         cardsCompact: (json['cardsCompact'] as bool?) ?? false,
         darkMode: (json['darkMode'] as bool?) ?? false,
         darkFollowSystem: (json['darkFollowSystem'] as bool?) ?? true,
+        noteBodyFont: (json['noteBodyFont'] as String?) ?? 'Caveat',
         tutorialSeen: (json['tutorialSeen'] as bool?) ?? false,
         lastBackupAt:
             DateTime.tryParse(json['lastBackupAt'] as String? ?? ''),
         backupReminderDismissedAt: DateTime.tryParse(
             json['backupReminderDismissedAt'] as String? ?? ''),
+        driveAutoBackup: (json['driveAutoBackup'] as bool?) ?? false,
+        lastDriveBackupAt:
+            DateTime.tryParse(json['lastDriveBackupAt'] as String? ?? ''),
+        driveAccountEmail: json['driveAccountEmail'] as String?,
         sortMode: (json['sortMode'] as String?) ?? 'recent',
         feedWallpaper: (json['feedWallpaper'] as num?)?.toInt() ?? 0,
+        feedBackgroundPath: (json['feedBackgroundPath'] as String?) ?? '',
+        feedBackgroundLight: (json['feedBackgroundLight'] as String?) ?? '',
+        feedBackgroundDark: (json['feedBackgroundDark'] as String?) ?? '',
+        readerFontScale:
+            (json['readerFontScale'] as num?)?.toDouble() ?? 1.0,
+        readerFont: (json['readerFont'] as String?) ?? 'Lora',
+        readerTheme: (json['readerTheme'] as String?) ?? 'original',
         journalMonthCovers:
             ((json['journalMonthCovers'] as Map?) ?? const {})
                 .map((k, v) => MapEntry(k.toString(), v.toString())),
+        journalReminderOn: (json['journalReminderOn'] as bool?) ?? false,
+        journalReminderMinutes:
+            (json['journalReminderMinutes'] as num?)?.toInt() ?? 21 * 60,
+        pinnedReflexId:
+            (json['pinnedReflexId'] as String?) ?? '__daily_day__',
+        progressImpulseId:
+            (json['progressImpulseId'] as String?) ?? '__daily_day__',
+        journalPaneOpen: (json['journalPaneOpen'] as bool?) ?? false,
+        cortexPaneOpen: (json['cortexPaneOpen'] as bool?) ?? false,
+        progressShowAll: (json['progressShowAll'] as bool?) ?? false,
+        typingMillis: (json['typingMillis'] as num?)?.toInt() ?? 0,
+        journalOrder: (json['journalOrder'] as List?)
+            ?.map((e) => e.toString())
+            .toList(),
+        readerPositions: ((json['readerPositions'] as Map?) ?? const {})
+            .map((k, v) => MapEntry(k.toString(), (v as num).toDouble())),
+        readerBookmarks: ((json['readerBookmarks'] as Map?) ?? const {}).map(
+            (k, v) => MapEntry(
+                k.toString(),
+                ((v as List?) ?? const [])
+                    .map((e) => (e as num).toDouble())
+                    .toList())),
       );
     } catch (_) {
       return null;
@@ -126,7 +169,23 @@ class StorageService {
   ///
   /// The expensive part — jsonEncode of the whole library + the write — runs
   /// on a background isolate so keystroke-time saves never touch a UI frame.
+  // Serializes saves process-wide: two writers sharing the temp file used to
+  // race and corrupt the write (an "access denied" rename on Windows).
+  static Future<void> _writeLock = Future.value();
+
   Future<void> save(AppData data) async {
+    final previous = _writeLock;
+    final done = Completer<void>();
+    _writeLock = done.future;
+    await previous.catchError((_) {});
+    try {
+      await _save(data);
+    } finally {
+      done.complete();
+    }
+  }
+
+  Future<void> _save(AppData data) async {
     final file = await _dataFile;
     final bak = await _bakFile;
     // Build the plain map on this isolate (cheap); ship it across.
@@ -134,21 +193,46 @@ class StorageService {
       'notes': data.notes.map((n) => n.toJson()).toList(),
       'spaces': data.spaces.map((s) => s.toJson()).toList(),
       'cards': data.cards.map((c) => c.toJson()).toList(),
+      'books': data.books.map((b) => b.toJson()).toList(),
+      'impulses': data.impulses.map((i) => i.toJson()).toList(),
       'cardsCompact': data.cardsCompact,
       'darkMode': data.darkMode,
       'darkFollowSystem': data.darkFollowSystem,
+      'noteBodyFont': data.noteBodyFont,
       'tutorialSeen': data.tutorialSeen,
       'lastBackupAt': data.lastBackupAt?.toIso8601String(),
       'backupReminderDismissedAt':
           data.backupReminderDismissedAt?.toIso8601String(),
+      'driveAutoBackup': data.driveAutoBackup,
+      'lastDriveBackupAt': data.lastDriveBackupAt?.toIso8601String(),
+      'driveAccountEmail': data.driveAccountEmail,
       'sortMode': data.sortMode,
       'feedWallpaper': data.feedWallpaper,
+      'feedBackgroundPath': data.feedBackgroundPath,
+      'feedBackgroundLight': data.feedBackgroundLight,
+      'feedBackgroundDark': data.feedBackgroundDark,
+      'readerFontScale': data.readerFontScale,
+      'readerFont': data.readerFont,
+      'readerTheme': data.readerTheme,
       'journalMonthCovers': data.journalMonthCovers,
+      'journalReminderOn': data.journalReminderOn,
+      'journalReminderMinutes': data.journalReminderMinutes,
+      'pinnedReflexId': data.pinnedReflexId,
+      'progressImpulseId': data.progressImpulseId,
+      'journalPaneOpen': data.journalPaneOpen,
+      'cortexPaneOpen': data.cortexPaneOpen,
+      'progressShowAll': data.progressShowAll,
+      'typingMillis': data.typingMillis,
+      'journalOrder': data.journalOrder,
+      'readerPositions': data.readerPositions,
+      'readerBookmarks': data.readerBookmarks,
     };
     final filePath = file.path;
     final bakPath = bak.path;
+    // A unique temp name so overlapping writers can never share a scratch file.
+    final tmpPath = '$filePath.${DateTime.now().microsecondsSinceEpoch}.tmp';
     await Isolate.run(() {
-      final tmp = File('$filePath.tmp');
+      final tmp = File(tmpPath);
       tmp.writeAsStringSync(jsonEncode(json), flush: true);
       final f = File(filePath);
       if (f.existsSync()) {
@@ -161,7 +245,27 @@ class StorageService {
           // what guarantees integrity.
         }
       }
-      tmp.renameSync(filePath);
+      // Windows can't rename onto an existing file: clear it first (the .bak
+      // above is the safety net), then fall back to copy if rename still trips.
+      if (f.existsSync()) {
+        try {
+          f.deleteSync();
+        } catch (_) {}
+      }
+      try {
+        tmp.renameSync(filePath);
+      } catch (_) {
+        // Rename lost a race (the destination is momentarily locked — happens
+        // when a stray reader/writer overlaps, e.g. late timers in tests).
+        // Copy as a fallback, and treat even that as best-effort: the .bak
+        // written above keeps the library intact if this write can't land.
+        try {
+          tmp.copySync(filePath);
+        } catch (_) {}
+        try {
+          tmp.deleteSync();
+        } catch (_) {}
+      }
     });
   }
 
@@ -200,21 +304,51 @@ class AppData {
     required this.notes,
     required this.spaces,
     required this.cards,
+    List<Book>? books,
+    List<Impulse>? impulses,
     this.cardsCompact = false,
     this.darkMode = false,
     this.darkFollowSystem = true,
     this.tutorialSeen = false,
     this.lastBackupAt,
     this.backupReminderDismissedAt,
+    this.driveAutoBackup = false,
+    this.lastDriveBackupAt,
+    this.driveAccountEmail,
     this.sortMode = 'recent',
     this.feedWallpaper = 0,
+    this.feedBackgroundPath = '',
+    this.feedBackgroundLight = '',
+    this.feedBackgroundDark = '',
+    this.readerFontScale = 1.0,
+    this.readerFont = 'Lora',
+    this.readerTheme = 'original',
+    this.journalReminderOn = false,
+    this.journalReminderMinutes = 21 * 60,
+    this.noteBodyFont = 'Caveat',
+    this.pinnedReflexId = '__daily_day__',
+    this.progressImpulseId = '__daily_day__',
+    this.journalPaneOpen = false,
+    this.cortexPaneOpen = false,
+    this.progressShowAll = false,
+    this.typingMillis = 0,
+    List<String>? journalOrder,
     Map<String, String>? journalMonthCovers,
-  }) : journalMonthCovers = journalMonthCovers ?? {};
+    Map<String, double>? readerPositions,
+    Map<String, List<double>>? readerBookmarks,
+  })  : books = books ?? [],
+        impulses = impulses ?? [],
+        journalOrder = journalOrder ?? const ['tasks', 'card', 'entries'],
+        journalMonthCovers = journalMonthCovers ?? {},
+        readerPositions = readerPositions ?? {},
+        readerBookmarks = readerBookmarks ?? {};
   factory AppData.empty() => AppData(notes: [], spaces: [], cards: []);
 
   final List<Note> notes;
   final List<Space> spaces;
   final List<TweetCard> cards;
+  final List<Book> books;
+  final List<Impulse> impulses;
 
   /// Cards feed view preference: false = Open (full cards), true = Blocks.
   bool cardsCompact;
@@ -225,6 +359,9 @@ class AppData {
   /// When true, dark mode follows the system setting.
   bool darkFollowSystem;
 
+  /// The font family used for node & spark body text.
+  String noteBodyFont;
+
   /// Whether the first-launch tutorial has been shown.
   bool tutorialSeen;
 
@@ -234,12 +371,66 @@ class AppData {
   /// When the backup nudge was last cross-dismissed (snoozes it a week).
   DateTime? backupReminderDismissedAt;
 
+  /// Whether automatic Google Drive backup is enabled.
+  bool driveAutoBackup;
+
+  /// When the last successful Google Drive backup completed (null = never).
+  DateTime? lastDriveBackupAt;
+
+  /// The connected Google account email for Drive backup (null = not connected).
+  String? driveAccountEmail;
+
   /// Feed sort order name (see NoteSort).
   String sortMode;
 
   /// Which bundled feed wallpaper is active (index into kFeedWallpapers).
   int feedWallpaper;
 
+  /// A legacy single feed-background image path (migrated into light/dark).
+  String feedBackgroundPath;
+
+  /// User-chosen feed backgrounds per theme (empty = built-in wallpaper).
+  String feedBackgroundLight;
+  String feedBackgroundDark;
+
+  /// Book reader typography and theme.
+  double readerFontScale;
+  String readerFont;
+  String readerTheme;
+
+  /// The nightly "write in your journal" nudge: whether it's on, and the time
+  /// of day to fire it, as minutes since midnight (default 21:00).
+  bool journalReminderOn;
+  int journalReminderMinutes;
+
+  /// The reflex pinned into the journal feed (its threads show below the week
+  /// strip). Defaults to the daily day.
+  String pinnedReflexId;
+
+  /// The impulse tracked by the green "Today's progress" card. Defaults to the
+  /// daily day.
+  String progressImpulseId;
+
+  /// Whether the side pane's Journal / Cortex groups are expanded.
+  bool journalPaneOpen;
+  bool cortexPaneOpen;
+
+  /// Whether the green progress card aggregates all reflexes.
+  bool progressShowAll;
+
+  /// Cumulative active-typing time in milliseconds (analytics).
+  int typingMillis;
+
+  /// The order of the journal's three movable sections: 'tasks' (daily-day
+  /// threads), 'card' (the reflex date card), 'entries' (diary entries).
+  List<String> journalOrder;
+
   /// User-chosen cover image per journal month, keyed 'yyyy-MM'.
   Map<String, String> journalMonthCovers;
+
+  /// Last read position per book, as a 0–1 fraction of the scroll extent.
+  Map<String, double> readerPositions;
+
+  /// Reader bookmarks per book, each a 0–1 fraction of the scroll extent.
+  Map<String, List<double>> readerBookmarks;
 }

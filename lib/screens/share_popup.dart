@@ -13,17 +13,45 @@ const _channel = MethodChannel('braim/share');
 
 /// The tiny app run by ShareActivity's `shareMain` entrypoint: a Pinterest-style
 /// popup over the sharing app that saves the shared link into a chosen folder.
-class SharePopupApp extends StatelessWidget {
+class SharePopupApp extends StatefulWidget {
   const SharePopupApp({super.key});
+
+  @override
+  State<SharePopupApp> createState() => _SharePopupAppState();
+}
+
+class _SharePopupAppState extends State<SharePopupApp> {
+  bool _resolved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveBrightness();
+  }
+
+  /// Resolve dark mode BEFORE the theme is built, so the popup's theme (and its
+  /// ListTile ink) matches the phone — otherwise the theme baked a light scheme
+  /// and folder names came out dark-on-dark in dark mode.
+  Future<void> _resolveBrightness() async {
+    try {
+      final data = await StorageService.instance.load();
+      AppPalette.dark = data.darkFollowSystem
+          ? PlatformDispatcher.instance.platformBrightness == Brightness.dark
+          : data.darkMode;
+    } catch (_) {}
+    if (mounted) setState(() => _resolved = true);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
+      theme: buildTheme(AppPalette.dark),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const SharePopupScreen(),
+      home: _resolved
+          ? const SharePopupScreen()
+          : const Scaffold(backgroundColor: Colors.transparent),
     );
   }
 }
@@ -37,11 +65,16 @@ class SharePopupScreen extends StatefulWidget {
 
 class _SharePopupScreenState extends State<SharePopupScreen> {
   String? _url;
+  String? _text;
   List<Space> _spaces = const [];
   bool _loading = true;
   String? _savedTo;
   bool _creatingFolder = false;
   final _folderCtrl = TextEditingController();
+
+  /// A plain-text share (no link in it) is filed as a note instead of a card.
+  bool get _isNote => _url == null && (_text?.trim().isNotEmpty ?? false);
+  bool get _hasContent => _url != null || (_text?.trim().isNotEmpty ?? false);
 
   @override
   void dispose() {
@@ -68,11 +101,12 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
     if (!mounted) return;
     setState(() {
       _url = match?.group(0);
+      _text = shared;
       _spaces = data.spaces
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       _loading = false;
     });
-    if (_url == null) {
+    if (!_hasContent) {
       // Nothing usable was shared; bow out quietly.
       Future.delayed(const Duration(milliseconds: 1200), _close);
     }
@@ -82,22 +116,24 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
   // writes the main data file, so it can't race the main app's own saves.
   // The main app drains the inbox on next launch/resume and de-duplicates.
 
+  Map<String, dynamic> _record(Map<String, dynamic> dest) =>
+      _isNote ? {'noteText': _text, ...dest} : {'url': _url, ...dest};
+
   Future<void> _saveTo(String? spaceId, String label) async {
-    if (_url == null || _savedTo != null) return;
+    if (!_hasContent || _savedTo != null) return;
     setState(() => _savedTo = label);
-    await StorageService.instance
-        .saveShareInbox({'url': _url, 'spaceId': spaceId});
+    await StorageService.instance.saveShareInbox(_record({'spaceId': spaceId}));
     await Future.delayed(const Duration(milliseconds: 650));
     _close();
   }
 
-  /// Creates a new folder and files the link straight into it.
+  /// Creates a new folder and files the link/note straight into it.
   Future<void> _createFolderAndSave() async {
     final name = _folderCtrl.text.trim();
-    if (name.isEmpty || _url == null || _savedTo != null) return;
+    if (name.isEmpty || !_hasContent || _savedTo != null) return;
     setState(() => _savedTo = name);
     await StorageService.instance
-        .saveShareInbox({'url': _url, 'newFolderName': name});
+        .saveShareInbox(_record({'newFolderName': name}));
     await Future.delayed(const Duration(milliseconds: 650));
     _close();
   }
@@ -182,7 +218,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
   }
 
   Widget _pickerBody() {
-    if (_url == null) {
+    if (!_hasContent) {
       return SizedBox(
         height: 90,
         child: Center(
@@ -206,7 +242,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
             ),
             const SizedBox(width: 10),
             Text(
-              context.t.saveToBraim,
+              _isNote ? context.t.saveNoteToBraim : context.t.saveToBraim,
               style: TextStyle(
                 fontSize: 16.5,
                 fontWeight: FontWeight.w800,
@@ -224,7 +260,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
         ),
         const SizedBox(height: 2),
         Text(
-          _url!,
+          _isNote ? _text!.trim().replaceAll('\n', ' ') : _url!,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style:
@@ -278,10 +314,13 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                   onTap: () => setState(() => _creatingFolder = true),
                 ),
               _option(
-                icon: Icons.style_rounded,
-                label: context.t.tabCards,
+                icon: _isNote
+                    ? Icons.sticky_note_2_outlined
+                    : Icons.style_rounded,
+                label: _isNote ? context.t.tabHome : context.t.tabCards,
                 sub: context.t.noFolder,
-                onTap: () => _saveTo(null, 'Cards'),
+                onTap: () =>
+                    _saveTo(null, _isNote ? 'Home' : 'Sparks'),
               ),
               for (final s in _spaces)
                 _option(

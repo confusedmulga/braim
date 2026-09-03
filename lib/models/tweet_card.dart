@@ -27,9 +27,11 @@ class TweetCard {
     this.noteTitle = '',
     List<NoteBlock>? blocks,
     DateTime? createdAt,
+    DateTime? updatedAt,
   })  : id = id ?? _uuid.v4(),
         blocks = blocks ?? [],
-        createdAt = createdAt ?? DateTime.now();
+        createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? createdAt ?? DateTime.now();
 
   final String id;
   String url;
@@ -76,6 +78,9 @@ class TweetCard {
 
   final DateTime createdAt;
 
+  /// Last mutation time; drives last-write-wins when syncing.
+  DateTime updatedAt;
+
   bool get isTweet =>
       url.contains('twitter.com') || url.contains('x.com');
 
@@ -103,6 +108,7 @@ class TweetCard {
         'noteTitle': noteTitle,
         'blocks': blocks.map((b) => b.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
       };
 
   factory TweetCard.fromJson(Map<String, dynamic> json) => TweetCard(
@@ -126,5 +132,6 @@ class TweetCard {
             .map((e) => NoteBlock.fromJson(e as Map<String, dynamic>))
             .toList(),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
       );
 }

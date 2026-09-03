@@ -6,11 +6,13 @@ import 'package:provider/provider.dart';
 
 import '../models/note.dart';
 import '../state/app_state.dart';
+import '../widgets/feed_greeting.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_morph.dart';
-import '../widgets/item_actions_sheet.dart';
+import '../widgets/move_to_space_sheet.dart';
 import '../widgets/glass.dart';
 import '../widgets/note_card.dart';
+import '../widgets/quick_actions_menu.dart';
 import 'note_editor_screen.dart';
 import 'settings_screen.dart';
 
@@ -25,18 +27,80 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Future<void> _noteActions(Note note) async {
-    final state = context.read<AppState>();
-    await showItemActions(
-      context,
-      pinned: note.pinned,
-      archived: note.archived,
-      currentSpaceId: note.spaceId,
-      onSetPinned: (p) => state.setNotePinned(note.id, p),
-      onSetArchived: (a) => state.setNoteArchived(note.id, a),
-      onMove: (spaceId) => state.moveNoteToSpace(note.id, spaceId),
-      onDelete: () => state.deleteNote(note.id),
-    );
+  // Multi-select: long-press a note to start, then tap to (de)select.
+  bool _selecting = false;
+  final Set<String> _selected = {};
+
+  void _enterSelection(Note n) => setState(() {
+        _selecting = true;
+        _selected.add(n.id);
+      });
+
+  void _toggle(Note n) => setState(() {
+        if (!_selected.remove(n.id)) _selected.add(n.id);
+        if (_selected.isEmpty) _selecting = false;
+      });
+
+  void _exitSelection() => setState(() {
+        _selecting = false;
+        _selected.clear();
+      });
+
+  // ---- Long-press quick actions ------------------------------------------
+
+  Future<void> _showActions(Note n) async {
+    final action = await showQuickActions(context);
+    if (action == null || !mounted) return;
+    switch (action) {
+      case QuickAction.move:
+        await _moveOne(n);
+      case QuickAction.archive:
+        await _archiveOne(n);
+      case QuickAction.select:
+        _enterSelection(n);
+      case QuickAction.delete:
+        if (await confirmDeleteItems(context, 1) && mounted) {
+          await _deleteOne(n);
+        }
+    }
+  }
+
+  Future<void> _moveOne(Note n) async {
+    final choice = await showMoveToSpaceSheet(context, currentSpaceId: n.spaceId);
+    if (choice == null || !mounted) return;
+    await context
+        .read<AppState>()
+        .bulkMoveNotes({n.id}, choice == '__none__' ? null : choice);
+  }
+
+  Future<void> _archiveOne(Note n) =>
+      context.read<AppState>().bulkArchiveNotes({n.id}, true);
+
+  Future<void> _deleteOne(Note n) =>
+      context.read<AppState>().bulkDeleteNotes({n.id});
+
+  // ---- Multi-select bulk actions -----------------------------------------
+
+  Future<void> _bulkArchive() async {
+    await context.read<AppState>().bulkArchiveNotes(_selected.toSet(), true);
+    _exitSelection();
+  }
+
+  Future<void> _bulkDelete() async {
+    if (!await confirmDeleteItems(context, _selected.length) || !mounted) {
+      return;
+    }
+    await context.read<AppState>().bulkDeleteNotes(_selected.toSet());
+    _exitSelection();
+  }
+
+  Future<void> _bulkMove() async {
+    final choice = await showMoveToSpaceSheet(context, currentSpaceId: null);
+    if (choice == null || !mounted) return;
+    await context
+        .read<AppState>()
+        .bulkMoveNotes(_selected.toSet(), choice == '__none__' ? null : choice);
+    _exitSelection();
   }
 
   @override
@@ -44,13 +108,28 @@ class _HomeScreenState extends State<HomeScreen> {
     final state = context.watch<AppState>();
     final notes = state.notes;
 
-    if (notes.isEmpty) return const _EmptyState();
+    // A brand-new library: open with a subtle first-note greeting (only ever
+    // shown while there are zero notes) above the empty-state hint.
+    if (notes.isEmpty) {
+      return CustomScrollView(
+        controller: widget.controller,
+        slivers: const [
+          SliverToBoxAdapter(
+            child: FeedGreeting(picker: pickFirstNoteGreeting),
+          ),
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(),
+          ),
+        ],
+      );
+    }
 
     final showBackupBanner = state.showBackupReminder;
 
     // Left-edge scrollbar: appears while scrolling, hugs the left side so
     // it never fights the right-hand fade/toggle area.
-    return RawScrollbar(
+    final feed = RawScrollbar(
       controller: widget.controller,
       scrollbarOrientation: ScrollbarOrientation.left,
       thumbColor: AppPalette.inkSecondary.withValues(alpha: 0.5),
@@ -60,6 +139,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: CustomScrollView(
         controller: widget.controller,
       slivers: [
+        const SliverToBoxAdapter(
+          child: FeedGreeting(picker: pickHomeGreeting),
+        ),
         if (showBackupBanner)
           SliverToBoxAdapter(
             child: Padding(
@@ -75,7 +157,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         SliverPadding(
           // Just enough top padding to clear the (short) header fade band.
-          padding: EdgeInsets.fromLTRB(14, showBackupBanner ? 8 : 12, 14, 150),
+          padding: EdgeInsets.fromLTRB(
+              14, showBackupBanner ? 8 : 12, 14, 150),
           // Lazy masonry: builds only visible tiles and packs each new tile
           // into the currently-shortest column (true height balancing).
           sliver: SliverMasonryGrid.count(
@@ -91,8 +174,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 closedBuilder: (context, open) => NoteCard(
                   note: n,
                   space: state.spaceById(n.spaceId),
-                  onTap: open,
-                  onLongPress: () => _noteActions(n),
+                  selected: _selected.contains(n.id),
+                  onTap: _selecting ? () => _toggle(n) : open,
+                  onLongPress: _selecting ? null : () => _showActions(n),
                 ),
               );
             },
@@ -100,6 +184,27 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
       ),
+    );
+
+    // Always a Stack (even when not selecting) so the feed subtree — and its
+    // once-per-mount greeting — never re-mounts when selection toggles.
+    return Stack(
+      children: [
+        feed,
+        if (_selecting)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 96,
+            child: SelectionActionBar(
+              count: _selected.length,
+              onMove: _bulkMove,
+              onArchive: _bulkArchive,
+              onDelete: _bulkDelete,
+              onClose: _exitSelection,
+            ),
+          ),
+      ],
     );
   }
 }

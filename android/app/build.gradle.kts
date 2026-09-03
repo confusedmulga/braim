@@ -26,6 +26,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required by flutter_local_notifications (uses java.time on old APIs).
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -59,10 +61,26 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+            // R8 code shrinking for release. The keep rules in
+            // proguard-rules.pro are required so flutter_local_notifications'
+            // Gson reflection survives minification — without them a release
+            // build crashes on every reboot ("Missing type parameter").
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // MediaSession + MediaStyle notification for the Pomodoro focus timer
+    // (gives the Android 13 squiggly seek-bar and working transport controls).
+    implementation("androidx.media:media:1.7.0")
 }

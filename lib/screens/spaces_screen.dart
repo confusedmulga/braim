@@ -11,6 +11,7 @@ import '../services/crypt_auth.dart';
 import '../services/image_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/feed_greeting.dart';
 import '../widgets/glass.dart';
 import '../widgets/space_tile.dart';
 import 'space_detail_screen.dart';
@@ -58,6 +59,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
       if (result != null && mounted) {
         space.name = result.name;
         space.thumbnailPath = result.thumbnailPath;
+        space.colorValue = result.colorValue;
         await context.read<AppState>().updateSpace(space);
       }
     } else if (action == 'archive' && mounted) {
@@ -86,9 +88,11 @@ class _SpacesScreenState extends State<SpacesScreen> {
     return CustomScrollView(
       controller: widget.controller,
       slivers: [
+        const SliverToBoxAdapter(
+          child: FeedGreeting(text: kCortexGreeting),
+        ),
         SliverPadding(
-          // Top padding clears the header fade band (see home_screen).
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 150),
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 150),
           // Lazy masonry: square thumbnail tiles and half-height plain tiles
           // pack into whichever column is shorter.
           sliver: SliverMasonryGrid.count(
@@ -186,9 +190,10 @@ class _CryptTile extends StatelessWidget {
 }
 
 class SpaceEditorResult {
-  SpaceEditorResult(this.name, this.thumbnailPath);
+  SpaceEditorResult(this.name, this.thumbnailPath, this.colorValue);
   final String name;
   final String? thumbnailPath;
+  final int? colorValue;
 }
 
 Future<SpaceEditorResult?> showSpaceEditor(
@@ -213,6 +218,7 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
   late final TextEditingController _ctrl =
       TextEditingController(text: widget.existing?.name ?? '');
   late String? _thumb = widget.existing?.thumbnailPath;
+  late int? _color = widget.existing?.colorValue;
 
   @override
   void dispose() {
@@ -223,6 +229,33 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
   Future<void> _pickThumb() async {
     final path = await ImageService.pickThumbnail();
     if (path != null) setState(() => _thumb = path);
+  }
+
+  Widget _colorChoice(int? c) {
+    final selected = _color == c;
+    final fill = c == null ? null : Color(c);
+    return GestureDetector(
+      onTap: () => setState(() => _color = c),
+      child: Container(
+        width: 30,
+        height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: fill ?? Colors.transparent,
+          border: Border.all(
+            color: selected ? AppPalette.textPrimary : Colors.black26,
+            width: selected ? 2.5 : 1.2,
+          ),
+        ),
+        child: c == null
+            ? Icon(Icons.format_color_reset_rounded,
+                size: 15, color: AppPalette.textSecondary)
+            : (selected
+                ? const Icon(Icons.check_rounded, size: 16, color: Colors.black54)
+                : null),
+      ),
+    );
   }
 
   @override
@@ -292,6 +325,21 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
               ),
             ),
             const SizedBox(height: 16),
+            Text(context.t.folderColor,
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppPalette.textSecondary)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _colorChoice(null),
+                for (final c in NoteColors.swatches) _colorChoice(c),
+              ],
+            ),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -304,7 +352,8 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
                   onPressed: () {
                     final name = _ctrl.text.trim();
                     if (name.isEmpty) return;
-                    Navigator.pop(context, SpaceEditorResult(name, _thumb));
+                    Navigator.pop(
+                        context, SpaceEditorResult(name, _thumb, _color));
                   },
                   child: Text(context.t.save),
                 ),

@@ -11,6 +11,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_to_space_sheet.dart';
 import '../widgets/bubble_button.dart';
+import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/item_actions_sheet.dart';
@@ -244,78 +245,99 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
     final isEmpty = !_searching && notes.isEmpty && cards.isEmpty;
     final cover = space.thumbnailPath;
     final hasCover = cover != null && cover.isNotEmpty;
-    final searchAction = IconButton(
+    final searchButton = FrostedCircleButton(
       tooltip: context.t.searchThisFolder,
-      icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
-      onPressed: _toggleSearch,
+      icon: _searching ? Icons.close_rounded : Icons.search_rounded,
+      onTap: _toggleSearch,
     );
 
+    final fab = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        BubbleButton(
+          icon: Icons.playlist_add_rounded,
+          tooltip: context.t.addExisting,
+          size: 52,
+          iconSize: 24,
+          onTap: () => showAddToSpaceSheet(context,
+              spaceId: spaceId, spaceName: space.name),
+        ),
+        const SizedBox(height: 14),
+        GlassMorph(
+          closedRadius: 34,
+          openBuilder: (_) =>
+              NoteEditorScreen(note: Note(spaceId: spaceId), isNew: true),
+          closedBuilder: (context, open) => BubbleButton(
+              icon: Icons.edit_rounded,
+              tooltip: context.t.newNote,
+              onTap: open),
+        ),
+      ],
+    );
+
+    // Without a cover: the plain titled screen with the standard chrome.
+    if (!hasCover) {
+      return FrostedScaffold(
+        title: space.name,
+        actions: [searchButton],
+        floatingActionButton: fab,
+        body: isEmpty
+            ? _emptyBody(context)
+            : TopFade(
+                height: 12,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 120),
+                  children: sections,
+                ),
+              ),
+      );
+    }
+
+    // With a cover photo: the Twitter-style collapsing header, with the same
+    // pinned frosted chrome (back + search) floating over it.
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        // A folder with a cover photo shows a Twitter-style header that tucks
-        // into the bar as you scroll; without one, the plain titled bar.
-        appBar: hasCover
-            ? null
-            : AppBar(
-                foregroundColor: AppPalette.inkPrimary,
-                title: Text(space.name,
-                    style: const TextStyle(fontWeight: FontWeight.w800)),
-                actions: [searchAction],
-              ),
-        floatingActionButton: Column(
-          mainAxisSize: MainAxisSize.min,
+        floatingActionButton: fab,
+        body: Stack(
           children: [
-            BubbleButton(
-              icon: Icons.playlist_add_rounded,
-              tooltip: context.t.addExisting,
-              size: 52,
-              iconSize: 24,
-              onTap: () => showAddToSpaceSheet(context,
-                  spaceId: spaceId, spaceName: space.name),
+            CustomScrollView(
+              slivers: [
+                _CoverHeader(name: space.name, imagePath: cover),
+                if (isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _emptyBody(context),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 120),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate(sections),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 14),
-            GlassMorph(
-              closedRadius: 34,
-              openBuilder: (_) =>
-                  NoteEditorScreen(note: Note(spaceId: spaceId), isNew: true),
-              closedBuilder: (context, open) => BubbleButton(
-                  icon: Icons.edit_rounded,
-                  tooltip: context.t.newNote,
-                  onTap: open),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                  child: Row(
+                    children: [
+                      const FrostedBackButton(),
+                      const Spacer(),
+                      searchButton,
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ),
-        body: hasCover
-            ? CustomScrollView(
-                slivers: [
-                  _CoverHeader(
-                      name: space.name,
-                      imagePath: cover,
-                      actions: [searchAction]),
-                  if (isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _emptyBody(context),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 120),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate(sections),
-                      ),
-                    ),
-                ],
-              )
-            : (isEmpty
-                ? _emptyBody(context)
-                : TopFade(
-                    height: 12,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 120),
-                      children: sections,
-                    ),
-                  )),
       ),
     );
   }
@@ -342,13 +364,13 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
 
 /// A collapsing cover-photo header for a folder that has a thumbnail: the image
 /// fills an expanded app bar and tucks up into the toolbar as the feed scrolls.
+/// The back and search chrome is a pinned frosted overlay above it, so the bar
+/// itself carries neither a leading nor actions.
 class _CoverHeader extends StatelessWidget {
-  const _CoverHeader(
-      {required this.name, required this.imagePath, this.actions});
+  const _CoverHeader({required this.name, required this.imagePath});
 
   final String name;
   final String imagePath;
-  final List<Widget>? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +378,7 @@ class _CoverHeader extends StatelessWidget {
       expandedHeight: 210,
       pinned: true,
       stretch: true,
-      actions: actions,
+      automaticallyImplyLeading: false,
       foregroundColor: Colors.white,
       // Dark bar so that once the photo scrolls away on full collapse, the
       // white title and back arrow stay legible (over both themes).
@@ -365,12 +387,17 @@ class _CoverHeader extends StatelessWidget {
       systemOverlayStyle: SystemUiOverlayStyle.light
           .copyWith(statusBarColor: Colors.transparent),
       flexibleSpace: FlexibleSpaceBar(
+        // Centre the title and reserve the 50px back/search bubbles' width
+        // (14 lead + 50) on both sides, so on collapse it settles between the
+        // two buttons instead of sliding up behind the back arrow.
+        centerTitle: true,
         titlePadding:
-            const EdgeInsetsDirectional.only(start: 54, bottom: 16, end: 16),
+            const EdgeInsetsDirectional.only(start: 64, end: 64, bottom: 16),
         title: Text(
           name,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             fontWeight: FontWeight.w800,
             color: Colors.white,

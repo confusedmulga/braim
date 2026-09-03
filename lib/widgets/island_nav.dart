@@ -27,7 +27,9 @@ class IslandNav extends StatelessWidget {
 
   static const _items = [
     IslandNavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
-    IslandNavItem(Icons.style_outlined, Icons.style_rounded, 'Cards'),
+    IslandNavItem(Icons.style_outlined, Icons.style_rounded, 'Sparks'),
+    IslandNavItem(
+        Icons.menu_book_outlined, Icons.menu_book_rounded, 'Narrative'),
     IslandNavItem(Icons.book_outlined, Icons.book_rounded, 'Journal'),
     IslandNavItem(Icons.grid_view_outlined, Icons.grid_view_rounded, 'Cortex'),
   ];
@@ -56,7 +58,7 @@ class IslandNav extends StatelessWidget {
               border: Border.all(color: AppPalette.cardOutline),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -107,11 +109,12 @@ class _NavButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           onTap: onTap,
           child: Padding(
-            // Tighter than the 3-tab layout so four tabs plus the expanded
-            // label still fit beside the pencil bubble on narrow screens.
+            // Tight enough that five tabs plus the expanded label still fit
+            // beside the pencil bubble (the shell also scales the island
+            // down on very narrow screens rather than overflowing).
             padding: EdgeInsets.symmetric(
-              horizontal: selected ? 14 : 11,
-              vertical: 12,
+              horizontal: selected ? 12 : 9,
+              vertical: 11,
             ),
             child: Row(
               children: [
@@ -127,10 +130,11 @@ class _NavButton extends StatelessWidget {
                   curve: Curves.easeOutCubic,
                   child: selected
                       ? Padding(
-                          padding: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.only(left: 7),
                           child: Text(
                             item.label,
                             style: TextStyle(
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w700,
                               color: AppPalette.inkPrimary,
                             ),

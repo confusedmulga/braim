@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
@@ -9,12 +12,19 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/note.dart' show richToPlain;
 
 import '../models/tweet_card.dart';
+import '../services/wiki_links.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/bouncy_route.dart';
+import '../widgets/bubble_button.dart';
+import '../widgets/expand_from_button.dart';
+import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_bubble.dart';
 import '../widgets/move_to_space_sheet.dart';
 import '../widgets/note_body_editor.dart';
+import '../widgets/note_links_section.dart';
+import 'note_editor_screen.dart';
 
 /// Opens a saved card/tweet/link as a note: the fetched preview and the link
 /// (with copy) are pinned at the top, with an editable note body below.
@@ -27,10 +37,19 @@ class CardDetailScreen extends StatefulWidget {
   State<CardDetailScreen> createState() => _CardDetailScreenState();
 }
 
-class _CardDetailScreenState extends State<CardDetailScreen> {
+class _CardDetailScreenState extends State<CardDetailScreen>
+    with SingleTickerProviderStateMixin {
   late TweetCard _card;
   late TextEditingController _titleCtrl;
+  final _titleFocus = FocusNode();
   final _editorKey = GlobalKey<NoteBodyEditorState>();
+
+  /// Moves the caret up into the title (Backspace on an empty first body line).
+  void _focusTitle() {
+    _titleFocus.requestFocus();
+    _titleCtrl.selection =
+        TextSelection.collapsed(offset: _titleCtrl.text.length);
+  }
   final _activeController = ValueNotifier<QuillController?>(null);
 
   // Heavy children (Quill, edge blurs, bottom island) mount only after the
@@ -39,11 +58,58 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
   bool _settleHooked = false;
   bool _closing = false;
 
+  /// Live save while writing (see the note editor's autosave).
+  Timer? _autosave;
+  String _savedFingerprint = '';
+
+  String _fingerprint() => jsonEncode([
+        _card.noteTitle,
+        _card.spaceId,
+        for (final b in _card.blocks) b.toJson(),
+      ]);
+
+  /// A card opens as something to read; the compose button starts the note
+  /// attached to it, growing the editor out of itself.
+  bool _editing = false;
+  bool get _readOnly => !_editing;
+
+  late final AnimationController _expand = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+    value: 1,
+  );
+
+  void _startEditing() {
+    setState(() => _editing = true);
+    _expand.forward(from: 0);
+  }
+
+  void _finishEditing() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _collect();
+    final state = context.read<AppState>();
+    setState(() => _editing = false);
+    _savedFingerprint = _fingerprint();
+    state.updateCard(_card);
+  }
+
+  void _autosaveTick() {
+    if (_closing || _readOnly || !mounted) return;
+    _collect();
+    final fp = _fingerprint();
+    if (fp == _savedFingerprint) return;
+    _savedFingerprint = fp;
+    context.read<AppState>().updateCard(_card);
+  }
+
   @override
   void initState() {
     super.initState();
     _card = widget.card;
     _titleCtrl = TextEditingController(text: _card.noteTitle);
+    _savedFingerprint = _fingerprint();
+    _autosave = Timer.periodic(
+        const Duration(seconds: 3), (_) => _autosaveTick());
   }
 
   @override
@@ -71,7 +137,10 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
 
   @override
   void dispose() {
+    _autosave?.cancel();
+    _expand.dispose();
     _titleCtrl.dispose();
+    _titleFocus.dispose();
     _activeController.dispose();
     super.dispose();
   }
@@ -82,6 +151,11 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
   }
 
   void _close() {
+    // Reading changed nothing — leave without rewriting the card.
+    if (_readOnly) {
+      Navigator.of(context).pop();
+      return;
+    }
     final state = context.read<AppState>();
     _collect();
     setState(() => _closing = true);
@@ -120,9 +194,80 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
     setState(() => _card.spaceId = selected == '__none__' ? null : selected);
   }
 
+  // ---- Wiki-links ---------------------------------------------------------
+
+  /// The card's user-authored text (title + note body), scanned for outgoing
+  /// `[[links]]`.
+  String _cardScanText() {
+    final buffer = StringBuffer(_card.noteTitle);
+    for (final b in _card.blocks) {
+      if (!b.isText) continue;
+      final plain = richToPlain(b.text);
+      if (plain.isEmpty) continue;
+      if (buffer.isNotEmpty) buffer.write('\n');
+      buffer.write(plain);
+    }
+    return buffer.toString();
+  }
+
+  Future<void> _openRef(LinkRef ref) async {
+    final state = context.read<AppState>();
+    _editorKey.currentState?.sync();
+    _card.noteTitle = _titleCtrl.text;
+    state.updateCard(_card);
+    if (!mounted) return;
+    if (ref.kind == LinkKind.card) {
+      final card = state.cardById(ref.id);
+      if (card != null) {
+        await Navigator.of(context)
+            .push(bouncyRoute(CardDetailScreen(card: card)));
+      }
+      return;
+    }
+    final note = state.noteById(ref.id);
+    if (note != null) {
+      await Navigator.of(context)
+          .push(bouncyRoute(NoteEditorScreen(note: note, isNew: false)));
+    }
+  }
+
+  Future<void> _createAndOpenLinkedNote(String title) async {
+    final state = context.read<AppState>();
+    _editorKey.currentState?.sync();
+    _card.noteTitle = _titleCtrl.text;
+    state.updateCard(_card);
+    final created = await state.createLinkedNote(title);
+    if (!mounted) return;
+    await Navigator.of(context)
+        .push(bouncyRoute(NoteEditorScreen(note: created, isNew: true)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
+    final Widget topActions = BubblePill(
+      children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: context.t.refreshPreview,
+          icon: const Icon(Icons.refresh_rounded),
+          onPressed: () => context.read<AppState>().refreshCard(_card.id),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: context.t.deleteCard,
+          icon: const Icon(Icons.delete_outline_rounded),
+          onPressed: () {
+            final state = context.read<AppState>();
+            setState(() => _closing = true);
+            Navigator.of(context).pop();
+            Future.delayed(const Duration(milliseconds: 380), () {
+              state.deleteCard(_card.id);
+            });
+          },
+        ),
+      ],
+    );
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -130,66 +275,21 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
       },
       child: ColoredBox(
         color: AppPalette.sheet,
-        child: Scaffold(
+        // Status-bar clock/battery must stay readable over the sheet: dark
+        // icons on the light sheet, light icons on the dark one.
+        child: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: (AppPalette.dark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark)
+              .copyWith(statusBarColor: Colors.transparent),
+          child: Scaffold(
           backgroundColor: Colors.transparent,
-          extendBodyBehindAppBar: true,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            foregroundColor: AppPalette.inkPrimary,
-            // Status-bar clock/battery must stay readable over the sheet:
-            // dark icons on the light sheet, light icons on the dark one.
-            systemOverlayStyle: (AppPalette.dark
-                    ? SystemUiOverlayStyle.light
-                    : SystemUiOverlayStyle.dark)
-                .copyWith(statusBarColor: Colors.transparent),
-            leadingWidth: 64,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: GlassBubble(
-                icon: Icons.chevron_left_rounded,
-                tooltip: context.t.back,
-                iconColor: AppPalette.inkPrimary,
-                glassColor: const Color(0x14000000),
-                iconSize: 28,
-                shadow: false,
-                onTap: _close,
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                // One pill around the actions, on the back bubble's line.
-                child: BubblePill(
-                  children: [
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: context.t.refreshPreview,
-                      icon: const Icon(Icons.refresh_rounded),
-                      onPressed: () =>
-                          context.read<AppState>().refreshCard(_card.id),
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: context.t.deleteCard,
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      onPressed: () {
-                        final state = context.read<AppState>();
-                        setState(() => _closing = true);
-                        Navigator.of(context).pop();
-                        Future.delayed(const Duration(milliseconds: 380), () {
-                          state.deleteCard(_card.id);
-                        });
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
           body: Stack(
             children: [
               ListView(
-                padding: EdgeInsets.fromLTRB(18, topInset + 6, 18, 200),
+                // A little breathing room between the pinned back button and
+                // the card title below it.
+                padding: EdgeInsets.fromLTRB(18, topInset + 24, 18, 200),
                 children: [
                   _CardPreview(card: _card),
                   const SizedBox(height: 10),
@@ -200,59 +300,70 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                     _ArticleReader(text: _card.articleText),
                   ],
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _titleCtrl,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppPalette.inkPrimary,
-                    ),
-                    maxLines: null,
-                    // Grows with text; keeps the title from rubber-banding
-                    // independently under the bouncy scroll physics.
-                    scrollPhysics: const NeverScrollableScrollPhysics(),
-                    decoration: InputDecoration(
-                      hintText: context.t.addATitle,
-                      hintStyle: TextStyle(
-                        color: AppPalette.inkSecondary.withValues(alpha: 0.6),
+                  if (_readOnly) ...[
+                    if (_card.noteTitle.trim().isNotEmpty)
+                      Text(
+                        _card.noteTitle,
+                        style: TextStyle(
+                          fontFamily: kNoteHeadingFont,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppPalette.inkPrimary,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    _CardNoteBody(card: _card),
+                  ] else ...[
+                    TextField(
+                      controller: _titleCtrl,
+                      focusNode: _titleFocus,
+                      style: TextStyle(
+                        fontFamily: kNoteHeadingFont,
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
+                        color: AppPalette.inkPrimary,
                       ),
-                      border: InputBorder.none,
+                      maxLines: null,
+                      // Grows with text; keeps the title from rubber-banding
+                      // independently under the bouncy scroll physics.
+                      scrollPhysics: const NeverScrollableScrollPhysics(),
+                      decoration: InputDecoration(
+                        hintText: context.t.addATitle,
+                        hintStyle: TextStyle(
+                          color:
+                              AppPalette.inkSecondary.withValues(alpha: 0.6),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        border: InputBorder.none,
+                      ),
                     ),
+                    const SizedBox(height: 4),
+                    ExpandFromButton(
+                      animation: _expand,
+                      child: _settled
+                          ? NoteBodyEditor(
+                              key: _editorKey,
+                              blocks: _card.blocks,
+                              activeController: _activeController,
+                              onLight: true,
+                              onBackspaceAtStart: _focusTitle,
+                              onRemoveImagePath: (path) => context
+                                  .read<AppState>()
+                                  .refreshAfterImageRemoval(path),
+                            )
+                          : _CardNoteBody(card: _card),
+                    ),
+                  ],
+                  // The card's place in the graph: outgoing [[links]] and the
+                  // notes, journal entries and cards that mention it.
+                  NoteLinksSection(
+                    selfId: _card.id,
+                    title: _card.noteTitle,
+                    scanText: _cardScanText(),
+                    onOpen: _openRef,
+                    onCreateOpen: _createAndOpenLinkedNote,
                   ),
-                  const SizedBox(height: 4),
-                  if (_settled)
-                    NoteBodyEditor(
-                      key: _editorKey,
-                      blocks: _card.blocks,
-                      activeController: _activeController,
-                      onLight: true,
-                      onRemoveImagePath: (path) => context
-                          .read<AppState>()
-                          .refreshAfterImageRemoval(path),
-                    )
-                  else
-                    // Static lookalike of the body during the open morph.
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final b in _card.blocks)
-                          if (b.isText && richToPlain(b.text).isNotEmpty)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 4),
-                              child: Text(
-                                richToPlain(b.text),
-                                style: TextStyle(
-                                  fontSize: 16.5,
-                                  height: 1.4,
-                                  color: AppPalette.inkPrimary,
-                                ),
-                              ),
-                            ),
-                      ],
-                    ),
                 ],
               ),
               if (_settled && !_closing) ...[
@@ -266,19 +377,90 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                   child: TopScrimFade(
                       height: MediaQuery.of(context).padding.top + 8),
                 ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: EditorBottomBar(
-                    activeController: _activeController,
-                    onAddPhotos: () => _editorKey.currentState?.addPhotos(),
-                    onPickSpace: _pickSpace,
+                if (!_readOnly)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: SlideUpFromButton(
+                      animation: _expand,
+                      child: EditorBottomBar(
+                        activeController: _activeController,
+                        onAddPhotos: () =>
+                            _editorKey.currentState?.addPhotos(),
+                        onPickSpace: _pickSpace,
+                      ),
+                    ),
+                  ),
+                // Same compose button as the feed: it starts (and finishes)
+                // the note attached to this card.
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  right: 18,
+                  bottom: (_editing ? 148 : 18) +
+                      MediaQuery.of(context).padding.bottom,
+                  child: BubbleButton(
+                    icon: _editing ? Icons.check_rounded : Icons.edit_rounded,
+                    tooltip:
+                        _editing ? context.t.save : context.t.editAction,
+                    onTap: _editing ? _finishEditing : _startEditing,
                   ),
                 ),
               ],
+              // The back button + actions, pinned at the standard chrome spot.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    child: Row(
+                      children: [
+                        FrostedBackButton(onTap: _close),
+                        const Spacer(),
+                        topActions,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
+        ),
       ),
+    );
+  }
+}
+
+/// The user's own note on a card, rendered as plain text for reading (and
+/// during the open morph, before the editors mount).
+class _CardNoteBody extends StatelessWidget {
+  const _CardNoteBody({required this.card});
+
+  final TweetCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final b in card.blocks)
+          if (b.isText && richToPlain(b.text).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                richToPlain(b.text),
+                style: TextStyle(
+                  fontFamily: activeBodyFont,
+                  fontSize: 21,
+                  height: 1.35,
+                  color: AppPalette.inkPrimary,
+                ),
+              ),
+            ),
+      ],
     );
   }
 }
