@@ -292,6 +292,30 @@ abstract class AppLocalizations {
   /// **'New node'**
   String get newNote;
 
+  /// No description provided for @newMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'New markdown'**
+  String get newMarkdown;
+
+  /// No description provided for @importFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Import file'**
+  String get importFile;
+
+  /// No description provided for @markdownHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Write or paste Markdown…'**
+  String get markdownHint;
+
+  /// No description provided for @preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get preview;
+
   /// No description provided for @saveALink.
   ///
   /// In en, this message translates to:
@@ -1966,59 +1990,23 @@ abstract class AppLocalizations {
   /// **'More'**
   String get moreOptions;
 
+  /// No description provided for @chooseTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour & background'**
+  String get chooseTheme;
+
   /// No description provided for @createNote.
   ///
   /// In en, this message translates to:
   /// **'Node'**
   String get createNote;
 
-  /// No description provided for @createArticle.
-  ///
-  /// In en, this message translates to:
-  /// **'Article'**
-  String get createArticle;
-
-  /// No description provided for @newArticle.
-  ///
-  /// In en, this message translates to:
-  /// **'New article'**
-  String get newArticle;
-
-  /// No description provided for @saveAsDraft.
-  ///
-  /// In en, this message translates to:
-  /// **'Save as draft'**
-  String get saveAsDraft;
-
   /// No description provided for @editAction.
   ///
   /// In en, this message translates to:
   /// **'Edit'**
   String get editAction;
-
-  /// No description provided for @articleSavedToast.
-  ///
-  /// In en, this message translates to:
-  /// **'Article saved'**
-  String get articleSavedToast;
-
-  /// No description provided for @draftSavedToast.
-  ///
-  /// In en, this message translates to:
-  /// **'Saved as draft'**
-  String get draftSavedToast;
-
-  /// No description provided for @articleLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Article'**
-  String get articleLabel;
-
-  /// No description provided for @draftLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Draft'**
-  String get draftLabel;
 
   /// No description provided for @accountSection.
   ///
@@ -2415,12 +2403,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'What do you make of it?'**
   String get noteHint;
-
-  /// No description provided for @pagesLeft.
-  ///
-  /// In en, this message translates to:
-  /// **'{n, plural, =0{Last page} =1{1 page left} other{{n} pages left}}'**
-  String pagesLeft(int n);
 
   /// No description provided for @bookAuthor.
   ///
@@ -3022,6 +3004,18 @@ abstract class AppLocalizations {
   /// **'Nothing due today'**
   String get progressAllClear;
 
+  /// No description provided for @perfectDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Perfect day'**
+  String get perfectDay;
+
+  /// No description provided for @nextUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Next up'**
+  String get nextUp;
+
   /// No description provided for @analyticsTitle.
   ///
   /// In en, this message translates to:
@@ -3076,16 +3070,22 @@ abstract class AppLocalizations {
   /// **'Consistency'**
   String get analyticsConsistency;
 
+  /// No description provided for @analyticsPeriodToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get analyticsPeriodToday;
+
   /// No description provided for @analyticsPeriodWeek.
   ///
   /// In en, this message translates to:
-  /// **'7D'**
+  /// **'1W'**
   String get analyticsPeriodWeek;
 
   /// No description provided for @analyticsPeriodMonth.
   ///
   /// In en, this message translates to:
-  /// **'30D'**
+  /// **'1M'**
   String get analyticsPeriodMonth;
 
   /// No description provided for @analyticsPeriodYear.
@@ -3094,11 +3094,71 @@ abstract class AppLocalizations {
   /// **'1Y'**
   String get analyticsPeriodYear;
 
+  /// No description provided for @analyticsPeriodAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get analyticsPeriodAll;
+
   /// No description provided for @analyticsPeriodMax.
   ///
   /// In en, this message translates to:
   /// **'Max'**
   String get analyticsPeriodMax;
+
+  /// No description provided for @analyticsAllImpulses.
+  ///
+  /// In en, this message translates to:
+  /// **'All impulses'**
+  String get analyticsAllImpulses;
+
+  /// No description provided for @analyticsTrackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Track'**
+  String get analyticsTrackLabel;
+
+  /// No description provided for @analyticsAverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Average progress'**
+  String get analyticsAverage;
+
+  /// No description provided for @analyticsMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed'**
+  String get analyticsMissed;
+
+  /// No description provided for @proceed.
+  ///
+  /// In en, this message translates to:
+  /// **'Proceed'**
+  String get proceed;
+
+  /// No description provided for @editPastTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing a past day'**
+  String get editPastTitle;
+
+  /// No description provided for @editPastBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re changing a task in the past. Are you sure you want to proceed?'**
+  String get editPastBody;
+
+  /// No description provided for @editFutureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing a future day'**
+  String get editFutureTitle;
+
+  /// No description provided for @editFutureBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re changing a task in the future. Are you sure you want to proceed?'**
+  String get editFutureBody;
 
   /// No description provided for @analyticsComingSoon.
   ///
@@ -3118,11 +3178,101 @@ abstract class AppLocalizations {
   /// **'All reflexes today'**
   String get combinedProgressLabel;
 
+  /// No description provided for @cropTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop'**
+  String get cropTitle;
+
+  /// No description provided for @cropReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get cropReset;
+
+  /// No description provided for @cropFreeform.
+  ///
+  /// In en, this message translates to:
+  /// **'Free'**
+  String get cropFreeform;
+
+  /// No description provided for @cropSquare.
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get cropSquare;
+
   /// No description provided for @consistencyHeatmap.
   ///
   /// In en, this message translates to:
   /// **'Consistency'**
   String get consistencyHeatmap;
+
+  /// No description provided for @historyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get historyTitle;
+
+  /// No description provided for @historyJumpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump to date'**
+  String get historyJumpToDate;
+
+  /// No description provided for @textStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Text style'**
+  String get textStyle;
+
+  /// No description provided for @textSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get textSize;
+
+  /// No description provided for @resetSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get resetSize;
+
+  /// No description provided for @moveCheckedToBottom.
+  ///
+  /// In en, this message translates to:
+  /// **'Move ticked items to the bottom'**
+  String get moveCheckedToBottom;
+
+  /// No description provided for @backgroundForDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Background for dark mode'**
+  String get backgroundForDark;
+
+  /// No description provided for @backgroundForLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Background for light mode'**
+  String get backgroundForLight;
+
+  /// No description provided for @historyEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No task history yet.'**
+  String get historyEmpty;
+
+  /// No description provided for @historyNoTasksDay.
+  ///
+  /// In en, this message translates to:
+  /// **'No tasks scheduled this day.'**
+  String get historyNoTasksDay;
+
+  /// No description provided for @historyCompletedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} completed'**
+  String historyCompletedOf(int done, int total);
 
   /// No description provided for @rearrangeJournal.
   ///
@@ -3310,6 +3460,24 @@ abstract class AppLocalizations {
   /// **'Pick the days this runs on (none = every day).'**
   String get daysHint;
 
+  /// No description provided for @repeatOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'Once'**
+  String get repeatOnce;
+
+  /// No description provided for @repeatEveryday.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyday'**
+  String get repeatEveryday;
+
+  /// No description provided for @repeatOnceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A one-time task. Tick it off and it stays, done, until you delete it.'**
+  String get repeatOnceHint;
+
   /// No description provided for @addLink.
   ///
   /// In en, this message translates to:
@@ -3403,7 +3571,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutWelcomeBody.
   ///
   /// In en, this message translates to:
-  /// **'Your nodes live on Home. Tap the pencil to write one, it saves automatically. Long-press any node for quick actions.'**
+  /// **'Your notes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add and crop photos or set the text size. Long-press any note for quick actions.'**
   String get tutWelcomeBody;
 
   /// No description provided for @tutCardsTitle.
@@ -3415,7 +3583,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutCardsBody.
   ///
   /// In en, this message translates to:
-  /// **'Share a link from any app to Braim and a small popup saves it as a spark, no app switching. Duplicates merge automatically. Switch the feed between Open and Blocks views with the toggle.'**
+  /// **'Share a link from any app to Braim and it saves as a spark, no app switching. Add your own note under any spark, and duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.'**
   String get tutCardsBody;
 
   /// No description provided for @tutCortexTitle.
@@ -3427,8 +3595,44 @@ abstract class AppLocalizations {
   /// No description provided for @tutCortexBody.
   ///
   /// In en, this message translates to:
-  /// **'Folds for your nodes and sparks. Create one with the + button, give it a photo thumbnail, or file things from the long-press menu.'**
+  /// **'Folders for your notes and sparks. Make one with the plus button, give it a cover photo, and file things from the long-press menu.'**
   String get tutCortexBody;
+
+  /// No description provided for @tutReflexesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reflexes'**
+  String get tutReflexesTitle;
+
+  /// No description provided for @tutReflexesBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Build habits and projects as Reflexes. Add daily tasks or one-time ones, tick them off, and watch your streak grow. Tap the heatmap to open the full day-by-day history.'**
+  String get tutReflexesBody;
+
+  /// No description provided for @tutBooksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Books'**
+  String get tutBooksTitle;
+
+  /// No description provided for @tutBooksBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Write long pieces as Books made of chapters. Read them in a clean, scrollable reader with themes, adjustable font size, bookmarks and highlights.'**
+  String get tutBooksBody;
+
+  /// No description provided for @tutJournalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Journal'**
+  String get tutJournalTitle;
+
+  /// No description provided for @tutJournalBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep a daily diary from the Journal tab. Entries stay tied to their day and never show up in Home or search.'**
+  String get tutJournalBody;
 
   /// No description provided for @tutCryptTitle.
   ///
@@ -3439,7 +3643,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutCryptBody.
   ///
   /// In en, this message translates to:
-  /// **'A fold that only opens with your fingerprint or screen lock, its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and included readable in backups. Don\'t keep passwords or bank details in it.'**
+  /// **'A folder that only opens with your fingerprint or screen lock, and its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and are readable in backups. Do not keep passwords or bank details in it.'**
   String get tutCryptBody;
 
   /// No description provided for @tutTipsTitle.
@@ -3451,8 +3655,20 @@ abstract class AppLocalizations {
   /// No description provided for @tutTipsBody.
   ///
   /// In en, this message translates to:
-  /// **'Search finds nodes, sparks and folds in one place. Pin up to 10 favourites per feed. Archive hides without deleting; deleted items wait 30 days in Recently deleted. Back up everything from Settings, and there\'s a dark mode in there too.'**
+  /// **'Search finds notes, sparks and folders in one place. Pin up to 10 favourites per feed. Archive hides things without deleting, and deleted items wait 30 days in Recently deleted. Back up everything and switch to dark mode from Settings.'**
   String get tutTipsBody;
+
+  /// No description provided for @guideTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'How Braim works'**
+  String get guideTitle;
+
+  /// No description provided for @guideSettingsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get guideSettingsLabel;
 
   /// No description provided for @driveSection.
   ///

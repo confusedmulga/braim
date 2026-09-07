@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'storage_service.dart';
+
 /// Creates and restores full backups (data + images) as a single .zip.
 class BackupService {
   BackupService._();
@@ -85,7 +87,12 @@ class BackupService {
 
     final map = jsonDecode(dataJson) as Map<String, dynamic>;
     _rewritePaths(map, imagesDir.path);
-    await (await _dataFile()).writeAsString(jsonEncode(map));
+    // Land it through the normal atomic save (temp file, flush, rename) so a
+    // crash mid-restore can never leave a torn data file behind; the library
+    // being replaced rotates into .bak as usual. Parsing it first also means a
+    // malformed backup fails here, loudly, instead of after it overwrote the
+    // store.
+    await StorageService.instance.save(AppData.fromJson(map));
   }
 
   Future<void> restoreFromFile(String path) async {

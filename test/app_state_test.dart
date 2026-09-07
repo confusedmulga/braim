@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:braim/models/annotation.dart';
 import 'package:braim/models/book.dart';
@@ -10,6 +11,7 @@ import 'package:braim/models/note.dart';
 import 'package:braim/models/note_block.dart';
 import 'package:braim/models/space.dart';
 import 'package:braim/models/tweet_card.dart';
+import 'package:braim/services/db/db_store.dart';
 import 'package:braim/services/storage_service.dart';
 import 'package:braim/services/wiki_links.dart';
 import 'package:braim/state/app_state.dart';
@@ -39,9 +41,31 @@ void main() {
     } catch (_) {}
   });
 
+  // Every AppState a test creates, so teardown can flush its coalesced save
+  // and cancel its timer: a 400 ms flush left pending by one test used to land
+  // on disk in the middle of the next one and hand it a stale library.
+  final states = <AppState>[];
+  AppState newState({DbStore? dbStore}) {
+    final s = AppState(dbStore: dbStore);
+    states.add(s);
+    return s;
+  }
+
+  tearDown(() async {
+    for (final s in states) {
+      await s.flushNow();
+      s.dispose();
+    }
+    states.clear();
+  });
+
   setUp(() {
     // Fresh data file per test.
-    for (final name in ['keepy_data.json', 'keepy_data.bak']) {
+    for (final name in [
+      'keepy_data.json',
+      'keepy_data.bak',
+      'keepy_json_ahead',
+    ]) {
       final f = File('${root.path}/$name');
       if (f.existsSync()) f.deleteSync();
     }
@@ -51,10 +75,67 @@ void main() {
 
   Future<AppState> boot(AppData data) async {
     await StorageService.instance.save(data);
-    final state = AppState();
+    final state = newState();
     await state.init();
     return state;
   }
+
+  test('loadLegacyForImport tells a fresh install from an unreadable store',
+      () async {
+    final storage = StorageService.instance;
+    // No files at all: a fresh install.
+    expect(await storage.loadLegacyForImport(), isNull);
+    // A readable store comes back as data, even when the library is empty.
+    await storage.save(AppData.empty());
+    expect((await storage.loadLegacyForImport())!.notes, isEmpty);
+    // A store that exists but can't be parsed must throw, never read as empty:
+    // the importer would otherwise mark done and hide the library for good.
+    File('${root.path}/keepy_data.json').writeAsStringSync('{not json');
+    final bak = File('${root.path}/keepy_data.bak');
+    if (bak.existsSync()) bak.deleteSync();
+    await expectLater(storage.loadLegacyForImport(), throwsStateError);
+    // ...while the app's own loader still degrades to an empty library.
+    expect((await storage.load()).notes, isEmpty);
+  });
+
+  test(
+      'JSON-ahead flag: edits saved to JSON while the DB was down are folded '
+      'into the DB on the next launch instead of being read over', () async {
+    sqfliteFfiInit();
+    final dbPath = '${root.path}/json_ahead_test.db';
+    final dbFile = File(dbPath);
+    if (dbFile.existsSync()) dbFile.deleteSync();
+    await StorageService.instance.clearJsonAhead();
+
+    // Launch 1: the DB imports the library (note A) and is the live store.
+    await StorageService.instance
+        .save(AppData(notes: [Note(title: 'A')], spaces: [], cards: []));
+    final store1 = DbStore(factory: databaseFactoryFfi, path: dbPath);
+    final first = newState(dbStore: store1);
+    await first.init();
+    expect(first.notes.map((n) => n.title), ['A']);
+    await first.flushNow();
+    expect(await StorageService.instance.jsonAhead, isFalse);
+    await store1.close();
+
+    // Launch 2 (simulated) ran with the DB down: the app saved to JSON only,
+    // adding note B, and raised the flag.
+    final onDisk = await StorageService.instance.load();
+    onDisk.notes.add(Note(title: 'B'));
+    await StorageService.instance.save(onDisk);
+    await StorageService.instance.markJsonAhead();
+
+    // Launch 3: the DB is back. It must read the JSON (A + B), fold it into the
+    // DB and lower the flag, not read the stale DB (A only) over the edits.
+    final store3 = DbStore(factory: databaseFactoryFfi, path: dbPath);
+    final third = newState(dbStore: store3);
+    await third.init();
+    expect(third.notes.map((n) => n.title).toSet(), {'A', 'B'});
+    expect(await StorageService.instance.jsonAhead, isFalse);
+    final inDb = await store3.readAppData();
+    expect(inDb!.notes.map((n) => n.title).toSet(), {'A', 'B'});
+    await store3.close();
+  });
 
   test('feeds exclude archived, deleted and crypt items', () async {
     final state = await boot(AppData(
@@ -223,7 +304,7 @@ void main() {
     await withNote.markBackedUp();
     await withNote.flushNow(); // land the write before reloading from disk
     expect(withNote.backupOverdue, isFalse);
-    final reloaded = AppState();
+    final reloaded = newState();
     await reloaded.init();
     expect(reloaded.lastBackupAt, isNotNull);
     expect(reloaded.backupOverdue, isFalse);
@@ -339,28 +420,23 @@ void main() {
     expect(state.backupOverdue, isFalse);
   });
 
-  test('an article keeps its byline and saved state across a reload',
+  test('a per-note font scale and checked-to-bottom flag survive a reload',
       () async {
     final state = await boot(AppData(notes: [], spaces: [], cards: []));
     await state.upsertNote(Note(
-      title: 'On writing',
-      isArticle: true,
-      articleDraft: false,
-      articleSavedAt: DateTime(2026, 7, 20),
-      authorName: 'Kalpesh',
-      authorPhoto: 'https://example.com/p.jpg',
+      title: 'Big note',
+      fontScale: 1.3,
+      checkedToBottom: true,
     ));
     await state.flushNow();
 
     final back = (await StorageService.instance.load()).notes.single;
-    expect(back.isArticle, isTrue);
-    expect(back.articleDraft, isFalse);
-    expect(back.authorName, 'Kalpesh');
-    expect(back.authorPhoto, 'https://example.com/p.jpg');
-    expect(back.articleSavedAt, DateTime(2026, 7, 20));
+    expect(back.fontScale, 1.3);
+    expect(back.checkedToBottom, isTrue);
 
-    // A plain note stays a plain note.
-    expect(Note(title: 'note').isArticle, isFalse);
+    // Defaults stay put.
+    expect(Note(title: 'note').fontScale, 1.0);
+    expect(Note(title: 'note').checkedToBottom, isFalse);
   });
 
   test('a new book gets Contents, Introduction and Chapter I, hidden from feed',
@@ -541,7 +617,7 @@ void main() {
     expect(page.annotations.single.note, 'why it matters');
 
     // Reader prefs live on the settings doc; a fresh state reads them back.
-    final state2 = AppState();
+    final state2 = newState();
     await state2.init();
     expect(state2.readerFontScale, 1.3);
     expect(state2.readerTheme, 'paper');
@@ -582,7 +658,6 @@ void main() {
     expect(data.notes.any((n) => n.reminderAt != null), isTrue);
     expect(data.notes.any((n) => n.tags.isNotEmpty), isTrue);
     expect(data.notes.any((n) => n.journalDate != null), isTrue);
-    expect(data.notes.any((n) => n.isArticle), isTrue);
     expect(data.notes.any((n) => n.archived), isTrue);
     expect(data.notes.any((n) => n.deletedAt != null), isTrue);
 
@@ -764,23 +839,28 @@ void main() {
     expect(reThread.doneDays.contains('2026-08-10'), isFalse);
   });
 
-  test('reflexes: daily day is first, pinning persists and survives delete',
+  test('reflexes: the daily day appears only once it has tasks; pinning persists',
       () async {
     final state = await boot(AppData(notes: [], spaces: [], cards: []));
 
-    // The daily day always leads the reflex feed, and is pinned by default.
+    // A fresh library has no daily day — a project is the only reflex.
     await state.addImpulse(title: 'Fitness');
-    expect(state.reflexes.first.id, AppState.dailyDayId);
-    expect(state.reflexes.length, 2);
-    expect(state.pinnedReflexId, AppState.dailyDayId);
-    expect(state.isDailyDay(state.pinnedReflex.id), isTrue);
+    expect(state.reflexes.length, 1);
+    expect(state.reflexes.first.title, 'Fitness');
+    expect(state.reflexes.any((i) => i.id == AppState.dailyDayId), isFalse);
 
-    // Pin the project — it now leads the journal feed and persists.
+    // Adding a loose task creates the (grey) daily day as an ordinary reflex.
+    await state.addDailyTask('Water the plants');
+    expect(state.reflexes.any((i) => i.id == AppState.dailyDayId), isTrue);
+    expect(state.impulseById(AppState.dailyDayId)!.colorValue,
+        AppState.dailyDayColorValue);
+
+    // Pin the project — it leads the journal feed and persists.
     final fitness = state.reflexes.firstWhere((i) => i.title == 'Fitness');
     await state.setPinnedReflex(fitness.id);
     expect(state.pinnedReflex.title, 'Fitness');
     await state.flushNow();
-    final reloaded = AppState();
+    final reloaded = newState();
     await reloaded.init();
     expect(reloaded.pinnedReflexId, fitness.id);
 
@@ -818,21 +898,43 @@ void main() {
     expect(state.impulseById(imp.id)!.isComplete, isFalse);
   });
 
-  test('threads cannot be marked complete for a future day', () async {
+  test('threads can be ticked for past and future days', () async {
     final state = await boot(AppData(notes: [], spaces: [], cards: []));
     await state.addDailyTask('Wake up');
     final day = state.dailyDay;
     final t = day.threads.first;
-    final future = AppState.dayKeyFor(
-        DateTime.now().add(const Duration(days: 3)));
+    final future =
+        AppState.dayKeyFor(DateTime.now().add(const Duration(days: 3)));
+    final past =
+        AppState.dayKeyFor(DateTime.now().subtract(const Duration(days: 3)));
 
+    // Both far past and far future are now tickable (the UI guards them with a
+    // confirmation first; the state layer just records the day).
     await state.toggleThreadOn(day.id, t.id, future);
-    expect(state.dailyDay.threads.first.doneDays.contains(future), isFalse);
+    expect(state.dailyDay.threads.first.doneDays.contains(future), isTrue);
+    await state.toggleThreadOn(day.id, t.id, past);
+    expect(state.dailyDay.threads.first.doneDays.contains(past), isTrue);
 
-    // But today can be ticked.
+    // Today too, and unticking removes just that day.
     await state.toggleThreadOn(day.id, t.id, state.todayKey);
     expect(state.dailyDay.threads.first.doneDays.contains(state.todayKey),
         isTrue);
+    await state.toggleThreadOn(day.id, t.id, future);
+    expect(state.dailyDay.threads.first.doneDays.contains(future), isFalse);
+  });
+
+  test('far-edit guard: within 2 days is free, beyond needs a confirm once',
+      () async {
+    final state = await boot(AppData(notes: [], spaces: [], cards: []));
+    final twoAway =
+        AppState.dayKeyFor(DateTime.now().add(const Duration(days: 2)));
+    final threeAway =
+        AppState.dayKeyFor(DateTime.now().add(const Duration(days: 3)));
+
+    expect(state.farEditNeedsConfirm(twoAway), isFalse); // grace window
+    expect(state.farEditNeedsConfirm(threeAway), isTrue);
+    state.confirmFarEdit(threeAway);
+    expect(state.farEditNeedsConfirm(threeAway), isFalse); // remembered today
   });
 
   test('daily day mark-all, impulse colour and journal order persist',
@@ -855,7 +957,7 @@ void main() {
     expect(state.journalOrder, ['entries', 'tasks', 'card']);
 
     await state.flushNow();
-    final reloaded = AppState();
+    final reloaded = newState();
     await reloaded.init();
     expect(reloaded.journalOrder, ['entries', 'tasks', 'card']);
     expect(reloaded.impulseById(imp.id)!.colorValue, 0xFFB3E5FC);

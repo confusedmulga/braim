@@ -72,8 +72,15 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
   bool _creatingFolder = false;
   final _folderCtrl = TextEditingController();
 
-  /// A plain-text share (no link in it) is filed as a note instead of a card.
-  bool get _isNote => _url == null && (_text?.trim().isNotEmpty ?? false);
+  /// Any real text is filed as a note (defaulting to Home) — even when it has a
+  /// link inside it. Only a *bare* link (the whole share is just a URL) becomes
+  /// a spark. This keeps prose out of Sparks.
+  bool get _isNote {
+    final t = _text?.trim() ?? '';
+    if (t.isEmpty) return false;
+    return !RegExp(r'^https?://\S+$').hasMatch(t);
+  }
+
   bool get _hasContent => _url != null || (_text?.trim().isNotEmpty ?? false);
 
   @override
@@ -306,13 +313,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
             shrinkWrap: true,
             padding: EdgeInsets.zero,
             children: [
-              if (!_creatingFolder)
-                _option(
-                  icon: Icons.create_new_folder_outlined,
-                  label: context.t.newFolder,
-                  sub: context.t.createAndSave,
-                  onTap: () => setState(() => _creatingFolder = true),
-                ),
+              // The default destination leads: Home for notes, Sparks for links.
               _option(
                 icon: _isNote
                     ? Icons.sticky_note_2_outlined
@@ -322,6 +323,13 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
                 onTap: () =>
                     _saveTo(null, _isNote ? 'Home' : 'Sparks'),
               ),
+              if (!_creatingFolder)
+                _option(
+                  icon: Icons.create_new_folder_outlined,
+                  label: context.t.newFolder,
+                  sub: context.t.createAndSave,
+                  onTap: () => setState(() => _creatingFolder = true),
+                ),
               for (final s in _spaces)
                 _option(
                   icon: Icons.folder_rounded,

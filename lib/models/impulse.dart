@@ -68,6 +68,7 @@ class Thread {
     this.flag = TaskFlag.none,
     Set<String>? doneDays,
     Set<int>? days,
+    this.once = false,
     this.reminderMinutes,
     this.endMinutes,
     this.notify = false,
@@ -97,7 +98,13 @@ class Thread {
   Set<String> doneDays;
 
   /// The weekdays (1 = Mon … 7 = Sun) this thread runs on. Empty = every day.
+  /// Ignored when [once] is set.
   Set<int> days;
+
+  /// A one-time task: it never resets with the day. Ticking it marks it done
+  /// for good (like a checklist milestone) and it stays in the list, struck
+  /// through, until deleted. Mutually exclusive with weekday recurrence.
+  bool once;
 
   /// Minutes past midnight for the task's start time, plus an optional end time.
   /// Null means unscheduled.
@@ -126,6 +133,7 @@ class Thread {
         if (flag.isNotEmpty) 'flag': flag,
         if (doneDays.isNotEmpty) 'doneDays': (doneDays.toList()..sort()),
         if (days.isNotEmpty) 'days': (days.toList()..sort()),
+        if (once) 'once': true,
         if (reminderMinutes != null) 'reminderMinutes': reminderMinutes,
         if (endMinutes != null) 'endMinutes': endMinutes,
         if (notify) 'notify': true,
@@ -156,6 +164,7 @@ class Thread {
       days: ((json['days'] as List?) ?? const [])
           .map((e) => (e as num).toInt())
           .toSet(),
+      once: (json['once'] as bool?) ?? false,
       reminderMinutes: (json['reminderMinutes'] as num?)?.toInt(),
       endMinutes: (json['endMinutes'] as num?)?.toInt(),
       notify: (json['notify'] as bool?) ?? false,
@@ -400,9 +409,13 @@ class Impulse {
       threads.isNotEmpty && threads.every((t) => t.doneDays.contains(dayKey));
 
   /// Whether [t] counts as done on [dayKey] ('yyyy-MM-dd'). Daily and long-term
-  /// threads are per-day; a checklist thread is done for good.
-  bool threadDone(Thread t, String dayKey) =>
-      (isDaily || isLongTerm) ? t.doneDays.contains(dayKey) : t.doneDays.isNotEmpty;
+  /// threads are per-day; a checklist thread — or any one-time [Thread.once]
+  /// task — is done for good once ticked.
+  bool threadDone(Thread t, String dayKey) => t.once
+      ? t.doneDays.isNotEmpty
+      : (isDaily || isLongTerm)
+          ? t.doneDays.contains(dayKey)
+          : t.doneDays.isNotEmpty;
 
   int doneCount(String dayKey) =>
       threads.where((t) => threadDone(t, dayKey)).length;

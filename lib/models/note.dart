@@ -38,12 +38,62 @@ String richToPlain(String raw) {
 enum RichLineKind { plain, checkedItem, uncheckedItem, bullet, ordered }
 
 class RichLine {
-  const RichLine(this.text, this.kind);
+  const RichLine(
+    this.text,
+    this.kind, {
+    this.runs = const [],
+    this.header = 0,
+    this.quote = false,
+    this.indent = 0,
+    this.align,
+  });
   final String text;
   final RichLineKind kind;
 
+  /// The inline runs (styled fragments) making up this line. Empty for the
+  /// plain-only [richToLines] output; filled by [richToStyledLines] so a
+  /// read-only view can reproduce bold/italic/etc.
+  final List<RichRun> runs;
+
+  /// Heading level: 0 = body, 1 = H1, 2 = H2.
+  final int header;
+
+  /// A block quote line (indented, italic, with a left rule).
+  final bool quote;
+
+  /// Indent depth, 0–3.
+  final int indent;
+
+  /// Paragraph alignment: 'center' | 'right' | 'justify', or null for the
+  /// default left flow.
+  final String? align;
+
   bool get isCheckItem =>
       kind == RichLineKind.checkedItem || kind == RichLineKind.uncheckedItem;
+}
+
+/// One inline fragment of a [RichLine], carrying the inline marks Quill stores
+/// (bold, italic, …). [richToStyledLines] fills these so a saved note renders
+/// with the same formatting the editor showed.
+class RichRun {
+  const RichRun(
+    this.text, {
+    this.bold = false,
+    this.italic = false,
+    this.underline = false,
+    this.strike = false,
+    this.highlight = false,
+    this.link,
+  });
+  final String text;
+  final bool bold;
+  final bool italic;
+  final bool underline;
+  final bool strike;
+  final bool highlight;
+
+  /// An inline hyperlink URL (Quill's `link` attribute), if any.
+  final String? link;
 }
 
 RichLineKind _kindFromListValue(Object? v) {
@@ -110,6 +160,83 @@ List<RichLine> richToLines(String raw) {
   return [
     for (final l in trimmed.split('\n')) RichLine(l, RichLineKind.plain),
   ];
+}
+
+RichRun _runFromAttrs(Map a, String text) => RichRun(
+      text,
+      bold: a['bold'] == true,
+      italic: a['italic'] == true,
+      underline: a['underline'] == true,
+      strike: a['strike'] == true,
+      highlight: a['background'] != null,
+      link: a['link'] is String ? a['link'] as String : null,
+    );
+
+/// Splits a text block (plain string or Quill Delta JSON) into styled display
+/// lines. Unlike [richToLines], this keeps each line's inline runs (bold,
+/// italic, underline, strikethrough, highlight, links) and its block-level
+/// formatting (heading, quote, indent, alignment) so a read-only view can
+/// reproduce exactly what the editor showed. The line order/count matches
+/// [richToLines] so checkbox [lineIndex]es stay in sync.
+List<RichLine> richToStyledLines(String raw) {
+  final trimmed = raw.trim();
+  List<RichLine> plainFallback() => [
+        for (final l in trimmed.split('\n'))
+          RichLine(l, RichLineKind.plain, runs: [RichRun(l)]),
+      ];
+  if (trimmed.isEmpty) return const [];
+  if (!trimmed.startsWith('[')) return plainFallback();
+  dynamic decoded;
+  try {
+    decoded = jsonDecode(trimmed);
+  } catch (_) {
+    return plainFallback();
+  }
+  if (decoded is! List) return plainFallback();
+
+  final lines = <RichLine>[];
+  var runs = <RichRun>[];
+  for (final op in decoded) {
+    if (op is! Map || op['insert'] is! String) continue;
+    final s = op['insert'] as String;
+    final a = op['attributes'] is Map ? op['attributes'] as Map : const {};
+    // Inline marks ride on the text op; block marks ride on the op carrying
+    // the newline that ends the line.
+    final kind = _kindFromListValue(a['list']);
+    final header = a['header'] is num ? (a['header'] as num).toInt() : 0;
+    final quote = a['blockquote'] == true;
+    var indent = a['indent'] is num ? (a['indent'] as num).toInt() : 0;
+    indent = indent < 0 ? 0 : (indent > 3 ? 3 : indent);
+    final align = a['align'] is String ? a['align'] as String : null;
+    final parts = s.split('\n');
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].isNotEmpty) runs.add(_runFromAttrs(a, parts[i]));
+      if (i < parts.length - 1) {
+        lines.add(RichLine(
+          runs.map((r) => r.text).join(),
+          kind,
+          runs: List.of(runs),
+          header: header,
+          quote: quote,
+          indent: indent,
+          align: align,
+        ));
+        runs = <RichRun>[];
+      }
+    }
+  }
+  if (runs.isNotEmpty) {
+    lines.add(RichLine(runs.map((r) => r.text).join(), RichLineKind.plain,
+        runs: List.of(runs)));
+  }
+  // Drop the trailing empty paragraph Quill always terminates on (mirrors
+  // richToLines so line indexes line up).
+  if (lines.isNotEmpty &&
+      lines.last.kind == RichLineKind.plain &&
+      lines.last.text.isEmpty) {
+    lines.removeLast();
+  }
+  return lines;
 }
 
 /// Flips the checkbox state of the [lineIndex]-th line of a Quill Delta text
@@ -199,11 +326,9 @@ class Note {
     this.reminderAt,
     List<Annotation>? annotations,
     List<NoteSnapshot>? history,
-    this.isArticle = false,
-    this.articleDraft = true,
-    this.articleSavedAt,
-    this.authorName = '',
-    this.authorPhoto = '',
+    this.fontScale = 1.0,
+    this.checkedToBottom = false,
+    this.markdown = false,
     this.archived = false,
     this.pinned = false,
     this.deletedAt,
@@ -288,21 +413,26 @@ class Note {
 
   int get charCount => textPreview.length;
 
-  /// True when this note is a long-form article: it gets the article editor
-  /// (explicit Save, a byline) and opens read-only once saved.
-  bool isArticle;
+  /// A per-note text-size multiplier applied to the whole body (0.8–1.6), so a
+  /// single note can be set larger or smaller without changing the app default.
+  double fontScale;
 
-  /// An article stays a draft until the author presses Save; drafts reopen
-  /// straight into the editor, saved articles open in the reading view.
-  bool articleDraft;
+  /// When set, ticked checklist items sink to the bottom of their list in the
+  /// saved read view, keeping the unfinished ones on top.
+  bool checkedToBottom;
 
-  /// When the article was last saved (shown under the byline).
-  DateTime? articleSavedAt;
+  /// A GitHub-flavored Markdown node: its single text block holds raw markdown
+  /// (not a Quill Delta), edited as source and rendered with a GFM engine
+  /// rather than the handwriting-style rich view. Regular notes leave this off.
+  bool markdown;
 
-  /// Byline, snapshotted from the signed-in Google account at save time so
-  /// the article keeps its author even after a sign-out or account switch.
-  String authorName;
-  String authorPhoto;
+  /// The raw markdown source of a [markdown] node (its first text block), or ''.
+  String get markdownSource {
+    for (final b in blocks) {
+      if (b.isText) return b.text;
+    }
+    return '';
+  }
 
   /// Archived notes are hidden from the feed and live in the Archive.
   bool archived;
@@ -372,12 +502,9 @@ class Note {
           'annotations': annotations.map((a) => a.toJson()).toList(),
         if (history.isNotEmpty)
           'history': history.map((s) => s.toJson()).toList(),
-        if (isArticle) 'isArticle': isArticle,
-        if (isArticle) 'articleDraft': articleDraft,
-        if (articleSavedAt != null)
-          'articleSavedAt': articleSavedAt!.toIso8601String(),
-        if (authorName.isNotEmpty) 'authorName': authorName,
-        if (authorPhoto.isNotEmpty) 'authorPhoto': authorPhoto,
+        if (fontScale != 1.0) 'fontScale': fontScale,
+        if (checkedToBottom) 'checkedToBottom': checkedToBottom,
+        if (markdown) 'markdown': true,
         'archived': archived,
         'pinned': pinned,
         'deletedAt': deletedAt?.toIso8601String(),
@@ -411,12 +538,9 @@ class Note {
         history: ((json['history'] as List?) ?? [])
             .map((e) => NoteSnapshot.fromJson(e as Map<String, dynamic>))
             .toList(),
-        isArticle: (json['isArticle'] as bool?) ?? false,
-        articleDraft: (json['articleDraft'] as bool?) ?? true,
-        articleSavedAt:
-            DateTime.tryParse(json['articleSavedAt'] as String? ?? ''),
-        authorName: (json['authorName'] as String?) ?? '',
-        authorPhoto: (json['authorPhoto'] as String?) ?? '',
+        fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
+        checkedToBottom: (json['checkedToBottom'] as bool?) ?? false,
+        markdown: (json['markdown'] as bool?) ?? false,
         archived: (json['archived'] as bool?) ?? false,
         pinned: (json['pinned'] as bool?) ?? false,
         deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),

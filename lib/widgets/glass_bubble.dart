@@ -1,10 +1,13 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// A pill-shaped bubble wrapping a row of action icons (the editor top
-/// bars). Matches [GlassBubble]'s faint fill so the back bubble and the
-/// action cluster read as one aligned line of chrome.
+/// A pill-shaped bubble wrapping a row of action icons (the editor top bars).
+/// Uses the same frosted-glass recipe as the back button — a clipped backdrop
+/// blur over a translucent [AppPalette.whiteFill] — so the two read as one
+/// aligned line of chrome instead of a near-invisible outline.
 class BubblePill extends StatelessWidget {
   const BubblePill({super.key, required this.children, this.glassColor});
 
@@ -13,16 +16,35 @@ class BubblePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(22);
     return Center(
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: glassColor ?? const Color(0x14000000),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: AppPalette.cardOutline),
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.16),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: children),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: glassColor ?? AppPalette.whiteFill,
+                borderRadius: radius,
+                border: Border.all(color: AppPalette.cardOutline),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: children),
+            ),
+          ),
+        ),
       ),
     );
   }

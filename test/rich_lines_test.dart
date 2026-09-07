@@ -72,6 +72,88 @@ void main() {
     });
   });
 
+  group('richToStyledLines', () {
+    test('keeps inline marks a plain flatten would drop', () {
+      final raw = jsonEncode([
+        {'insert': 'Plain '},
+        {
+          'insert': 'bold',
+          'attributes': {'bold': true},
+        },
+        {'insert': ' and '},
+        {
+          'insert': 'italic',
+          'attributes': {'italic': true},
+        },
+        {'insert': '\n'},
+      ]);
+      final lines = richToStyledLines(raw);
+      expect(lines.length, 1);
+      expect(lines.single.text, 'Plain bold and italic');
+      final runs = lines.single.runs;
+      expect(runs.firstWhere((r) => r.text == 'bold').bold, isTrue);
+      expect(runs.firstWhere((r) => r.text == 'italic').italic, isTrue);
+      expect(runs.firstWhere((r) => r.text == 'Plain ').bold, isFalse);
+    });
+
+    test('recovers heading, quote, indent and alignment block formats', () {
+      final raw = jsonEncode([
+        {'insert': 'Title'},
+        {
+          'insert': '\n',
+          'attributes': {'header': 1},
+        },
+        {'insert': 'A quote'},
+        {
+          'insert': '\n',
+          'attributes': {'blockquote': true, 'align': 'center', 'indent': 2},
+        },
+      ]);
+      final lines = richToStyledLines(raw);
+      expect(lines[0].header, 1);
+      expect(lines[1].quote, isTrue);
+      expect(lines[1].align, 'center');
+      expect(lines[1].indent, 2);
+    });
+
+    test('a justified paragraph keeps its alignment', () {
+      final raw = jsonEncode([
+        {'insert': 'Justified body text that wraps.'},
+        {
+          'insert': '\n',
+          'attributes': {'align': 'justify'},
+        },
+      ]);
+      expect(richToStyledLines(raw).single.align, 'justify');
+    });
+
+    test('line order matches richToLines so checkbox indexes stay in sync', () {
+      final styled = richToStyledLines(delta());
+      final plain = richToLines(delta());
+      expect(styled.map((l) => l.text).toList(),
+          plain.map((l) => l.text).toList());
+      expect(styled.map((l) => l.kind).toList(),
+          plain.map((l) => l.kind).toList());
+    });
+
+    test('a bold word inside a checklist item keeps both marks', () {
+      final raw = jsonEncode([
+        {'insert': 'buy '},
+        {
+          'insert': 'milk',
+          'attributes': {'bold': true},
+        },
+        {
+          'insert': '\n',
+          'attributes': {'list': 'unchecked'},
+        },
+      ]);
+      final lines = richToStyledLines(raw);
+      expect(lines.single.kind, RichLineKind.uncheckedItem);
+      expect(lines.single.runs.firstWhere((r) => r.text == 'milk').bold, isTrue);
+    });
+  });
+
   group('toggleChecklistLine', () {
     test('flips unchecked to checked and back', () {
       final toggled = toggleChecklistLine(delta(), 1); // the "Milk" line

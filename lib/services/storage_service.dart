@@ -68,6 +68,15 @@ class StorageService {
     return dest;
   }
 
+  /// Writes raw image [bytes] (e.g. a freshly cropped image) into the app's
+  /// images folder and returns the new absolute path.
+  Future<String> saveImageBytes(List<int> bytes, {String ext = '.png'}) async {
+    final dir = await imagesDir;
+    final dest = '${dir.path}/${_uuid.v4()}$ext';
+    await File(dest).writeAsBytes(bytes);
+    return dest;
+  }
+
   Future<void> deleteImage(String path) async {
     try {
       final f = File(path);
@@ -86,6 +95,60 @@ class StorageService {
     return data ?? AppData.empty();
   }
 
+  /// The legacy JSON library for the one-time SQLite import. Unlike [load],
+  /// which always yields a library, this tells the importer apart the two
+  /// cases it must treat differently: null means there is no legacy store at
+  /// all (a fresh install, safe to mark the import done), while a throw means
+  /// a store exists but can't be read right now (the importer must NOT mark
+  /// done, or the still-intact library would sit hidden behind an empty DB).
+  Future<AppData?> loadLegacyForImport() async {
+    final main = await _dataFile;
+    final bak = await _bakFile;
+    if (!await main.exists() && !await bak.exists()) return null;
+    final data = await _tryLoad(main) ?? await _tryLoad(bak);
+    if (data == null) {
+      throw StateError('legacy store present but unreadable');
+    }
+    return data;
+  }
+
+  // ---- JSON-ahead flag -----------------------------------------------------
+
+  /// A flag file saying the JSON store holds edits the SQLite store doesn't:
+  /// raised whenever a save has to go to JSON because the DB wasn't the live
+  /// store that launch, lowered once a later launch folds the JSON back into
+  /// the DB. Without it, a launch on JSON followed by a launch on the DB would
+  /// silently read the stale DB over the JSON-only edits and then overwrite
+  /// the JSON with it at the next checkpoint.
+  Future<File> get _jsonAheadFile async {
+    final dir = await _docsDir;
+    return File('${dir.path}/keepy_json_ahead');
+  }
+
+  Future<bool> get jsonAhead async {
+    try {
+      return await (await _jsonAheadFile).exists();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> markJsonAhead() async {
+    try {
+      final f = await _jsonAheadFile;
+      if (!await f.exists()) await f.writeAsString('1', flush: true);
+    } catch (_) {
+      // Best effort: a missing flag only costs the safety net, never data.
+    }
+  }
+
+  Future<void> clearJsonAhead() async {
+    try {
+      final f = await _jsonAheadFile;
+      if (await f.exists()) await f.delete();
+    } catch (_) {}
+  }
+
   Future<AppData?> _tryLoad(File file) async {
     try {
       if (!await file.exists()) return null;
@@ -94,70 +157,7 @@ class StorageService {
       // Decode off the UI isolate: a large library shouldn't stall startup.
       final json =
           await Isolate.run(() => jsonDecode(raw) as Map<String, dynamic>);
-      return AppData(
-        notes: ((json['notes'] as List?) ?? [])
-            .map((e) => Note.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        spaces: ((json['spaces'] as List?) ?? [])
-            .map((e) => Space.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        cards: ((json['cards'] as List?) ?? [])
-            .map((e) => TweetCard.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        books: ((json['books'] as List?) ?? [])
-            .map((e) => Book.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        impulses: ((json['impulses'] as List?) ?? [])
-            .map((e) => Impulse.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        cardsCompact: (json['cardsCompact'] as bool?) ?? false,
-        darkMode: (json['darkMode'] as bool?) ?? false,
-        darkFollowSystem: (json['darkFollowSystem'] as bool?) ?? true,
-        noteBodyFont: (json['noteBodyFont'] as String?) ?? 'Caveat',
-        tutorialSeen: (json['tutorialSeen'] as bool?) ?? false,
-        lastBackupAt:
-            DateTime.tryParse(json['lastBackupAt'] as String? ?? ''),
-        backupReminderDismissedAt: DateTime.tryParse(
-            json['backupReminderDismissedAt'] as String? ?? ''),
-        driveAutoBackup: (json['driveAutoBackup'] as bool?) ?? false,
-        lastDriveBackupAt:
-            DateTime.tryParse(json['lastDriveBackupAt'] as String? ?? ''),
-        driveAccountEmail: json['driveAccountEmail'] as String?,
-        sortMode: (json['sortMode'] as String?) ?? 'recent',
-        feedWallpaper: (json['feedWallpaper'] as num?)?.toInt() ?? 0,
-        feedBackgroundPath: (json['feedBackgroundPath'] as String?) ?? '',
-        feedBackgroundLight: (json['feedBackgroundLight'] as String?) ?? '',
-        feedBackgroundDark: (json['feedBackgroundDark'] as String?) ?? '',
-        readerFontScale:
-            (json['readerFontScale'] as num?)?.toDouble() ?? 1.0,
-        readerFont: (json['readerFont'] as String?) ?? 'Lora',
-        readerTheme: (json['readerTheme'] as String?) ?? 'original',
-        journalMonthCovers:
-            ((json['journalMonthCovers'] as Map?) ?? const {})
-                .map((k, v) => MapEntry(k.toString(), v.toString())),
-        journalReminderOn: (json['journalReminderOn'] as bool?) ?? false,
-        journalReminderMinutes:
-            (json['journalReminderMinutes'] as num?)?.toInt() ?? 21 * 60,
-        pinnedReflexId:
-            (json['pinnedReflexId'] as String?) ?? '__daily_day__',
-        progressImpulseId:
-            (json['progressImpulseId'] as String?) ?? '__daily_day__',
-        journalPaneOpen: (json['journalPaneOpen'] as bool?) ?? false,
-        cortexPaneOpen: (json['cortexPaneOpen'] as bool?) ?? false,
-        progressShowAll: (json['progressShowAll'] as bool?) ?? false,
-        typingMillis: (json['typingMillis'] as num?)?.toInt() ?? 0,
-        journalOrder: (json['journalOrder'] as List?)
-            ?.map((e) => e.toString())
-            .toList(),
-        readerPositions: ((json['readerPositions'] as Map?) ?? const {})
-            .map((k, v) => MapEntry(k.toString(), (v as num).toDouble())),
-        readerBookmarks: ((json['readerBookmarks'] as Map?) ?? const {}).map(
-            (k, v) => MapEntry(
-                k.toString(),
-                ((v as List?) ?? const [])
-                    .map((e) => (e as num).toDouble())
-                    .toList())),
-      );
+      return AppData.fromJson(json);
     } catch (_) {
       return null;
     }
@@ -189,44 +189,7 @@ class StorageService {
     final file = await _dataFile;
     final bak = await _bakFile;
     // Build the plain map on this isolate (cheap); ship it across.
-    final json = {
-      'notes': data.notes.map((n) => n.toJson()).toList(),
-      'spaces': data.spaces.map((s) => s.toJson()).toList(),
-      'cards': data.cards.map((c) => c.toJson()).toList(),
-      'books': data.books.map((b) => b.toJson()).toList(),
-      'impulses': data.impulses.map((i) => i.toJson()).toList(),
-      'cardsCompact': data.cardsCompact,
-      'darkMode': data.darkMode,
-      'darkFollowSystem': data.darkFollowSystem,
-      'noteBodyFont': data.noteBodyFont,
-      'tutorialSeen': data.tutorialSeen,
-      'lastBackupAt': data.lastBackupAt?.toIso8601String(),
-      'backupReminderDismissedAt':
-          data.backupReminderDismissedAt?.toIso8601String(),
-      'driveAutoBackup': data.driveAutoBackup,
-      'lastDriveBackupAt': data.lastDriveBackupAt?.toIso8601String(),
-      'driveAccountEmail': data.driveAccountEmail,
-      'sortMode': data.sortMode,
-      'feedWallpaper': data.feedWallpaper,
-      'feedBackgroundPath': data.feedBackgroundPath,
-      'feedBackgroundLight': data.feedBackgroundLight,
-      'feedBackgroundDark': data.feedBackgroundDark,
-      'readerFontScale': data.readerFontScale,
-      'readerFont': data.readerFont,
-      'readerTheme': data.readerTheme,
-      'journalMonthCovers': data.journalMonthCovers,
-      'journalReminderOn': data.journalReminderOn,
-      'journalReminderMinutes': data.journalReminderMinutes,
-      'pinnedReflexId': data.pinnedReflexId,
-      'progressImpulseId': data.progressImpulseId,
-      'journalPaneOpen': data.journalPaneOpen,
-      'cortexPaneOpen': data.cortexPaneOpen,
-      'progressShowAll': data.progressShowAll,
-      'typingMillis': data.typingMillis,
-      'journalOrder': data.journalOrder,
-      'readerPositions': data.readerPositions,
-      'readerBookmarks': data.readerBookmarks,
-    };
+    final json = data.toJson();
     final filePath = file.path;
     final bakPath = bak.path;
     // A unique temp name so overlapping writers can never share a scratch file.
@@ -343,6 +306,130 @@ class AppData {
         readerPositions = readerPositions ?? {},
         readerBookmarks = readerBookmarks ?? {};
   factory AppData.empty() => AppData(notes: [], spaces: [], cards: []);
+
+  /// The full library as a JSON map: the five entity lists plus every app-level
+  /// setting. Single source of truth for both the JSON file and (later) the
+  /// SQLite store, so the two can never drift apart.
+  Map<String, dynamic> toJson() => {
+        'notes': notes.map((n) => n.toJson()).toList(),
+        'spaces': spaces.map((s) => s.toJson()).toList(),
+        'cards': cards.map((c) => c.toJson()).toList(),
+        'books': books.map((b) => b.toJson()).toList(),
+        'impulses': impulses.map((i) => i.toJson()).toList(),
+        ...settingsToJson(),
+      };
+
+  /// Just the non-entity settings (used by the SQLite `settings` table).
+  Map<String, dynamic> settingsToJson() => {
+        'cardsCompact': cardsCompact,
+        'darkMode': darkMode,
+        'darkFollowSystem': darkFollowSystem,
+        'noteBodyFont': noteBodyFont,
+        'tutorialSeen': tutorialSeen,
+        'lastBackupAt': lastBackupAt?.toIso8601String(),
+        'backupReminderDismissedAt':
+            backupReminderDismissedAt?.toIso8601String(),
+        'driveAutoBackup': driveAutoBackup,
+        'lastDriveBackupAt': lastDriveBackupAt?.toIso8601String(),
+        'driveAccountEmail': driveAccountEmail,
+        'sortMode': sortMode,
+        'feedWallpaper': feedWallpaper,
+        'feedBackgroundPath': feedBackgroundPath,
+        'feedBackgroundLight': feedBackgroundLight,
+        'feedBackgroundDark': feedBackgroundDark,
+        'readerFontScale': readerFontScale,
+        'readerFont': readerFont,
+        'readerTheme': readerTheme,
+        'journalMonthCovers': journalMonthCovers,
+        'journalReminderOn': journalReminderOn,
+        'journalReminderMinutes': journalReminderMinutes,
+        'pinnedReflexId': pinnedReflexId,
+        'progressImpulseId': progressImpulseId,
+        'journalPaneOpen': journalPaneOpen,
+        'cortexPaneOpen': cortexPaneOpen,
+        'progressShowAll': progressShowAll,
+        'typingMillis': typingMillis,
+        'journalOrder': journalOrder,
+        'readerPositions': readerPositions,
+        'readerBookmarks': readerBookmarks,
+      };
+
+  /// Rebuilds the library from a JSON map. Tolerant of missing keys (older
+  /// files) and of the entity lists being supplied separately (the SQLite
+  /// store passes decoded rows in via [notesOverride] etc.).
+  factory AppData.fromJson(
+    Map<String, dynamic> json, {
+    List<Note>? notesOverride,
+    List<Space>? spacesOverride,
+    List<TweetCard>? cardsOverride,
+    List<Book>? booksOverride,
+    List<Impulse>? impulsesOverride,
+  }) {
+    return AppData(
+      notes: notesOverride ??
+          ((json['notes'] as List?) ?? [])
+              .map((e) => Note.fromJson(e as Map<String, dynamic>))
+              .toList(),
+      spaces: spacesOverride ??
+          ((json['spaces'] as List?) ?? [])
+              .map((e) => Space.fromJson(e as Map<String, dynamic>))
+              .toList(),
+      cards: cardsOverride ??
+          ((json['cards'] as List?) ?? [])
+              .map((e) => TweetCard.fromJson(e as Map<String, dynamic>))
+              .toList(),
+      books: booksOverride ??
+          ((json['books'] as List?) ?? [])
+              .map((e) => Book.fromJson(e as Map<String, dynamic>))
+              .toList(),
+      impulses: impulsesOverride ??
+          ((json['impulses'] as List?) ?? [])
+              .map((e) => Impulse.fromJson(e as Map<String, dynamic>))
+              .toList(),
+      cardsCompact: (json['cardsCompact'] as bool?) ?? false,
+      darkMode: (json['darkMode'] as bool?) ?? false,
+      darkFollowSystem: (json['darkFollowSystem'] as bool?) ?? true,
+      noteBodyFont: (json['noteBodyFont'] as String?) ?? 'Caveat',
+      tutorialSeen: (json['tutorialSeen'] as bool?) ?? false,
+      lastBackupAt: DateTime.tryParse(json['lastBackupAt'] as String? ?? ''),
+      backupReminderDismissedAt: DateTime.tryParse(
+          json['backupReminderDismissedAt'] as String? ?? ''),
+      driveAutoBackup: (json['driveAutoBackup'] as bool?) ?? false,
+      lastDriveBackupAt:
+          DateTime.tryParse(json['lastDriveBackupAt'] as String? ?? ''),
+      driveAccountEmail: json['driveAccountEmail'] as String?,
+      sortMode: (json['sortMode'] as String?) ?? 'recent',
+      feedWallpaper: (json['feedWallpaper'] as num?)?.toInt() ?? 0,
+      feedBackgroundPath: (json['feedBackgroundPath'] as String?) ?? '',
+      feedBackgroundLight: (json['feedBackgroundLight'] as String?) ?? '',
+      feedBackgroundDark: (json['feedBackgroundDark'] as String?) ?? '',
+      readerFontScale: (json['readerFontScale'] as num?)?.toDouble() ?? 1.0,
+      readerFont: (json['readerFont'] as String?) ?? 'Lora',
+      readerTheme: (json['readerTheme'] as String?) ?? 'original',
+      journalMonthCovers: ((json['journalMonthCovers'] as Map?) ?? const {})
+          .map((k, v) => MapEntry(k.toString(), v.toString())),
+      journalReminderOn: (json['journalReminderOn'] as bool?) ?? false,
+      journalReminderMinutes:
+          (json['journalReminderMinutes'] as num?)?.toInt() ?? 21 * 60,
+      pinnedReflexId: (json['pinnedReflexId'] as String?) ?? '__daily_day__',
+      progressImpulseId:
+          (json['progressImpulseId'] as String?) ?? '__daily_day__',
+      journalPaneOpen: (json['journalPaneOpen'] as bool?) ?? false,
+      cortexPaneOpen: (json['cortexPaneOpen'] as bool?) ?? false,
+      progressShowAll: (json['progressShowAll'] as bool?) ?? false,
+      typingMillis: (json['typingMillis'] as num?)?.toInt() ?? 0,
+      journalOrder:
+          (json['journalOrder'] as List?)?.map((e) => e.toString()).toList(),
+      readerPositions: ((json['readerPositions'] as Map?) ?? const {})
+          .map((k, v) => MapEntry(k.toString(), (v as num).toDouble())),
+      readerBookmarks: ((json['readerBookmarks'] as Map?) ?? const {}).map(
+          (k, v) => MapEntry(
+              k.toString(),
+              ((v as List?) ?? const [])
+                  .map((e) => (e as num).toDouble())
+                  .toList())),
+    );
+  }
 
   final List<Note> notes;
   final List<Space> spaces;

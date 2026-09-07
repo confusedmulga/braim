@@ -20,6 +20,7 @@ import '../widgets/text_prompt.dart';
 import 'book_find_replace_screen.dart';
 import 'book_read_screen.dart';
 import 'chapter_history_screen.dart';
+import 'crop_screen.dart';
 import 'note_editor_screen.dart';
 
 /// Prompts for a book title and creates it (with its default pages).
@@ -1439,8 +1440,10 @@ Future<void> _bookMenu(BuildContext context, Book book) async {
       }
     case 'cover':
       final path = await ImageService.pickSingle();
-      if (path != null) {
-        book.coverPath = path;
+      if (path != null && context.mounted) {
+        // Let the user crop to the book-cover shape (2:3) before it's set.
+        final cropped = await cropImageFile(context, path, aspectRatio: 2 / 3);
+        book.coverPath = cropped ?? path;
         await state.updateBook(book);
       }
     case 'delete':
