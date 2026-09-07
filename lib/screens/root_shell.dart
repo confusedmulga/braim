@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
@@ -12,6 +14,7 @@ import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_button.dart';
+import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/island_nav.dart';
@@ -27,6 +30,7 @@ import 'daily_day_screen.dart';
 import 'home_screen.dart';
 import 'journal_screen.dart';
 import 'journal_year_screen.dart';
+import 'markdown_note_screen.dart';
 import 'note_editor_screen.dart';
 import 'pomodoro_screen.dart';
 import 'recently_deleted_screen.dart';
@@ -136,10 +140,10 @@ class _RootShellState extends State<RootShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
-    // The share popup writes to the data file from its own engine; re-read on
-    // resume so links saved while we were backgrounded show up.
+    // The share popup (its own engine) drops shares into the inbox; pick them
+    // up on resume so links saved while we were backgrounded show up.
     if (state == AppLifecycleState.resumed) {
-      context.read<AppState>().init();
+      context.read<AppState>().resume();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       // Backgrounding: make sure coalesced edits reach disk.
@@ -171,6 +175,7 @@ class _RootShellState extends State<RootShell>
     // Non-link text and any images collapse into a single new note.
     final imagePaths = <String>[];
     final textParts = <String>[];
+    var addedDoc = false;
     for (final f in files) {
       if (f.type == SharedMediaType.image) {
         try {
@@ -180,24 +185,56 @@ class _RootShellState extends State<RootShell>
         }
         continue;
       }
-      final match = RegExp(r'https?://\S+').firstMatch(f.path);
-      if (match != null) {
-        await state.addCardFromUrl(match.group(0)!);
+      // A shared document (a Markdown or plain-text file) becomes a home note.
+      // receive_sharing_intent hands us a real cached path for file shares and
+      // the display-name extension isn't guaranteed, so probe f.path as a file
+      // and parse its contents as Markdown rather than trusting the suffix.
+      File? doc;
+      try {
+        final file = File(f.path);
+        if (await file.exists()) doc = file;
+      } catch (_) {
+        doc = null;
+      }
+      if (doc != null) {
+        try {
+          final content = await doc.readAsString();
+          if (content.trim().isNotEmpty) {
+            // A shared document keeps its raw markdown as a full GitHub-style
+            // Markdown node, rather than being flattened into a rich note.
+            await state.addMarkdownNode(content);
+            addedDoc = true;
+          }
+        } catch (_) {
+          // A binary file we can't read as text: nothing to import.
+        }
+        continue; // f.path was a file — handled (or skipped), not share text.
+      }
+      // Only a bare link (the whole share is one URL) becomes a spark; a
+      // document that merely contains a link stays a note. Mirrors the share
+      // popup's note-vs-spark rule.
+      final trimmed = f.path.trim();
+      if (RegExp(r'^https?://\S+$').hasMatch(trimmed)) {
+        await state.addCardFromUrl(trimmed);
         addedCard = true;
-      } else if (f.path.trim().isNotEmpty) {
-        textParts.add(f.path.trim());
+      } else if (trimmed.isNotEmpty) {
+        textParts.add(trimmed);
       }
     }
-    final addedNote = imagePaths.isNotEmpty || textParts.isNotEmpty;
+    final text = textParts.isEmpty ? null : textParts.join('\n\n');
+    final addedNote = imagePaths.isNotEmpty || text != null;
     if (addedNote) {
-      await state.addSharedNote(
-        text: textParts.isEmpty ? null : textParts.join('\n\n'),
-        imagePaths: imagePaths,
-      );
+      if (imagePaths.isEmpty && text != null) {
+        // Pure shared text: parse as Markdown so formatting renders instead of
+        // its raw symbols (a no-op for plain text).
+        await state.addSharedMarkdown(text);
+      } else {
+        await state.addSharedNote(text: text, imagePaths: imagePaths);
+      }
     }
     if (!mounted) return;
     // A shared note wins the focus; otherwise land on the new card.
-    if (addedNote) {
+    if (addedNote || addedDoc) {
       _selectTab(0);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.t.savedToNotes)),
@@ -343,62 +380,142 @@ class _RootShellState extends State<RootShell>
     setState(() => _query = '');
   }
 
-  /// Long-pressing the Home pencil offers the two things you can write: a
-  /// quick Note or a long-form Article. The sheet pops up right above the
-  /// button it came from.
+  /// Long-pressing the Home pencil grows a small menu upward out of the button
+  /// — new Markdown node, import a file, or a plain new node. Uses the same
+  /// frosted-glass surface as the pencil so the chrome stays consistent.
   Future<void> _showCreateMenu(
       BuildContext anchorContext, VoidCallback openNote) async {
     final box = anchorContext.findRenderObject() as RenderBox?;
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (box == null || overlay == null) return;
-    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    const menuHeight = 116.0;
-    final choice = await showMenu<String>(
+    final anchor = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
+
+    final choice = await showGeneralDialog<String>(
       context: context,
-      // Softly rounded like the nav island it pops out of.
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(26))),
-      clipBehavior: Clip.antiAlias,
-      // left > right, so the menu's right edge lines up with the pencil's.
-      position: RelativeRect.fromLTRB(
-        topLeft.dx,
-        topLeft.dy - menuHeight - 10,
-        overlay.size.width - topLeft.dx - box.size.width,
-        overlay.size.height - topLeft.dy,
-      ),
-      items: [
-        PopupMenuItem(
-          value: 'note',
-          child: Row(children: [
-            Icon(Icons.edit_outlined, color: AppPalette.inkSecondary),
-            const SizedBox(width: 12),
-            Text(context.t.createNote),
-          ]),
-        ),
-        PopupMenuItem(
-          value: 'article',
-          child: Row(children: [
-            Icon(Icons.article_outlined, color: AppPalette.inkSecondary),
-            const SizedBox(width: 12),
-            Text(context.t.createArticle),
-          ]),
-        ),
-      ],
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black.withValues(alpha: 0.05),
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (ctx, _, _) {
+        Widget item(String value, IconData icon, String label) => InkWell(
+              onTap: () => Navigator.pop(ctx, value),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(icon, size: 22, color: AppPalette.inkPrimary),
+                  const SizedBox(width: 14),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppPalette.inkPrimary)),
+                ]),
+              ),
+            );
+        return Stack(children: [
+          Positioned(
+            // Right edge lines up with the pencil; bottom sits just above it.
+            right: overlay.size.width - anchor.right,
+            bottom: overlay.size.height - anchor.top + 10,
+            child: FrostedSurface(
+              borderRadius: 24,
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    item('markdown', Icons.data_object_rounded,
+                        context.t.newMarkdown),
+                    item('import', Icons.upload_file_rounded,
+                        context.t.importFile),
+                    item('note', Icons.edit_outlined, context.t.newNote),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ]);
+      },
+      transitionBuilder: (ctx, anim, _, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          // Grow out of the pencil's corner (bottom-right), expanding upward.
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.6, end: 1.0).animate(curved),
+            alignment: Alignment.bottomRight,
+            child: child,
+          ),
+        );
+      },
     );
     if (!mounted) return;
-    if (choice == 'note') {
-      openNote();
-    } else if (choice == 'article') {
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) =>
-            NoteEditorScreen(note: Note(isArticle: true), isNew: true),
-      ));
+    switch (choice) {
+      case 'markdown':
+        _newMarkdown();
+      case 'import':
+        await _importFile();
+      case 'note':
+        openNote();
     }
   }
 
-  /// The journal pencil menu: a bottom-up sheet to add a daily-day task, a new
-  /// reflex, or a journal entry for the selected day.
+  /// Opens a blank Markdown node in its source editor. It only persists once
+  /// it has content, so backing out of an empty one leaves nothing behind.
+  void _newMarkdown() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) =>
+          MarkdownNoteScreen(note: Note(markdown: true), isNew: true),
+    ));
+  }
+
+  /// Picks a `.md`/`.txt` file and imports it as a Markdown node, keeping the
+  /// raw markdown as-is, then opens the rendered result.
+  Future<void> _importFile() async {
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['md', 'markdown', 'txt', 'text'],
+      );
+    } catch (_) {
+      return;
+    }
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.first.path;
+    if (path == null) return;
+    String content;
+    try {
+      content = await File(path).readAsString();
+    } catch (_) {
+      return; // Not a readable text file.
+    }
+    if (content.trim().isEmpty || !mounted) return;
+    final note = await context.read<AppState>().addMarkdownNode(content);
+    if (!mounted) return;
+    _selectTab(0);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => MarkdownNoteScreen(note: note),
+    ));
+  }
+
+  /// Opens a fresh journal entry for [day] (defaults to the journal's selected
+  /// day). The plain tap on the journal pencil, and a double-tap on a day.
+  void _openNewJournalEntry([DateTime? day]) {
+    final date =
+        day ?? _journalKey.currentState?.selectedDate ?? DateTime.now();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => NoteEditorScreen(
+        note: Note(journalDate: AppState.journalKey(date)),
+        isNew: true,
+      ),
+    ));
+  }
+
+  /// The journal pencil menu (long-press): add a daily-day task, a new reflex,
+  /// or a journal entry for the selected day.
   void _showJournalCompose() {
     final date = _journalKey.currentState?.selectedDate ?? DateTime.now();
     final state = context.read<AppState>();
@@ -443,12 +560,7 @@ class _RootShellState extends State<RootShell>
                   context.t.composeEntry,
                   () {
                     Navigator.pop(sheetCtx);
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => NoteEditorScreen(
-                        note: Note(journalDate: AppState.journalKey(date)),
-                        isNew: true,
-                      ),
-                    ));
+                    _openNewJournalEntry(date);
                   },
                 ),
               ],
@@ -580,11 +692,13 @@ class _RootShellState extends State<RootShell>
     } else if (_index == 3) {
       // The pencil opens a bottom-up menu: a daily-day task, a new reflex, or
       // a journal entry for the day.
+      // Tap writes a new journal entry; long-press opens the compose menu.
       button = BubbleButton(
         key: const ValueKey('fab-journal'),
         icon: Icons.edit_rounded,
         tooltip: context.t.add,
-        onTap: _showJournalCompose,
+        onTap: () => _openNewJournalEntry(),
+        onLongPress: _showJournalCompose,
       );
     } else {
       button = BubbleButton(

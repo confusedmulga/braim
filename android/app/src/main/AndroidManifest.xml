@@ -45,6 +45,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <!-- Accept a shared Markdown file (saved as a new home note). Its
+                 own MIME keeps it distinct from the text/plain link popup. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/markdown" />
+            </intent-filter>
         </activity>
         <!-- Routes the focus media notification's play/pause button to the
              MediaSession. -->
@@ -70,7 +77,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/*" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
         <!-- flutter_local_notifications: fire scheduled reminders and reschedule

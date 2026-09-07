@@ -10,8 +10,9 @@ on the operator's device. No account is issued. No ground station is contacted.
 All data remains on board.
 
 Flutter package `braim`. Android application id and namespace `com.solo.braim`.
-The on-device data file is named `keepy_data.json`, retained for backward
-compatibility with earlier equipment.
+On-device data is held in a local SQLite database (`braim.db`). The earlier
+single-file store, `keepy_data.json`, is retained as the backup and export
+format and as a one-time import source, and is never deleted.
 
 ## ADVISORY CONVENTIONS
 
@@ -45,7 +46,9 @@ Settings, Archive, Recently Deleted, the Journal year view, the Reflex
 trackers, the Pomodoro timer, and any folder.
 
 1-4. A search field and a sort control are fitted across the top of the feed
-stations. Search filters notes, cards, and folders as characters are entered.
+stations. Search filters notes, cards, and folders as characters are entered;
+notes and cards are ranked by relevance, each word matches from its start, and
+accents are ignored.
 Sort orders the feed by recently added (default), oldest first, alphabetical
 A to Z, or alphabetical Z to A.
 
@@ -60,10 +63,17 @@ of text. Text supports Heading, Sub-heading, and Body sizes, plus bold, italic,
 underline, and highlight, applied from a toolbar that targets the focused line.
 Notes also carry tappable checklists and an optional colour tag. The first image
 in a note becomes its feed thumbnail, with the folder name overlaid in black or
-white according to contrast.
+white according to contrast. Images added to a note open in a built-in cropper
+before they are saved; back out of the cropper to keep the original.
 
-Press the pencil button to open a new note. Hold the pencil button to choose
-between a quick **Note** and a long-form **Article**.
+Notes come in two kinds. The **rich note** described above uses the handwriting
+face and a formatting toolbar. A **Markdown document** instead renders
+GitHub-flavored Markdown for reading and switches to a monospace source editor,
+with a live preview, for writing. Any note may be shared out as a `.md` file, and
+a `.md` or `.txt` file shared into Braim is saved as a note.
+
+Press the pencil button to open a new rich note. Hold it for a short menu: a new
+**Markdown document**, **import** a `.md` or `.txt` file, or a plain new note.
 
 ### 2-2. CARDS (Links and Tweets)
 
@@ -80,8 +90,8 @@ in its folder.
 ### 2-3. NARRATIVE (Books)
 
 A shelf of long-form books the operator is writing, with running totals of
-books, pages, and words. Each book holds chapters and pages, a cover, and a
-choice of reading typefaces (EB Garamond, Merriweather, Lora). Fitted functions
+books, pages, and words. Each book holds chapters and pages, a cover cropped to
+shape, and a choice of reading typefaces (EB Garamond, Merriweather, Lora). Fitted functions
 include find and replace across the book, chapter history, a distraction-free
 reader view, and export to **PDF**, **Markdown**, or **ePub** through the share
 sheet.
@@ -123,7 +133,9 @@ operates in one of three modes:
 
 Threads carry a priority flag (important, best, or optional). Reflexes may be
 filtered by state (active, paused, done, archived) and by category, and an
-analytics view reports progress over time.
+analytics view reports progress over time. A consistency heatmap on each reflex
+opens a month-by-month history: every day with scheduled threads is shaded by
+how many were completed, and tapping a day shows that day's tally.
 
 ### 3-2. POMODORO (Focus Timer)
 
@@ -227,27 +239,41 @@ fingerprints) is given in [docs/google_drive_setup.md](docs/google_drive_setup.m
 lib/
   l10n/          localized strings (app_en.arb) and generated bindings
   models/        Note, NoteBlock, Space, TweetCard, Book, Impulse, Annotation
-  services/      storage, image picker, link preview, article extractor,
-                 book export (PDF/Markdown/ePub), Drive backup, notifications,
-                 Do Not Disturb, focus media, seed data, wiki links
+  services/      SQLite store and one-time JSON importer (services/db), JSON
+                 storage and export, note to/from Markdown, image picker, link
+                 preview, article extractor, book export (PDF/Markdown/ePub),
+                 Drive backup, notifications, Do Not Disturb, focus media, seed
+                 data, wiki links
   state/         AppState (ChangeNotifier) and the Pomodoro controller
   theme/         palette, note colours, and ThemeData
   widgets/       navigation island, top bar, search, note/card/folder tiles,
-                 frosted chrome, sheets, and the open/close morph
+                 Markdown view, frosted chrome, sheets, and the open/close morph
   screens/       root shell, home, cards, books, journal, cortex, folder detail,
-                 note and card editors, reflexes, pomodoro, archive, deleted,
-                 settings
+                 rich and Markdown note editors, card editor, image cropper,
+                 reflexes, reflex history, pomodoro, archive, deleted, settings
 ```
 
 5-1. State is provided by `provider` through a single `AppState`
 `ChangeNotifier`.
 
-5-2. Persistence writes metadata to `keepy_data.json` in the application
-documents directory, using an atomic temp, backup, rename sequence with a `.bak`
-fallback on load. Picked images are copied into an `images/` subfolder and
-referenced by path. Writes are debounced and run off the main isolate.
+5-2. The primary on-device store is a local **SQLite** database (`sqflite`),
+`braim.db`, in the application documents directory. The full library is loaded
+into memory at startup, and feeds, sorting, and backlinks are served from memory.
+Each save writes only the changed rows (a dirty-diff flush), debounced and run
+off the main isolate. Picked images are stored as files in an `images/` subfolder
+and referenced by path, never held in the database.
 
-5-3. Label contrast uses `palette_generator` to find a thumbnail's dominant
+5-3. On first launch after upgrading, the earlier `keepy_data.json` store is read
+once and imported into the database, verified by row count, and never deleted. If
+the import or the database ever fails, the application falls back to the JSON
+store, so no data is lost. The JSON format also remains the backup and export
+artifact, so existing backups restore unchanged. Full detail is in
+[docs/sqlite-migration-plan.md](docs/sqlite-migration-plan.md).
+
+5-4. Full-text search is backed by an FTS5 index, ranked and accent-insensitive,
+falling back to an in-memory filter where FTS5 is unavailable.
+
+5-5. Label contrast uses `palette_generator` to find a thumbnail's dominant
 colour. A luminance above 0.5 gives black text, otherwise white, cached per
 image.
 

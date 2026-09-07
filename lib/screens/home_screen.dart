@@ -11,8 +11,10 @@ import '../theme/app_theme.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/move_to_space_sheet.dart';
 import '../widgets/glass.dart';
+import '../widgets/note_background.dart';
 import '../widgets/note_card.dart';
 import '../widgets/quick_actions_menu.dart';
+import 'markdown_note_screen.dart';
 import 'note_editor_screen.dart';
 import 'settings_screen.dart';
 
@@ -49,20 +51,55 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---- Long-press quick actions ------------------------------------------
 
   Future<void> _showActions(Note n) async {
-    final action = await showQuickActions(context);
+    final action = await showQuickActions(context, pinned: n.pinned);
     if (action == null || !mounted) return;
     switch (action) {
       case QuickAction.move:
         await _moveOne(n);
-      case QuickAction.archive:
-        await _archiveOne(n);
       case QuickAction.select:
         _enterSelection(n);
+      case QuickAction.pin:
+        await _pinOne(n);
+      case QuickAction.theme:
+        await _pickTheme(n);
+      case QuickAction.archive:
+        await _archiveOne(n);
       case QuickAction.delete:
         if (await confirmDeleteItems(context, 1) && mounted) {
           await _deleteOne(n);
         }
     }
+  }
+
+  Future<void> _pinOne(Note n) async {
+    final state = context.read<AppState>();
+    if (n.pinned) {
+      await state.setNotePinned(n.id, false);
+      return;
+    }
+    final ok = await state.setNotePinned(n.id, true);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.pinLimitReached(kMaxPins))),
+      );
+    }
+  }
+
+  Future<void> _pickTheme(Note n) async {
+    final state = context.read<AppState>();
+    await showNoteStylePicker(
+      context,
+      currentColor: n.colorValue,
+      currentBackground: n.backgroundAsset,
+      onColor: (value) {
+        n.colorValue = value;
+        state.upsertNote(n);
+      },
+      onBackground: (value) {
+        n.backgroundAsset = value;
+        state.upsertNote(n);
+      },
+    );
   }
 
   Future<void> _moveOne(Note n) async {
@@ -80,6 +117,18 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<AppState>().bulkDeleteNotes({n.id});
 
   // ---- Multi-select bulk actions -----------------------------------------
+
+  Future<void> _bulkPin() async {
+    final state = context.read<AppState>();
+    final result = await state.bulkPinNotesLimited(_selected.toSet());
+    if (!mounted) return;
+    _exitSelection();
+    if (result.skipped > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.pinLimitReached(kMaxPins))),
+      );
+    }
+  }
 
   Future<void> _bulkArchive() async {
     await context.read<AppState>().bulkArchiveNotes(_selected.toSet(), true);
@@ -161,7 +210,13 @@ class _HomeScreenState extends State<HomeScreen> {
               14, showBackupBanner ? 8 : 12, 14, 150),
           // Lazy masonry: builds only visible tiles and packs each new tile
           // into the currently-shortest column (true height balancing).
+          // SliverMasonryGrid reuses each realised child's cached column on a
+          // reorder, which leaves stale gaps. Re-key only when items actually
+          // reorder — a pin/unpin or a sort change — so a fresh layout kicks in
+          // there, while add/delete/edit keep their scroll position.
           sliver: SliverMasonryGrid.count(
+            key: ValueKey('feed|${state.sortMode.name}|'
+                '${notes.where((n) => n.pinned).map((n) => n.id).join(',')}'),
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
@@ -170,7 +225,9 @@ class _HomeScreenState extends State<HomeScreen> {
               final n = notes[i];
               return GlassMorph(
                 key: ValueKey(n.id),
-                openBuilder: (_) => NoteEditorScreen(note: n, isNew: false),
+                openBuilder: (_) => n.markdown
+                    ? MarkdownNoteScreen(note: n)
+                    : NoteEditorScreen(note: n, isNew: false),
                 closedBuilder: (context, open) => NoteCard(
                   note: n,
                   space: state.spaceById(n.spaceId),
@@ -199,6 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SelectionActionBar(
               count: _selected.length,
               onMove: _bulkMove,
+              onPin: _bulkPin,
               onArchive: _bulkArchive,
               onDelete: _bulkDelete,
               onClose: _exitSelection,

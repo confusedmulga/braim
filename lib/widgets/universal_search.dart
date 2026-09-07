@@ -8,40 +8,67 @@ import '../models/tweet_card.dart';
 import '../screens/card_detail_screen.dart';
 import '../screens/note_editor_screen.dart';
 import '../screens/space_detail_screen.dart';
+import '../services/db/db_store.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
 
 /// Universal search results: notes, cards and cortex folders in one list.
 /// Crypt content is intentionally invisible here — it stays secret.
-class UniversalSearchResults extends StatelessWidget {
+///
+/// Notes and cards come from the SQLite full-text index when it's available
+/// (ranked best-first; each word matches from its start; accents ignored),
+/// merged with the plain substring filter so nothing the index doesn't cover
+/// (a folder-name match, a note typed a second ago) is ever missed.
+class UniversalSearchResults extends StatefulWidget {
   const UniversalSearchResults({super.key, required this.query});
 
   final String query;
 
   @override
+  State<UniversalSearchResults> createState() => _UniversalSearchResultsState();
+}
+
+class _UniversalSearchResultsState extends State<UniversalSearchResults> {
+  /// Ranked index hits for [_hitsFor]; null when the index is unavailable.
+  List<SearchHit>? _hits;
+  String _hitsFor = '';
+  int _run = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _search();
+  }
+
+  @override
+  void didUpdateWidget(UniversalSearchResults old) {
+    super.didUpdateWidget(old);
+    if (old.query != widget.query) _search();
+  }
+
+  Future<void> _search() async {
+    final q = widget.query.toLowerCase().trim();
+    final run = ++_run;
+    final hits =
+        q.isEmpty ? null : await context.read<AppState>().searchIndex(q);
+    if (!mounted || run != _run) return;
+    setState(() {
+      _hits = hits;
+      _hitsFor = q;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final q = query.toLowerCase().trim();
+    final q = widget.query.toLowerCase().trim();
     // A "#tag" query matches on tags too (with or without the leading #).
     final qTag = q.replaceAll('#', '');
+    final hits = _hitsFor == q ? _hits : null;
 
     final spaces =
         state.spaces.where((s) => s.name.toLowerCase().contains(q)).toList();
-    final notes = state.notes.where((n) {
-      final space = state.spaceById(n.spaceId);
-      return n.title.toLowerCase().contains(q) ||
-          n.textPreview.toLowerCase().contains(q) ||
-          (qTag.isNotEmpty && n.tags.any((t) => t.contains(qTag))) ||
-          (space?.name.toLowerCase().contains(q) ?? false);
-    }).toList();
-    bool cardMatches(TweetCard c) {
-      return c.text.toLowerCase().contains(q) ||
-          c.noteTitle.toLowerCase().contains(q) ||
-          c.authorName.toLowerCase().contains(q) ||
-          c.authorHandle.toLowerCase().contains(q) ||
-          c.url.toLowerCase().contains(q);
-    }
 
     bool noteMatches(Note n) {
       final space = state.spaceById(n.spaceId);
@@ -51,9 +78,40 @@ class UniversalSearchResults extends StatelessWidget {
           (space?.name.toLowerCase().contains(q) ?? false);
     }
 
-    final cards = state.cards.where(cardMatches).toList();
-    final archivedNotes = state.archivedNotes.where(noteMatches).toList();
-    final archivedCards = state.archivedCards.where(cardMatches).toList();
+    bool cardMatches(TweetCard c) {
+      return c.text.toLowerCase().contains(q) ||
+          c.noteTitle.toLowerCase().contains(q) ||
+          c.authorName.toLowerCase().contains(q) ||
+          c.authorHandle.toLowerCase().contains(q) ||
+          c.url.toLowerCase().contains(q);
+    }
+
+    // Index hits first, in rank order, then whatever the substring filter
+    // finds that the index didn't. Only items already visible in [visible]
+    // can surface, so crypt and deleted content stay hidden.
+    List<T> merge<T>(List<T> visible, String kind, bool Function(T) matches,
+        String Function(T) idOf) {
+      if (hits == null) return visible.where(matches).toList();
+      final byId = {for (final v in visible) idOf(v): v};
+      final out = <T>[];
+      final seen = <String>{};
+      for (final h in hits) {
+        if (h.kind != kind) continue;
+        final v = byId[h.id];
+        if (v != null && seen.add(h.id)) out.add(v);
+      }
+      for (final v in visible) {
+        if (matches(v) && seen.add(idOf(v))) out.add(v);
+      }
+      return out;
+    }
+
+    final notes = merge(state.notes, 'note', noteMatches, (n) => n.id);
+    final cards = merge(state.cards, 'card', cardMatches, (c) => c.id);
+    final archivedNotes =
+        merge(state.archivedNotes, 'note', noteMatches, (n) => n.id);
+    final archivedCards =
+        merge(state.archivedCards, 'card', cardMatches, (c) => c.id);
     final archivedCount = archivedNotes.length + archivedCards.length;
 
     if (spaces.isEmpty &&

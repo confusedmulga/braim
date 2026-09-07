@@ -14,10 +14,19 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import '../models/note_block.dart';
+import '../screens/crop_screen.dart';
 import '../services/image_service.dart';
 import '../services/link_preview_service.dart';
+import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+
+/// The highlighter's paint: a light background with a fixed dark ink so
+/// highlighted text stays legible in both light and dark themes (the default
+/// body ink flips with the theme, the highlight background does not). Shared by
+/// the editor toggle and the read-only view.
+const String kHighlightBg = '#FFE082';
+const String kHighlightInk = '#202124';
 
 /// A reusable rich-text + image block editor. It edits the [blocks] list in
 /// place; call [NoteBodyEditorState.sync] before persisting. The [activeController]
@@ -31,6 +40,7 @@ class NoteBodyEditor extends StatefulWidget {
     this.onRemoveImagePath,
     this.onLight = false,
     this.bodyFontFamily,
+    this.fontScale = 1.0,
     this.onBackspaceAtStart,
   });
 
@@ -49,6 +59,10 @@ class NoteBodyEditor extends StatefulWidget {
   /// in this family instead of the handwriting default, so the manuscript
   /// reads in the book's chosen face.
   final String? bodyFontFamily;
+
+  /// A per-note multiplier on every text size (body, headings, lists…), so a
+  /// note can be set larger or smaller as a whole.
+  final double fontScale;
 
   @override
   State<NoteBodyEditor> createState() => NoteBodyEditorState();
@@ -177,6 +191,14 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       return KeyEventResult.handled;
     }
 
+    // Right after another text block: merge this line up into it, so a blank
+    // line (e.g. one left behind by a removed image) erases on Backspace
+    // instead of getting stuck.
+    if (idx > 0 && _blocks[idx - 1].isText) {
+      _mergeTextBlocks(idx, focus: true);
+      return KeyEventResult.handled;
+    }
+
     // Empty first line: hand the cursor up to the title.
     final firstText = _blocks.indexWhere((x) => x.isText);
     if (idx == firstText &&
@@ -193,7 +215,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     final raw = b.text.trim();
     if (raw.startsWith('[')) {
       try {
-        doc = Document.fromJson(jsonDecode(raw) as List);
+        doc = Document.fromJson(_readableHighlights(jsonDecode(raw) as List));
       } catch (_) {
         doc = Document()..insert(0, raw);
       }
@@ -206,6 +228,28 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       document: doc,
       selection: const TextSelection.collapsed(offset: 0),
     );
+  }
+
+  /// Back-fills a readable dark ink onto highlighted runs saved before the
+  /// highlighter paired the two, so older notes aren't light-on-yellow in the
+  /// editor. Only touches runs that carry a background but no explicit colour.
+  List<dynamic> _readableHighlights(List<dynamic> ops) {
+    return [
+      for (final op in ops)
+        if (op is Map &&
+            op['attributes'] is Map &&
+            (op['attributes'] as Map)['background'] != null &&
+            (op['attributes'] as Map)['color'] == null)
+          {
+            ...op,
+            'attributes': {
+              ...(op['attributes'] as Map),
+              'color': kHighlightInk,
+            },
+          }
+        else
+          op,
+    ];
   }
 
   // ---- Mention autocomplete -------------------------------------------------
@@ -430,8 +474,20 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   }
 
   Future<void> addPhotos() async {
-    final paths = await ImageService.pickMultiple();
-    if (paths.isEmpty) return;
+    final picked = await ImageService.pickMultiple();
+    if (picked.isEmpty) return;
+    // A single photo gets an in-app crop before it lands in the note (backing
+    // out keeps it uncropped). A multi-pick is inserted as-is: walking the
+    // user through one cropper per image was a chore.
+    final paths = List<String>.of(picked);
+    if (picked.length == 1 && mounted) {
+      final cropped = await cropImageFile(context, picked.single);
+      if (cropped != null && cropped != picked.single) {
+        paths[0] = cropped;
+        unawaited(StorageService.instance.deleteImage(picked.single));
+      }
+    }
+    if (!mounted) return;
     sync();
     setState(() {
       for (final p in paths) {
@@ -444,6 +500,10 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   }
 
   void _removeImage(NoteBlock block) {
+    // Remember the blocks the image sat between so we can rejoin them.
+    final idx = _blocks.indexWhere((b) => b.id == block.id);
+    final prev = idx > 0 ? _blocks[idx - 1] : null;
+    final next = idx >= 0 && idx + 1 < _blocks.length ? _blocks[idx + 1] : null;
     setState(() {
       _blocks.removeWhere((b) => b.id == block.id);
       if (_blocks.isEmpty) {
@@ -453,6 +513,17 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       }
     });
     widget.onRemoveImagePath?.call(block.imagePath);
+    // If the image left two text blocks touching and one of them is empty,
+    // fold the empty line away so it doesn't strand an undeletable blank line
+    // (two blocks that both hold text are left alone — that isn't a stray).
+    if (prev != null && prev.isText && next != null && next.isText) {
+      final p = _blocks.indexOf(prev);
+      final n = _blocks.indexOf(next);
+      if (p >= 0 && n == p + 1 &&
+          (_isTextBlockEmpty(prev) || _isTextBlockEmpty(next))) {
+        _mergeTextBlocks(n);
+      }
+    }
   }
 
   // ---- Pasted-link cards ---------------------------------------------------
@@ -536,6 +607,68 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       }
     }
     return false;
+  }
+
+  bool _isTextBlockEmpty(NoteBlock b) {
+    final c = _quillCtrls[b.id];
+    if (c != null) return c.document.toPlainText().trim().isEmpty;
+    return b.text.trim().isEmpty;
+  }
+
+  /// Joins two block deltas end-to-end, dropping [a]'s single terminating
+  /// newline so [b]'s content continues [a]'s last line — a line merge.
+  Delta _concatDeltas(Delta a, Delta b) {
+    final out = Delta();
+    final aOps = a.toList();
+    for (var i = 0; i < aOps.length; i++) {
+      final op = aOps[i];
+      final data = op.data;
+      if (i == aOps.length - 1 && data is String && data.endsWith('\n')) {
+        final trimmed = data.substring(0, data.length - 1);
+        if (trimmed.isNotEmpty) out.insert(trimmed, op.attributes);
+      } else {
+        out.insert(op.data, op.attributes);
+      }
+    }
+    for (final op in b.toList()) {
+      out.insert(op.data, op.attributes);
+    }
+    return _normalized(out);
+  }
+
+  /// Merges the text block at [curIdx] into the text block just before it,
+  /// preserving both sides' formatting. Rebuilds the previous block from the
+  /// combined delta (the same dispose/recreate path link conversion uses) and,
+  /// when [focus], drops the caret at the join. This is what lets a blank line
+  /// — e.g. one stranded by a removed image — backspace away like any newline.
+  void _mergeTextBlocks(int curIdx, {bool focus = false}) {
+    final prevIdx = curIdx - 1;
+    if (prevIdx < 0 || curIdx >= _blocks.length) return;
+    final prev = _blocks[prevIdx];
+    final cur = _blocks[curIdx];
+    final prevC = _quillCtrls[prev.id];
+    final curC = _quillCtrls[cur.id];
+    if (!prev.isText || !cur.isText || prevC == null || curC == null) return;
+    // The join sits just before the previous block's terminating newline.
+    final caret = prevC.document.length - 1;
+    final merged = _concatDeltas(prevC.document.toDelta(), curC.document.toDelta());
+    setState(() {
+      prev.text = jsonEncode(merged.toJson());
+      _disposeBlockEditors(prev.id);
+      _blocks.removeAt(curIdx);
+      _disposeBlockEditors(cur.id);
+      _ensure(prev);
+    });
+    if (!focus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _quillCtrls[prev.id];
+      if (c == null) return;
+      final max = c.document.length - 1;
+      final off = caret.clamp(0, max < 0 ? 0 : max);
+      c.updateSelection(
+          TextSelection.collapsed(offset: off), ChangeSource.local);
+      _focusNodes[prev.id]?.requestFocus();
+    });
   }
 
   void _disposeBlockEditors(String id) {
@@ -720,7 +853,8 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
           expands: false,
           autoFocus: false,
           padding: EdgeInsets.zero,
-          customStyles: _quillStyles(widget.onLight, widget.bodyFontFamily),
+          customStyles: _quillStyles(
+              widget.onLight, widget.bodyFontFamily, widget.fontScale),
           // Backspace at the start of a line: delete a preceding image, or on
           // an empty first line jump up to the title (Google Keep style).
           // ignore: experimental_member_use
@@ -735,7 +869,8 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
 /// to black text for white backgrounds. When [fontFamily] is given (a book
 /// page), the whole editor is typeset in that face at print-like sizes; the
 /// default is the handwriting body with Lora headings used elsewhere.
-DefaultStyles _quillStyles(bool onLight, [String? fontFamily]) {
+DefaultStyles _quillStyles(bool onLight,
+    [String? fontFamily, double scale = 1.0]) {
   final text = onLight ? AppPalette.inkPrimary : AppPalette.textPrimary;
   final placeholder = onLight
       ? AppPalette.inkSecondary.withValues(alpha: 0.7)
@@ -745,10 +880,11 @@ DefaultStyles _quillStyles(bool onLight, [String? fontFamily]) {
   final bodyFace = fontFamily ?? activeBodyFont;
   final headingFace = fontFamily ?? kNoteHeadingFont;
   // Caveat runs small for its point size, so notes sit a notch larger; the
-  // serif book faces are set nearer a real page size.
-  final bodySize = bookFace ? 18.0 : 21.0;
-  final h1Size = bookFace ? 24.0 : 26.0;
-  final h2Size = bookFace ? 20.0 : 21.0;
+  // serif book faces are set nearer a real page size. The per-note [scale]
+  // grows or shrinks the whole note at once.
+  final bodySize = (bookFace ? 18.0 : 21.0) * scale;
+  final h1Size = (bookFace ? 24.0 : 26.0) * scale;
+  final h2Size = (bookFace ? 20.0 : 21.0) * scale;
   final bodyHeight = bookFace ? 1.5 : 1.35;
   // Quill paints spans directly (no DefaultTextStyle inheritance), so the
   // family must be spelled out here or the editor falls back to Roboto.
@@ -835,10 +971,14 @@ class EditorBottomBar extends StatelessWidget {
     this.onReminder,
     this.reminderSet = false,
     this.onLinkNote,
+    this.onFontSize,
   });
 
   final ValueNotifier<QuillController?> activeController;
   final VoidCallback onAddPhotos;
+
+  /// Opens the per-note text-size control.
+  final VoidCallback? onFontSize;
 
   /// Move-to-cortex; hidden when null (journal entries don't join folders).
   final VoidCallback? onPickSpace;
@@ -874,6 +1014,13 @@ class EditorBottomBar extends StatelessWidget {
                         color: _islandPrimary),
                     onPressed: onAddPhotos,
                   ),
+                  if (onFontSize != null)
+                    IconButton(
+                      tooltip: context.t.textSize,
+                      icon: Icon(Icons.format_size_rounded,
+                          color: _islandPrimary),
+                      onPressed: onFontSize,
+                    ),
                   if (onPickColor != null)
                     IconButton(
                       tooltip: context.t.noteColor,
@@ -1109,34 +1256,17 @@ class _NoteFormatBarState extends State<NoteFormatBar> {
                         if (c.hasRedo) c.redo();
                       }),
                   _vsep(sepColor),
-                  _TextChip(
-                    label: context.t.heading,
-                    active: headerVal == 1,
+                  // Body / Heading / Sub-heading folded into one dropdown.
+                  _StyleDropdown(
+                    headerVal: headerVal is int ? headerVal : 0,
                     primary: primary,
                     secondary: secondary,
                     activeFill: activeFill,
-                    onTap: () => c.formatSelection(headerVal == 1
-                        ? Attribute.clone(Attribute.header, null)
-                        : Attribute.h1),
-                  ),
-                  _TextChip(
-                    label: context.t.subHeading,
-                    active: headerVal == 2,
-                    primary: primary,
-                    secondary: secondary,
-                    activeFill: activeFill,
-                    onTap: () => c.formatSelection(headerVal == 2
-                        ? Attribute.clone(Attribute.header, null)
-                        : Attribute.h2),
-                  ),
-                  _TextChip(
-                    label: context.t.body,
-                    active: headerVal == null,
-                    primary: primary,
-                    secondary: secondary,
-                    activeFill: activeFill,
-                    onTap: () =>
-                        c.formatSelection(Attribute.clone(Attribute.header, null)),
+                    onSelect: (level) => c.formatSelection(switch (level) {
+                      1 => Attribute.h1,
+                      2 => Attribute.h2,
+                      _ => Attribute.clone(Attribute.header, null),
+                    }),
                   ),
                   _vsep(sepColor),
                   _IconToggle(
@@ -1178,9 +1308,22 @@ class _NoteFormatBarState extends State<NoteFormatBar> {
                     primary: primary,
                     secondary: secondary,
                     activeFill: activeFill,
-                    onTap: () => c.formatSelection(highlight
-                        ? Attribute.clone(Attribute.background, null)
-                        : Attribute.clone(Attribute.background, '#FFE082')),
+                    // Highlight pairs a light background with a fixed dark ink
+                    // so the text stays readable on it in dark theme too (where
+                    // the default body ink is light). Clearing drops both.
+                    onTap: () {
+                      if (highlight) {
+                        c.formatSelection(
+                            Attribute.clone(Attribute.background, null));
+                        c.formatSelection(
+                            Attribute.clone(Attribute.color, null));
+                      } else {
+                        c.formatSelection(
+                            Attribute.clone(Attribute.background, kHighlightBg));
+                        c.formatSelection(
+                            Attribute.clone(Attribute.color, kHighlightInk));
+                      }
+                    },
                   ),
                   _vsep(sepColor),
                   _IconToggle(
@@ -1286,42 +1429,75 @@ class _NoteFormatBarState extends State<NoteFormatBar> {
       );
 }
 
-class _TextChip extends StatelessWidget {
-  const _TextChip({
-    required this.label,
-    required this.active,
-    required this.onTap,
+/// Body / Heading / Sub-heading folded into one dropdown. [headerVal] is 0
+/// (body), 1 (heading) or 2 (sub-heading); [onSelect] passes the chosen level.
+class _StyleDropdown extends StatelessWidget {
+  const _StyleDropdown({
+    required this.headerVal,
+    required this.onSelect,
     required this.primary,
     required this.secondary,
     required this.activeFill,
   });
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
+  final int headerVal;
+  final void Function(int level) onSelect;
   final Color primary;
   final Color secondary;
   final Color activeFill;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color: active ? activeFill : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                color: active ? primary : secondary,
-              ),
-            ),
+    final active = headerVal == 1 || headerVal == 2;
+    final label = headerVal == 1
+        ? context.t.heading
+        : headerVal == 2
+            ? context.t.subHeading
+            : context.t.body;
+    return PopupMenuButton<int>(
+      tooltip: context.t.textStyle,
+      onSelected: onSelect,
+      color: AppPalette.sheet,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+            value: 0,
+            child: Text(context.t.body,
+                style: TextStyle(color: AppPalette.inkPrimary))),
+        PopupMenuItem(
+            value: 1,
+            child: Text(context.t.heading,
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppPalette.inkPrimary))),
+        PopupMenuItem(
+            value: 2,
+            child: Text(context.t.subHeading,
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppPalette.inkPrimary))),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+          decoration: BoxDecoration(
+            color: active ? activeFill : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                    color: active ? primary : secondary,
+                  )),
+              Icon(Icons.arrow_drop_down_rounded,
+                  size: 20, color: active ? primary : secondary),
+            ],
           ),
         ),
       ),

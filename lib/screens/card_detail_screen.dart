@@ -5,13 +5,18 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
+
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/note.dart' show richToPlain;
 
 import '../models/tweet_card.dart';
+import '../services/note_markdown.dart';
 import '../services/wiki_links.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -166,6 +171,82 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     });
   }
 
+  /// Adjusts the card note's text size (a per-card multiplier).
+  void _pickFontSize() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (sheetCtx, setSheet) {
+          void set(double v) {
+            _collect();
+            setState(() => _card.fontScale = v.clamp(0.8, 1.6));
+            setSheet(() {});
+            context.read<AppState>().updateCard(_card);
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                decoration: BoxDecoration(
+                  color: AppPalette.sheet,
+                  borderRadius: BorderRadius.circular(26),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.t.textSize,
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppPalette.inkPrimary)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        _sizeButton('A', 15, () => set(_card.fontScale - 0.1)),
+                        const SizedBox(width: 12),
+                        _sizeButton('A', 26, () => set(_card.fontScale + 0.1)),
+                        const Spacer(),
+                        Text('${(_card.fontScale * 100).round()}%',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppPalette.inkSecondary)),
+                        const SizedBox(width: 8),
+                        TextButton(
+                            onPressed: () => set(1.0),
+                            child: Text(context.t.resetSize)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _sizeButton(String label, double size, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppPalette.cardOutline),
+          ),
+          child: Text(label,
+              style: TextStyle(fontSize: size, color: AppPalette.inkPrimary)),
+        ),
+      );
+
   Future<void> _openLink() async {
     final uri = Uri.tryParse(_card.url);
     if (uri == null) return;
@@ -185,6 +266,88 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.t.linkCopied)),
     );
+  }
+
+  /// The 3-dots overflow menu: share as Markdown, refresh preview, archive,
+  /// delete.
+  void _showCardMenu() {
+    final state = context.read<AppState>();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: GlassPanel(
+            borderRadius: 26,
+            strong: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _cardMenuTile(sheetCtx, Icons.ios_share_rounded,
+                    context.t.share, _shareMarkdown),
+                _cardMenuTile(sheetCtx, Icons.refresh_rounded,
+                    context.t.refreshPreview, () => state.refreshCard(_card.id)),
+                _cardMenuTile(
+                  sheetCtx,
+                  _card.archived
+                      ? Icons.unarchive_outlined
+                      : Icons.archive_outlined,
+                  _card.archived ? context.t.unarchive : context.t.archive,
+                  () => state.setCardArchived(_card.id, !_card.archived),
+                ),
+                _cardMenuTile(
+                  sheetCtx,
+                  Icons.delete_outline_rounded,
+                  context.t.deleteCard,
+                  () {
+                    setState(() => _closing = true);
+                    Navigator.of(context).pop();
+                    Future.delayed(const Duration(milliseconds: 380),
+                        () => state.deleteCard(_card.id));
+                  },
+                  danger: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cardMenuTile(BuildContext sheetCtx, IconData icon, String label,
+      VoidCallback onTap,
+      {bool danger = false}) {
+    final tint = danger ? const Color(0xFFE0567B) : null;
+    return ListTile(
+      leading: Icon(icon, color: tint ?? AppPalette.inkSecondary),
+      title: Text(label,
+          style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: tint ?? AppPalette.inkPrimary)),
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        onTap();
+      },
+    );
+  }
+
+  Future<void> _shareMarkdown() async {
+    try {
+      final md = cardToMarkdown(_card);
+      final dir = await getTemporaryDirectory();
+      final title = _card.noteTitle.trim().isNotEmpty
+          ? _card.noteTitle.trim()
+          : 'spark';
+      final base = title
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .replaceAll(RegExp(r'\s+'), '-');
+      final file = File('${dir.path}/${base.isEmpty ? 'spark' : base}.md');
+      await file.writeAsString(md);
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+    } catch (_) {}
   }
 
   Future<void> _pickSpace() async {
@@ -249,22 +412,9 @@ class _CardDetailScreenState extends State<CardDetailScreen>
       children: [
         IconButton(
           visualDensity: VisualDensity.compact,
-          tooltip: context.t.refreshPreview,
-          icon: const Icon(Icons.refresh_rounded),
-          onPressed: () => context.read<AppState>().refreshCard(_card.id),
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          tooltip: context.t.deleteCard,
-          icon: const Icon(Icons.delete_outline_rounded),
-          onPressed: () {
-            final state = context.read<AppState>();
-            setState(() => _closing = true);
-            Navigator.of(context).pop();
-            Future.delayed(const Duration(milliseconds: 380), () {
-              state.deleteCard(_card.id);
-            });
-          },
+          tooltip: context.t.moreOptions,
+          icon: const Icon(Icons.more_horiz_rounded),
+          onPressed: _showCardMenu,
         ),
       ],
     );
@@ -347,6 +497,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                               blocks: _card.blocks,
                               activeController: _activeController,
                               onLight: true,
+                              fontScale: _card.fontScale,
                               onBackspaceAtStart: _focusTitle,
                               onRemoveImagePath: (path) => context
                                   .read<AppState>()
@@ -387,6 +538,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                         onAddPhotos: () =>
                             _editorKey.currentState?.addPhotos(),
                         onPickSpace: _pickSpace,
+                        onFontSize: _pickFontSize,
                       ),
                     ),
                   ),

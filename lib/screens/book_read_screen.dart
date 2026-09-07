@@ -1,6 +1,10 @@
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -43,8 +47,64 @@ class ReaderTheme {
       all.firstWhere((t) => t.id == id, orElse: () => original);
 }
 
-/// The whole book in one scroll: reading themes, type controls, a contents
-/// jump, highlights and margin notes, and a live page counter in the footer.
+/// One paragraph or image in the reader's flow, tagged with the chapter it came
+/// from so highlights and bookmarks can be anchored to it.
+class _Flow {
+  _Flow.paragraph({
+    required this.runs,
+    required this.style,
+    required this.align,
+    required this.indent,
+    required this.topGap,
+    required this.pageId,
+  })  : isImage = false,
+        imagePath = null;
+
+  _Flow.image({
+    required this.imagePath,
+    required this.topGap,
+    required this.pageId,
+  })  : isImage = true,
+        runs = const [],
+        style = null,
+        align = TextAlign.start,
+        indent = 0;
+
+  final bool isImage;
+  final List<RichRun> runs;
+  final TextStyle? style;
+  final TextAlign align;
+  final double indent;
+  final double topGap;
+  final String? imagePath;
+  final String pageId;
+}
+
+/// A [TextSpan] for [runs] with each run's inline marks over [base]. Highlighted
+/// runs get a fixed dark ink so they stay legible on the light highlight.
+TextSpan _runsToSpan(List<RichRun> runs, TextStyle base) => TextSpan(children: [
+      for (final r in runs) TextSpan(text: r.text, style: _runStyle(r, base)),
+    ]);
+
+TextStyle _runStyle(RichRun r, TextStyle base) {
+  var s = base;
+  if (r.bold) s = s.copyWith(fontWeight: FontWeight.w700);
+  if (r.italic) s = s.copyWith(fontStyle: FontStyle.italic);
+  final d = <TextDecoration>[];
+  if (r.underline) d.add(TextDecoration.underline);
+  if (r.strike) d.add(TextDecoration.lineThrough);
+  if (d.isNotEmpty) s = s.copyWith(decoration: TextDecoration.combine(d));
+  if (r.highlight) {
+    s = s.copyWith(
+        backgroundColor: const Color(0xFFFFE082),
+        color: const Color(0xFF202124));
+  }
+  return s;
+}
+
+/// The book read chapter-by-chapter in one continuous, scrollable flow, with
+/// reading themes, type controls, a contents jump, per-paragraph bookmarks, and
+/// highlights & margin notes.
 class BookReadScreen extends StatefulWidget {
   const BookReadScreen({super.key, required this.bookId});
 
@@ -55,45 +115,46 @@ class BookReadScreen extends StatefulWidget {
 }
 
 class _BookReadScreenState extends State<BookReadScreen> {
-  final _scroll = ScrollController();
+  final ItemScrollController _isc = ItemScrollController();
+  final ItemPositionsListener _ipl = ItemPositionsListener.create();
 
-  /// Anchors for the contents jump, one per page.
-  final Map<String, GlobalKey> _anchors = {};
+  // (topmost paragraph index, total paragraphs) — only the counter / hint
+  // rebuild on scroll, not the whole reader.
+  final ValueNotifier<(int index, int total)> _prog = ValueNotifier((0, 1));
 
-  // Current (page, total-pages), tracked without setState: updating a
-  // ValueNotifier lets only the tiny page counter and chapter hint rebuild.
-  // Calling setState here instead rebuilt the whole non-lazy reader whenever a
-  // page boundary was crossed, which interrupted the in-flight scroll — that
-  // was the "can't scroll past the first screen" bug.
-  final ValueNotifier<(int page, int pages)> _prog = ValueNotifier((1, 1));
-
-  /// The live selection, tracked from the region so the reading menu knows
-  /// what was picked. Region-based selection (SelectionArea) is used instead
-  /// of per-page SelectableText so a drag scrolls the page rather than being
-  /// eaten as a text selection.
   String _selectedText = '';
   List<Note> _readerPages = const [];
 
-  // Raw-pointer tap detection for the chrome toggle: a GestureDetector.onTap
-  // loses the arena to SelectionArea, so a Listener watches pointers directly
-  // and treats a quick, still press as a tap (a drag scrolls, a long press
-  // selects — neither toggles the chrome).
+  // The flow (paragraphs + images), rebuilt only when something visible
+  // changes (type scale, theme, face, or content).
+  String _flowsKey = '';
+  List<_Flow> _flows = const [];
+
+  // Per chapter: its paragraphs' text joined the way SelectionArea joins a
+  // selection (no separator), and where each paragraph starts in that string,
+  // so a passage picked across a paragraph break is still found and painted.
+  final Map<String, String> _joinedByPage = {};
+  final Map<String, List<(int flowIndex, int start)>> _flowStartsByPage = {};
+  Map<int, List<({int start, int end, int color})>> _marksByFlow = const {};
+  String _marksKey = '';
+
   Offset _downPos = Offset.zero;
   int _downMs = 0;
 
-  /// Chrome hides while reading and returns on a tap.
   bool _chrome = true;
 
-  // Resume: the read position is saved as a 0–1 fraction and restored on open.
   late AppState _state;
-  double _lastFraction = 0;
   bool _restored = false;
+  int _restoreIndex = 0;
+
+  /// The last read position as a paragraph fraction (topmost paragraph ÷ total)
+  /// — a stable, per-paragraph anchor that survives font/theme changes.
+  double _lastFraction = 0;
 
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _restore());
+    _ipl.itemPositions.addListener(_onPositions);
   }
 
   @override
@@ -104,49 +165,316 @@ class _BookReadScreenState extends State<BookReadScreen> {
 
   @override
   void dispose() {
-    // Remember where the reader left off (fire-and-forget; the write is
-    // debounced and the fraction survives font/content changes).
+    _ipl.itemPositions.removeListener(_onPositions);
     _state.setReaderPosition(widget.bookId, _lastFraction);
-    _scroll.removeListener(_onScroll);
-    _scroll.dispose();
     _prog.dispose();
     super.dispose();
   }
 
-  /// Jumps to the saved position once the content is laid out. Retries a few
-  /// frames while the extent is still zero (long chapters lay out lazily).
-  void _restore([int tries = 0]) {
-    if (_restored || !mounted) return;
-    if (!_scroll.hasClients) {
-      if (tries < 8) {
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _restore(tries + 1));
+  void _onPositions() {
+    final positions = _ipl.itemPositions.value;
+    if (positions.isEmpty || _flows.isEmpty) return;
+    // The first paragraph still (partly) on screen is "where we are".
+    final visible = positions.where((p) => p.itemTrailingEdge > 0);
+    if (visible.isEmpty) return;
+    final idx = visible.map((p) => p.index).reduce(math.min);
+    _lastFraction = idx / _flows.length;
+    final v = (idx, _flows.length);
+    if (_prog.value != v) _prog.value = v;
+  }
+
+  static double _progressOf((int, int) v) =>
+      v.$2 <= 1 ? 1 : (v.$1 / (v.$2 - 1)).clamp(0.0, 1.0);
+
+  int _indexForFraction(double f) =>
+      (f.clamp(0.0, 1.0) * (_flows.isEmpty ? 0 : _flows.length))
+          .round()
+          .clamp(0, _flows.isEmpty ? 0 : _flows.length - 1);
+
+  // ---- Flow building -------------------------------------------------------
+
+  void _ensureFlows(Book book, List<Note> pages, ReaderTheme theme,
+      double scale, String family) {
+    final rev = pages.fold<int>(
+        0,
+        (a, p) =>
+            a ^ p.id.hashCode ^ p.updatedAt.microsecondsSinceEpoch.hashCode);
+    final key = '${book.id}|$scale|${theme.id}|$family|$rev';
+    if (key == _flowsKey && _flows.isNotEmpty) return;
+    _flows = _buildFlows(book, pages, theme, scale, family);
+    _flowsKey = key;
+    _joinedByPage.clear();
+    _flowStartsByPage.clear();
+    final bufs = <String, StringBuffer>{};
+    for (var i = 0; i < _flows.length; i++) {
+      final f = _flows[i];
+      if (f.isImage) continue;
+      final buf = bufs.putIfAbsent(f.pageId, StringBuffer.new);
+      _flowStartsByPage.putIfAbsent(f.pageId, () => []).add((i, buf.length));
+      buf.write(f.runs.map((r) => r.text).join());
+    }
+    bufs.forEach((id, b) => _joinedByPage[id] = b.toString());
+    _marksKey = '';
+    if (!_restored) {
+      _restored = true;
+      _restoreIndex = _indexForFraction(_state.readerPosition(widget.bookId));
+    }
+  }
+
+  /// A selection's text with any line breaks dropped, so it compares against
+  /// the joined chapter text whether or not the platform inserted them.
+  static String _selKey(String s) => s.replaceAll('\n', '').replaceAll('\r', '');
+
+  /// Highlight ranges per paragraph, recomputed only when the flow or the
+  /// annotations change. An annotation is located in the chapter's joined
+  /// text and then cut at paragraph boundaries, so one that spans a break
+  /// paints on both paragraphs.
+  void _ensureMarks(List<Note> pages) {
+    final key = '$_flowsKey|'
+        '${pages.map((p) => '${p.id}:${p.annotations.length}').join(',')}';
+    if (key == _marksKey) return;
+    _marksKey = key;
+    final marks = <int, List<({int start, int end, int color})>>{};
+    for (final page in pages) {
+      final joined = _joinedByPage[page.id];
+      final starts = _flowStartsByPage[page.id];
+      if (joined == null || starts == null) continue;
+      for (final a in page.annotations) {
+        final needle = _selKey(a.text);
+        if (needle.isEmpty) continue;
+        final at = joined.indexOf(needle);
+        if (at < 0) continue;
+        final end = at + needle.length;
+        for (var k = 0; k < starts.length; k++) {
+          final (flowIndex, ps) = starts[k];
+          final pe = k + 1 < starts.length ? starts[k + 1].$2 : joined.length;
+          final s = math.max(at, ps);
+          final e = math.min(end, pe);
+          if (s < e) {
+            (marks[flowIndex] ??= [])
+                .add((start: s - ps, end: e - ps, color: a.colorValue));
+          }
+        }
       }
-      return;
     }
-    final max = _scroll.position.maxScrollExtent;
-    final frac = _state.readerPosition(widget.bookId);
-    if (max <= 0 && frac > 0 && tries < 8) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _restore(tries + 1));
-      return;
+    for (final l in marks.values) {
+      l.sort((x, y) => x.start.compareTo(y.start));
     }
-    _restored = true;
-    if (frac > 0 && max > 0) _scroll.jumpTo((frac * max).clamp(0.0, max));
+    _marksByFlow = marks;
   }
 
-  void _onScroll() {
-    if (!_scroll.hasClients) return;
-    final view = _scroll.position.viewportDimension;
-    if (view <= 0) return;
-    final max = _scroll.position.maxScrollExtent;
-    _lastFraction = max > 0 ? (_scroll.offset / max).clamp(0.0, 1.0) : 0;
-    final total = max + view;
-    final pages = (total / view).ceil().clamp(1, 99999);
-    final page = ((_scroll.offset / view).floor() + 1).clamp(1, pages);
-    if (_prog.value != (page, pages)) _prog.value = (page, pages);
+  List<_Flow> _buildFlows(Book book, List<Note> pages, ReaderTheme theme,
+      double scale, String family) {
+    final flows = <_Flow>[];
+    final baseSize = (family == 'Caveat' ? 22.0 : 17.0) * scale;
+    final gap = baseSize * 0.95;
+
+    TextStyle body([Color? color]) => TextStyle(
+          fontFamily: family,
+          fontSize: baseSize,
+          height: 1.65,
+          fontWeight: theme.bold ? FontWeight.w600 : FontWeight.w400,
+          color: color ?? theme.ink,
+        );
+    TextStyle heading(double factor) => TextStyle(
+          fontFamily: family,
+          fontSize: baseSize * factor,
+          height: 1.3,
+          fontWeight: FontWeight.w700,
+          color: theme.ink,
+        );
+
+    for (final page in pages) {
+      final quiet = BookPageKind.isQuietMatter(page.bookPageKind);
+      if (!quiet) {
+        final title = page.title.trim();
+        if (title.isNotEmpty) {
+          flows.add(_Flow.paragraph(
+            runs: [RichRun(title)],
+            style: heading(1.4),
+            align: TextAlign.center,
+            indent: 0,
+            topGap: gap * 2.4,
+            pageId: page.id,
+          ));
+        }
+      }
+      for (final b in page.blocks) {
+        if (b.isImage && b.imagePath.isNotEmpty) {
+          flows.add(_Flow.image(
+              imagePath: b.imagePath, topGap: gap, pageId: page.id));
+          continue;
+        }
+        if (b.isLink && b.url.isNotEmpty) {
+          final label = b.linkTitle.isNotEmpty ? b.linkTitle : b.url;
+          flows.add(_Flow.paragraph(
+            runs: [RichRun(label)],
+            style: body(theme.ink.withValues(alpha: 0.85)),
+            align: TextAlign.left,
+            indent: 0,
+            topGap: gap,
+            pageId: page.id,
+          ));
+          continue;
+        }
+        if (!b.isText) continue;
+
+        final lines = richToStyledLines(b.text);
+        var ordinal = 0;
+        for (final l in lines) {
+          if (l.kind == RichLineKind.ordered) {
+            ordinal++;
+          } else {
+            ordinal = 0;
+          }
+          final runs = <RichRun>[];
+          final marker = _markerFor(l, ordinal);
+          if (marker.isNotEmpty) runs.add(RichRun(marker));
+          runs.addAll(l.runs.isEmpty ? [RichRun(l.text)] : l.runs);
+
+          TextStyle st;
+          var topGap = gap;
+          if (l.header == 1) {
+            st = heading(1.5);
+            topGap = gap * 1.6;
+          } else if (l.header == 2) {
+            st = heading(1.25);
+            topGap = gap * 1.3;
+          } else if (l.quote) {
+            st = body(theme.ink.withValues(alpha: 0.75))
+                .copyWith(fontStyle: FontStyle.italic);
+          } else if (quiet) {
+            st = body(theme.ink.withValues(alpha: 0.82))
+                .copyWith(fontStyle: FontStyle.italic);
+          } else if (l.kind == RichLineKind.checkedItem) {
+            st = body(theme.ink.withValues(alpha: 0.6))
+                .copyWith(decoration: TextDecoration.lineThrough);
+          } else {
+            st = body();
+          }
+
+          final align = _alignFor(l.align) ??
+              (quiet
+                  ? TextAlign.center
+                  : (l.header > 0 ? TextAlign.left : TextAlign.justify));
+
+          flows.add(_Flow.paragraph(
+            runs: runs,
+            style: st,
+            align: align,
+            indent: l.indent * 16.0,
+            topGap: topGap,
+            pageId: page.id,
+          ));
+        }
+      }
+    }
+    return flows;
   }
 
-  static double _progressOf((int, int) v) => v.$2 <= 1 ? 1 : v.$1 / v.$2;
+  String _markerFor(RichLine l, int ordinal) {
+    switch (l.kind) {
+      case RichLineKind.bullet:
+        return '•   ';
+      case RichLineKind.ordered:
+        return '$ordinal.   ';
+      case RichLineKind.checkedItem:
+        return '☑   ';
+      case RichLineKind.uncheckedItem:
+        return '☐   ';
+      default:
+        return '';
+    }
+  }
+
+  TextAlign? _alignFor(String? a) {
+    switch (a) {
+      case 'center':
+        return TextAlign.center;
+      case 'right':
+        return TextAlign.right;
+      case 'justify':
+        return TextAlign.justify;
+      default:
+        return null;
+    }
+  }
+
+  // ---- Rendering -----------------------------------------------------------
+
+  Widget _element(int index, _Flow f, double maxImageHeight) {
+    if (f.isImage) {
+      return Padding(
+        padding: EdgeInsets.only(top: f.topGap),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxImageHeight),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.file(
+              File(f.imagePath!),
+              width: double.infinity,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              cacheWidth: 1440,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.only(top: f.topGap, left: f.indent),
+      child: Text.rich(_spanFor(index, f), textAlign: f.align, style: f.style),
+    );
+  }
+
+  /// The paragraph's rich text, with any reader annotations painted over the
+  /// matching passages (see [_ensureMarks]).
+  InlineSpan _spanFor(int index, _Flow f) {
+    final marks = _marksByFlow[index];
+    if (marks == null || marks.isEmpty) return _runsToSpan(f.runs, f.style!);
+    return _highlightedSpan(f.runs, f.style!, marks);
+  }
+
+  InlineSpan _highlightedSpan(List<RichRun> runs, TextStyle base,
+      List<({int start, int end, int color})> marks) {
+    final children = <InlineSpan>[];
+    var pos = 0;
+    for (final r in runs) {
+      final rStart = pos;
+      final rEnd = pos + r.text.length;
+      pos = rEnd;
+      var cur = rStart;
+      final runStyle = _runStyle(r, base);
+      while (cur < rEnd) {
+        ({int start, int end, int color})? cover;
+        var nextStart = rEnd;
+        for (final m in marks) {
+          if (m.start <= cur && cur < m.end) {
+            cover = m;
+            break;
+          }
+          if (m.start > cur && m.start < nextStart) nextStart = m.start;
+        }
+        if (cover != null) {
+          final end = math.min(rEnd, cover.end);
+          children.add(TextSpan(
+            text: r.text.substring(cur - rStart, end - rStart),
+            style: runStyle.copyWith(
+                backgroundColor: Color(cover.color).withValues(alpha: 0.5)),
+          ));
+          cur = end;
+        } else {
+          children.add(TextSpan(
+            text: r.text.substring(cur - rStart, nextStart - rStart),
+            style: runStyle,
+          ));
+          cur = nextStart;
+        }
+      }
+    }
+    return TextSpan(children: children);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -160,95 +488,50 @@ class _BookReadScreenState extends State<BookReadScreen> {
     _readerPages = pages;
     final theme = ReaderTheme.byId(state.readerTheme);
     final scale = state.readerFontScale;
-    // The book is read in its own chosen face, so the type is consistent with
-    // how it's written and the choice travels with the book.
     final family = book.fontFamily;
+    _ensureFlows(book, pages, theme, scale, family);
+    _ensureMarks(pages);
 
-    final bodyStyle = TextStyle(
-      fontFamily: family,
-      fontSize: (family == 'Caveat' ? 22 : 17) * scale,
-      height: 1.65,
-      fontWeight: theme.bold ? FontWeight.w600 : FontWeight.w400,
-      color: theme.ink,
-    );
+    final maxImageHeight = MediaQuery.of(context).size.height * 0.66;
 
     return Scaffold(
       backgroundColor: theme.paper,
       body: SafeArea(
         child: Stack(
           children: [
-            // The book itself.
-            // Region-based selection so a drag scrolls the page instead of
-            // being captured as a text selection (per-page SelectableText was
-            // eating the scroll gesture). A raw-pointer Listener keeps the
-            // tap-to-toggle-chrome working alongside it.
-            Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (e) {
-                _downPos = e.position;
-                _downMs = DateTime.now().millisecondsSinceEpoch;
-              },
-              onPointerUp: (e) {
-                final moved = (e.position - _downPos).distance;
-                final elapsed =
-                    DateTime.now().millisecondsSinceEpoch - _downMs;
-                if (moved < 12 && elapsed < 250) {
-                  setState(() => _chrome = !_chrome);
-                }
-              },
-              child: SelectionArea(
-                onSelectionChanged: (content) =>
-                    _selectedText = content?.plainText ?? '',
-                contextMenuBuilder: (context, selectableRegionState) =>
-                    _selectionMenu(context, selectableRegionState),
-                child: ListView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(24, 40, 24, 96),
-                  children: [
-                    for (final page in pages) ...[
-                      KeyedSubtree(
-                        key: _anchors.putIfAbsent(page.id, GlobalKey.new),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // A dedication or epigraph reads centred, with no
-                            // chapter heading over it.
-                            if (!BookPageKind.isQuietMatter(page.bookPageKind))
-                              Padding(
-                                padding:
-                                    const EdgeInsets.only(top: 20, bottom: 18),
-                                child: Text(
-                                  page.title.trim(),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontFamily: family,
-                                    fontSize: 21 * scale,
-                                    fontWeight: FontWeight.w700,
-                                    color: theme.ink,
-                                  ),
-                                ),
-                              )
-                            else
-                              const SizedBox(height: 40),
-                            _PageText(
-                              page: page,
-                              style: BookPageKind.isQuietMatter(
-                                      page.bookPageKind)
-                                  ? bodyStyle.copyWith(
-                                      fontStyle: FontStyle.italic,
-                                      color: theme.ink.withValues(alpha: 0.8))
-                                  : bodyStyle,
-                              align: BookPageKind.isQuietMatter(
-                                      page.bookPageKind)
-                                  ? TextAlign.center
-                                  : TextAlign.justify,
-                            ),
-                          ],
+            // The book, chapter after chapter in one scroll.
+            Positioned.fill(
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (e) {
+                  _downPos = e.position;
+                  _downMs = DateTime.now().millisecondsSinceEpoch;
+                },
+                onPointerUp: (e) {
+                  final moved = (e.position - _downPos).distance;
+                  final elapsed =
+                      DateTime.now().millisecondsSinceEpoch - _downMs;
+                  if (moved < 12 && elapsed < 250) {
+                    setState(() => _chrome = !_chrome);
+                  }
+                },
+                child: SelectionArea(
+                  onSelectionChanged: (content) =>
+                      _selectedText = content?.plainText ?? '',
+                  contextMenuBuilder: (context, regionState) =>
+                      _selectionMenu(context, regionState),
+                  child: _flows.isEmpty
+                      ? const SizedBox.shrink()
+                      : ScrollablePositionedList.builder(
+                          itemScrollController: _isc,
+                          itemPositionsListener: _ipl,
+                          initialScrollIndex: _restoreIndex,
+                          padding:
+                              const EdgeInsets.fromLTRB(26, 44, 26, 96),
+                          itemCount: _flows.length,
+                          itemBuilder: (ctx, i) =>
+                              _element(i, _flows[i], maxImageHeight),
                         ),
-                      ),
-                      const SizedBox(height: 26),
-                    ],
-                  ],
                 ),
               ),
             ),
@@ -274,7 +557,7 @@ class _BookReadScreenState extends State<BookReadScreen> {
                         child: ValueListenableBuilder<(int, int)>(
                           valueListenable: _prog,
                           builder: (context, v, _) => Text(
-                            _chapterHint(context, v),
+                            '${(_progressOf(v) * 100).round()}%',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12.5,
@@ -290,7 +573,7 @@ class _BookReadScreenState extends State<BookReadScreen> {
               ),
             ),
 
-            // Bottom bar: share, themes & settings, contents.
+            // Bottom bar: share, themes & settings, bookmark, contents.
             Align(
               alignment: Alignment.bottomCenter,
               child: AnimatedSlide(
@@ -351,7 +634,7 @@ class _BookReadScreenState extends State<BookReadScreen> {
               ),
             ),
 
-            // Page counter, printed-book style.
+            // Progress readout, printed-book style.
             Align(
               alignment: Alignment.bottomCenter,
               child: AnimatedOpacity(
@@ -362,7 +645,7 @@ class _BookReadScreenState extends State<BookReadScreen> {
                   child: ValueListenableBuilder<(int, int)>(
                     valueListenable: _prog,
                     builder: (context, v, _) => Text(
-                      '${v.$1}',
+                      '${(_progressOf(v) * 100).round()}%',
                       style: TextStyle(
                           fontSize: 11.5,
                           color: theme.ink.withValues(alpha: 0.5)),
@@ -377,19 +660,17 @@ class _BookReadScreenState extends State<BookReadScreen> {
     );
   }
 
-  /// "4 pages left", the way a reader app counts down.
-  String _chapterHint(BuildContext context, (int, int) v) {
-    final left = (v.$2 - v.$1).clamp(0, 9999);
-    return context.t.pagesLeft(left);
-  }
-
   // ---- Selection menu ------------------------------------------------------
 
   /// The manuscript page a selected passage belongs to (first match wins).
+  /// Matched against the chapter's paragraphs joined the way SelectionArea
+  /// joins a selection, so a passage picked across a paragraph break resolves.
   Note? _pageForText(String text) {
-    if (text.isEmpty) return null;
+    final needle = _selKey(text);
+    if (needle.isEmpty) return null;
     for (final p in _readerPages) {
-      if (p.textPreview.contains(text)) return p;
+      final joined = _joinedByPage[p.id];
+      if (joined != null && joined.contains(needle)) return p;
     }
     return null;
   }
@@ -403,20 +684,21 @@ class _BookReadScreenState extends State<BookReadScreen> {
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: regionState.contextMenuAnchors,
       buttonItems: [
-        // Note/Highlight only when the passage sits within one known page.
         if (page != null) ...[
           ContextMenuButtonItem(
             label: t.annotateNote,
             onPressed: () {
-              close();
-              _annotate(context, page, text, withNote: true);
+              // Drop the live selection first so its overlay stops competing
+              // with the sheet for taps.
+              regionState.clearSelection();
+              _annotate(page, text, withNote: true);
             },
           ),
           ContextMenuButtonItem(
             label: t.annotateHighlight,
             onPressed: () {
-              close();
-              _annotate(context, page, text, withNote: false);
+              regionState.clearSelection();
+              _annotate(page, text, withNote: false);
             },
           ),
         ],
@@ -462,16 +744,17 @@ class _BookReadScreenState extends State<BookReadScreen> {
     try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
-      // Nothing to do: the reader stays put.
+      // Nothing else to do.
     }
   }
 
   /// Attaches a highlight (and optionally a note) to whichever page contains
-  /// the selected passage.
-  Future<void> _annotate(BuildContext context, Note page, String text,
+  /// the selected passage. Uses the reader's own (stable) context rather than
+  /// the transient selection-menu one, so the pickers stay mounted and tappable.
+  Future<void> _annotate(Note page, String text,
       {required bool withNote}) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty || !mounted) return;
     final state = context.read<AppState>();
 
     var colour = Annotation.palette.first;
@@ -493,16 +776,17 @@ class _BookReadScreenState extends State<BookReadScreen> {
       );
       if (result == null) return;
       note = result.trim();
-    } else if (context.mounted) {
+    } else {
       final picked = await showModalBottomSheet<int>(
         context: context,
+        useRootNavigator: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => SafeArea(
+        builder: (sheetCtx) => SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 22),
+                  horizontal: 16, vertical: 20),
               decoration: BoxDecoration(
                 color: AppPalette.scheme.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(26),
@@ -512,15 +796,19 @@ class _BookReadScreenState extends State<BookReadScreen> {
                 children: [
                   for (final c in Annotation.palette)
                     GestureDetector(
-                      onTap: () => Navigator.pop(context, c),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Color(c),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: Colors.black.withValues(alpha: 0.15)),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(sheetCtx).pop(c),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Color(c),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: Colors.black.withValues(alpha: 0.15)),
+                          ),
                         ),
                       ),
                     ),
@@ -530,7 +818,7 @@ class _BookReadScreenState extends State<BookReadScreen> {
           ),
         ),
       );
-      if (picked == null) return;
+      if (picked == null || !mounted) return;
       colour = picked;
     }
 
@@ -597,7 +885,6 @@ class _BookReadScreenState extends State<BookReadScreen> {
                         ],
                       ),
                     ),
-                    // Jump-to-chapter search: filter the list by title.
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
                       child: TextField(
@@ -673,19 +960,21 @@ class _BookReadScreenState extends State<BookReadScreen> {
     );
   }
 
+  /// Scrolls to the first paragraph of chapter [pageId].
   void _jumpTo(String pageId) {
-    final key = _anchors[pageId];
-    final ctx = key?.currentContext;
-    if (ctx == null) return;
-    Scrollable.ensureVisible(ctx,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic);
+    final idx = _flows.indexWhere((f) => f.pageId == pageId);
+    if (idx >= 0 && _isc.isAttached) {
+      _isc.scrollTo(
+          index: idx,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic);
+    }
   }
 
   void _jumpToFraction(double f) {
-    if (!_scroll.hasClients) return;
-    final max = _scroll.position.maxScrollExtent;
-    _scroll.animateTo((f * max).clamp(0.0, max),
+    if (!_isc.isAttached) return;
+    _isc.scrollTo(
+        index: _indexForFraction(f),
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeOutCubic);
   }
@@ -722,7 +1011,14 @@ class _BookReadScreenState extends State<BookReadScreen> {
                             style:
                                 TextStyle(color: AppPalette.inkSecondary)),
                       )
-                    : Flexible(
+                    // A bounded box, not Flexible: Flexible only works inside a
+                    // Flex, and inside this Container it rendered nothing (blank
+                    // sheet). ConstrainedBox lets the list size to its content
+                    // and scroll if it grows past ~60% of the screen.
+                    : ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxHeight:
+                                MediaQuery.of(sheetContext).size.height * 0.6),
                         child: ListView(
                           shrinkWrap: true,
                           children: [
@@ -782,7 +1078,12 @@ class _BookReadScreenState extends State<BookReadScreen> {
                         style:
                             TextStyle(color: AppPalette.inkSecondary)),
                   )
-                : Flexible(
+                // Bounded box, not Flexible (which is invalid inside a Container
+                // and rendered a blank sheet).
+                : ConstrainedBox(
+                    constraints: BoxConstraints(
+                        maxHeight:
+                            MediaQuery.of(sheetContext).size.height * 0.6),
                     child: ListView(
                       shrinkWrap: true,
                       children: [
@@ -840,59 +1141,6 @@ class _BookReadScreenState extends State<BookReadScreen> {
   }
 }
 
-/// One page's body: text with the reader's highlights painted behind the
-/// marked passages. Selection (and its menu) is handled by the enclosing
-/// [SelectionArea] so it never competes with the scroll gesture.
-class _PageText extends StatelessWidget {
-  const _PageText({
-    required this.page,
-    required this.style,
-    this.align = TextAlign.justify,
-  });
-
-  final Note page;
-  final TextStyle style;
-  final TextAlign align;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = page.textPreview.trim();
-    if (text.isEmpty) return const SizedBox.shrink();
-
-    // Find each highlight's span, then paint the text in order.
-    final marks = <({int start, int end, Annotation a})>[];
-    for (final a in page.annotations) {
-      final i = text.indexOf(a.text);
-      if (i >= 0) marks.add((start: i, end: i + a.text.length, a: a));
-    }
-    marks.sort((x, y) => x.start.compareTo(y.start));
-
-    final spans = <TextSpan>[];
-    var cursor = 0;
-    for (final m in marks) {
-      if (m.start < cursor) continue; // overlapping marks: keep the first
-      if (m.start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, m.start)));
-      }
-      spans.add(TextSpan(
-        text: text.substring(m.start, m.end),
-        style: TextStyle(
-          backgroundColor: Color(m.a.colorValue).withValues(alpha: 0.55),
-        ),
-      ));
-      cursor = m.end;
-    }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor)));
-    }
-
-    return Text.rich(
-      TextSpan(children: spans, style: style),
-      textAlign: align,
-    );
-  }
-}
-
 /// Themes & Settings: type size, face, and the reading themes. The face is
 /// the book's own, so changing it here applies book-wide.
 class _ReaderSettingsSheet extends StatelessWidget {
@@ -923,7 +1171,6 @@ class _ReaderSettingsSheet extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       color: AppPalette.inkPrimary)),
               const SizedBox(height: 16),
-              // Type size and face.
               Row(
                 children: [
                   _RoundAction(
@@ -944,8 +1191,6 @@ class _ReaderSettingsSheet extends StatelessWidget {
                         .setReaderFontScale(state.readerFontScale + 0.1),
                   ),
                   const Spacer(),
-                  // The book's typeface, book-wide. Scrolls if it overflows
-                  // the row on a narrow screen.
                   Flexible(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -982,7 +1227,6 @@ class _ReaderSettingsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              // Reading themes.
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),

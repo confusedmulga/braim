@@ -64,13 +64,18 @@ class CardsScreen extends StatelessWidget {
         controller: controller,
         slivers: [
           const SliverToBoxAdapter(
-            child: FeedGreeting(text: kCardsGreeting),
+            child: FeedGreeting(picker: pickCardsGreeting),
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 150),
             // Lazy masonry: builds only visible tiles and packs each into the
-            // shortest column (true height balancing).
+            // shortest column (true height balancing). Re-key only on a real
+            // reorder — a pin/unpin or sort change — so the grid re-lays out
+            // cleanly there instead of reusing stale columns, while add/delete
+            // keep their scroll position.
             sliver: SliverMasonryGrid.count(
+              key: ValueKey('cards|${state.sortMode.name}|'
+                  '${cards.where((c) => c.pinned).map((c) => c.id).join(',')}'),
               crossAxisCount: 2,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,

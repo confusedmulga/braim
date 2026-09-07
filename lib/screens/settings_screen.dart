@@ -15,6 +15,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
+import '../widgets/tutorial_dialog.dart';
 
 /// Human-readable "last backed up" line for the backup row.
 String _lastBackupText(BuildContext context, DateTime? last) {
@@ -126,7 +127,7 @@ class SettingsScreen extends StatelessWidget {
       // Nothing pending may overwrite the restored file afterwards.
       await appState.flushNow();
       await BackupService.instance.restoreFromFile(path);
-      await appState.init();
+      await appState.init(restored: true);
       nav.pop();
       messenger.showSnackBar(
         SnackBar(content: Text(t.backupRestored)),
@@ -578,71 +579,52 @@ class SettingsScreen extends StatelessWidget {
                         borderRadius: 20,
                         blur: 0,
                         color: AppPalette.surfaceGlass,
-                        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-                        child: Row(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                        child: Column(
                           children: [
-                            // A small preview of the active theme's background.
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: SizedBox(
-                                width: 46,
-                                height: 46,
-                                child: _feedBgPreview(state),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(context.t.feedBackgroundLabel,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      fontSize: 14.5,
-                                      color: AppPalette.inkPrimary)),
-                            ),
-                            // Set the light-mode image, the dark-mode image, then
-                            // reset (shown only when a custom one is set).
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: context.t.feedBackgroundLightMode,
-                              icon: const Icon(Icons.light_mode_outlined),
-                              color: state.feedBackgroundLight.isNotEmpty
-                                  ? AppPalette.scheme.primary
-                                  : AppPalette.inkSecondary,
-                              onPressed: () async {
+                            // A clear row per theme: preview, what it is, and
+                            // the photo button to pick the image.
+                            _bgModeRow(
+                              context,
+                              label: context.t.backgroundForLight,
+                              preview: _bgThumb(state.feedBackgroundLight,
+                                  'assets/wallpapers/bg_light.jpg'),
+                              isSet: state.feedBackgroundLight.isNotEmpty,
+                              onPick: () async {
                                 final path = await ImageService.pickSingle();
                                 if (path != null && context.mounted) {
-                                  context
-                                      .read<AppState>()
-                                      .setFeedBackground(dark: false, path: path);
+                                  context.read<AppState>().setFeedBackground(
+                                      dark: false, path: path);
                                 }
                               },
                             ),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              tooltip: context.t.feedBackgroundDarkMode,
-                              icon: const Icon(Icons.dark_mode_outlined),
-                              color: state.feedBackgroundDark.isNotEmpty
-                                  ? AppPalette.scheme.primary
-                                  : AppPalette.inkSecondary,
-                              onPressed: () async {
+                            const SizedBox(height: 14),
+                            _bgModeRow(
+                              context,
+                              label: context.t.backgroundForDark,
+                              preview: _bgThumb(state.feedBackgroundDark,
+                                  'assets/wallpapers/bg_dark.jpg'),
+                              isSet: state.feedBackgroundDark.isNotEmpty,
+                              onPick: () async {
                                 final path = await ImageService.pickSingle();
                                 if (path != null && context.mounted) {
-                                  context
-                                      .read<AppState>()
-                                      .setFeedBackground(dark: true, path: path);
+                                  context.read<AppState>().setFeedBackground(
+                                      dark: true, path: path);
                                 }
                               },
                             ),
                             if (state.feedBackgroundLight.isNotEmpty ||
                                 state.feedBackgroundDark.isNotEmpty)
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                tooltip: context.t.feedBackgroundReset,
-                                icon: const Icon(Icons.restart_alt_rounded),
-                                color: AppPalette.inkSecondary,
-                                onPressed: () => context
-                                    .read<AppState>()
-                                    .clearFeedBackgrounds(),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: () => context
+                                      .read<AppState>()
+                                      .clearFeedBackgrounds(),
+                                  icon: const Icon(Icons.restart_alt_rounded,
+                                      size: 18),
+                                  label: Text(context.t.feedBackgroundReset),
+                                ),
                               ),
                           ],
                         ),
@@ -927,6 +909,27 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      _SectionLabel(context.t.guideSettingsLabel),
+                      GlassPanel(
+                        borderRadius: 20,
+                        blur: 0,
+                        color: AppPalette.surfaceGlass,
+                        padding: EdgeInsets.zero,
+                        child: ListTile(
+                          leading: Icon(Icons.help_outline_rounded,
+                              color: AppPalette.inkPrimary),
+                          title: Text(context.t.guideTitle,
+                              style: TextStyle(
+                                  color: AppPalette.inkPrimary,
+                                  fontWeight: FontWeight.w600)),
+                          trailing: Icon(Icons.chevron_right_rounded,
+                              color: AppPalette.inkSecondary),
+                          onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const GuideScreen())),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       _SectionLabel(context.t.aboutSection),
                       GlassPanel(
                         borderRadius: 20,
@@ -974,19 +977,48 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-/// A thumbnail of the active theme's feed background (custom image or built-in).
-Widget _feedBgPreview(AppState state) {
-  final custom =
-      AppPalette.dark ? state.feedBackgroundDark : state.feedBackgroundLight;
-  if (custom.isNotEmpty && File(custom).existsSync()) {
-    return Image.file(File(custom), fit: BoxFit.cover, cacheWidth: 140);
-  }
-  return Image.asset(
-    AppPalette.dark
-        ? 'assets/wallpapers/bg_dark.jpg'
-        : 'assets/wallpapers/bg_light.jpg',
-    fit: BoxFit.cover,
-    cacheWidth: 140,
+/// A 46px background thumbnail: the custom image if set, else the built-in one.
+Widget _bgThumb(String customPath, String fallbackAsset) {
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(10),
+    child: SizedBox(
+      width: 46,
+      height: 46,
+      child: customPath.isNotEmpty && File(customPath).existsSync()
+          ? Image.file(File(customPath), fit: BoxFit.cover, cacheWidth: 140)
+          : Image.asset(fallbackAsset, fit: BoxFit.cover, cacheWidth: 140),
+    ),
+  );
+}
+
+/// One theme's background row: a tappable preview, its label, and a photo
+/// button to choose the image.
+Widget _bgModeRow(
+  BuildContext context, {
+  required String label,
+  required Widget preview,
+  required bool isSet,
+  required Future<void> Function() onPick,
+}) {
+  return Row(
+    children: [
+      GestureDetector(onTap: onPick, child: preview),
+      const SizedBox(width: 14),
+      Expanded(
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w600,
+                color: AppPalette.inkPrimary)),
+      ),
+      IconButton(
+        tooltip: label,
+        icon: Icon(Icons.add_photo_alternate_outlined,
+            color:
+                isSet ? AppPalette.scheme.primary : AppPalette.inkSecondary),
+        onPressed: onPick,
+      ),
+    ],
   );
 }
 

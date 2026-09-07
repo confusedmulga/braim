@@ -4,6 +4,7 @@ import '../l10n/l10n.dart';
 
 import '../models/note.dart';
 import '../models/space.dart';
+import '../services/note_markdown.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
 import 'note_preview.dart';
@@ -47,7 +48,10 @@ class NoteCard extends StatelessWidget {
             : null,
         child: FlatCard(
         borderRadius: 22,
-        fill: NoteColors.resolve(note.colorValue),
+        // Colour-coded notes read the same vivid way as Cortex folder tiles
+        // (light-toned, only slightly darkened in dark mode) instead of the old
+        // near-black tint, so a chosen colour is actually visible.
+        fill: NoteColors.resolveStrong(note.colorValue),
         child: Stack(
           children: [
             _cardBody(context, thumb, preview),
@@ -88,6 +92,16 @@ class NoteCard extends StatelessWidget {
   }
 
   Widget _cardBody(BuildContext context, String? thumb, String preview) {
+    // On a colour-coded (light-toned) card, ink flips dark so it stays legible;
+    // uncoloured cards keep the theme's ink.
+    final colored = NoteColors.resolveStrong(note.colorValue) != null;
+    final ink = colored ? NoteColors.onSwatch : AppPalette.inkPrimary;
+    final ink2 = colored
+        ? NoteColors.onSwatch.withValues(alpha: 0.72)
+        : AppPalette.inkSecondary;
+    // A Markdown node reads as a clean "document" tile (sans face + a badge),
+    // distinct from the handwriting-style notes around it.
+    if (note.markdown) return _markdownBody(context, ink, ink2);
     return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
@@ -112,29 +126,6 @@ class NoteCard extends StatelessWidget {
                     _spaceChip(space!),
                     const SizedBox(height: 8),
                   ],
-                  // Articles read differently from notes; say so up front.
-                  if (note.isArticle) ...[
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.article_outlined,
-                            size: 14, color: AppPalette.inkSecondary),
-                        const SizedBox(width: 5),
-                        Text(
-                          note.articleDraft
-                              ? context.t.draftLabel
-                              : context.t.articleLabel,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            letterSpacing: 0.6,
-                            fontWeight: FontWeight.w700,
-                            color: AppPalette.inkSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                  ],
                   if (note.title.trim().isNotEmpty)
                     Text(
                       note.title.trim(),
@@ -144,7 +135,7 @@ class NoteCard extends StatelessWidget {
                         fontFamily: kNoteHeadingFont,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: AppPalette.inkPrimary,
+                        color: ink,
                       ),
                     ),
                   if (note.title.trim().isNotEmpty && preview.isNotEmpty)
@@ -157,7 +148,7 @@ class NoteCard extends StatelessWidget {
                         fontFamily: activeBodyFont,
                         fontSize: 18,
                         height: 1.25,
-                        color: AppPalette.inkSecondary,
+                        color: ink2,
                       ),
                     ),
                   if (preview.isEmpty &&
@@ -167,7 +158,7 @@ class NoteCard extends StatelessWidget {
                       context.t.emptyNote,
                       style: TextStyle(
                         fontStyle: FontStyle.italic,
-                        color: AppPalette.inkSecondary,
+                        color: ink2,
                       ),
                     ),
                   if (note.imagePaths.length > 1) ...[
@@ -175,13 +166,13 @@ class NoteCard extends StatelessWidget {
                     Row(
                       children: [
                         Icon(Icons.photo_library_outlined,
-                            size: 15, color: AppPalette.inkSecondary),
+                            size: 15, color: ink2),
                         const SizedBox(width: 4),
                         Text(
                           context.t.photosCount(note.imagePaths.length),
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppPalette.inkSecondary,
+                            color: ink2,
                           ),
                         ),
                       ],
@@ -206,7 +197,7 @@ class NoteCard extends StatelessWidget {
                                 style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: AppPalette.inkPrimary)),
+                                    color: ink)),
                           ),
                       ],
                     ),
@@ -215,6 +206,72 @@ class NoteCard extends StatelessWidget {
               ),
             ),
           ],
+    );
+  }
+
+  /// The feed tile for a Markdown node: a small "Markdown" badge, the title in
+  /// a clean sans, and a symbol-free preview of the source.
+  Widget _markdownBody(BuildContext context, Color ink, Color ink2) {
+    final title = note.title.trim();
+    final preview = markdownPlainPreview(note.markdownSource,
+        skipTitle: title.isEmpty ? null : title);
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: ink.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.data_object_rounded, size: 13, color: ink2),
+                const SizedBox(width: 4),
+                Text('Markdown',
+                    style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                        color: ink2)),
+              ],
+            ),
+          ),
+          if (title.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                    color: ink)),
+          ],
+          if (preview.isNotEmpty) ...[
+            SizedBox(height: title.isNotEmpty ? 6 : 10),
+            Text(preview,
+                maxLines: 6,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: ink2)),
+          ],
+          if (title.isEmpty && preview.isEmpty) ...[
+            const SizedBox(height: 10),
+            Text(context.t.emptyNote,
+                style: TextStyle(fontStyle: FontStyle.italic, color: ink2)),
+          ],
+        ],
+      ),
     );
   }
 

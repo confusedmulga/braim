@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -183,162 +185,243 @@ class DailyDayCard extends StatelessWidget {
   }
 }
 
-/// A "Today's progress" card (the reference): a completion ring on the left and
-/// Total / Completed / Pending counts on the right, summed across all of today's
-/// reflex threads. A self-contained deep-green card, readable in either theme.
+/// The journal's "Today's progress" card: one unified view of the whole daily
+/// day — the cumulative list of everything due today across every reflex. A
+/// completion ring, Total / Completed / Pending, a 7-day mini history strip
+/// (tap it for the full calendar), the next unfinished task, and a perfect-day /
+/// rest-day flourish. A self-contained deep-green card, readable in either theme.
 class _TodayProgressRing extends StatelessWidget {
   const _TodayProgressRing({
     required this.progress,
     required this.streak,
-    required this.name,
-    required this.showAll,
-    required this.onAll,
-    required this.onOne,
+    required this.history,
+    required this.pending,
     required this.onTap,
-    required this.onLongPress,
   });
   final TodayProgress progress;
-  final ReflexStreak streak;
 
-  /// The tracked impulse's name (shown on the "one" toggle segment).
-  final String name;
+  /// Consecutive fully-cleared days, ending at the last completed day.
+  final int streak;
 
-  /// Whether the card is aggregating all reflexes ("All") vs the one impulse.
-  final bool showAll;
-  final VoidCallback onAll;
-  final VoidCallback onOne;
+  /// The last 7 days of cumulative completion, oldest first (the mini strip).
+  final List<TodayProgress> history;
 
-  /// Tap opens analytics; long-press switches which impulse the card tracks.
+  /// Today's still-unfinished tasks, earliest first (the "next up" hint).
+  final List<Thread> pending;
+
+  /// Opens the full analytics screen (period graph, dropdown, heatmap).
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
 
   static const _ink = Colors.white;
   static const _fill = Color(0xFF5FD08C);
 
   @override
   Widget build(BuildContext context) {
+    final rest = progress.total == 0;
+    final perfect = progress.total > 0 && progress.done >= progress.total;
     final pct = (progress.fraction * 100).round();
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onLongPress,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF12362B), Color(0xFF1D4C3B)],
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF12362B), Color(0xFF1D4C3B)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.wb_sunny_rounded, size: 16, color: _fill),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(context.t.todaysProgress,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: _ink)),
+              ),
+              if (streak > 0) ...[
+                const Icon(Icons.local_fire_department_rounded,
+                    size: 15, color: Color(0xFFFFC65C)),
+                const SizedBox(width: 3),
+                Text(context.t.streakDays(streak),
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _ink.withValues(alpha: 0.9))),
+              ],
+            ],
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Scope toggle (All vs the tracked impulse) + a chevron into
-            // analytics.
-            Row(
-              children: [
-                _seg(context.t.analyticsScopeAll, showAll, onAll),
-                const SizedBox(width: 6),
-                Flexible(child: _seg(name, !showAll, onOne)),
-                const SizedBox(width: 8),
-                const Icon(Icons.chevron_right_rounded,
-                    size: 20, color: Colors.white70),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 74,
-                  height: 74,
-                  child: CustomPaint(
-                    painter: _RingPaint(progress.fraction),
-                    child: Center(
-                      child: Text('$pct%',
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: _ink)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              SizedBox(
+                width: 74,
+                height: 74,
+                child: CustomPaint(
+                  painter: _RingPaint(rest ? 0 : progress.fraction),
+                  child: Center(
+                    child: perfect
+                        ? const Icon(Icons.check_rounded,
+                            size: 30, color: _ink)
+                        : Text(rest ? '—' : '$pct%',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _ink)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _stat(Icons.dns_rounded, progress.total,
+                            context.t.progressTotal),
+                        _stat(Icons.check_circle_rounded, progress.done,
+                            context.t.progressCompleted),
+                        _stat(Icons.schedule_rounded, progress.pending,
+                            context.t.progressPending),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    _statusLine(context, rest: rest, perfect: perfect),
+                  ],
                 ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(context.t.todaysProgress,
-                          style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: _ink)),
-                      if (streak.current > 0) ...[
-                        const SizedBox(height: 5),
-                        Row(
-                          children: [
-                            const Icon(Icons.local_fire_department_rounded,
-                                size: 14, color: Color(0xFFFFC65C)),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                streak.best > streak.current
-                                    ? '${context.t.streakDays(streak.current)} · ${context.t.streakBest(streak.best)}'
-                                    : context.t.streakDays(streak.current),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: _ink.withValues(alpha: 0.85)),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                      ] else
-                        const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          _stat(Icons.dns_rounded, progress.total,
-                              context.t.progressTotal),
-                          _stat(Icons.check_circle_rounded, progress.done,
-                              context.t.progressCompleted),
-                          _stat(Icons.schedule_rounded, progress.pending,
-                              context.t.progressPending),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _miniStrip(context),
+        ],
+      ),
       ),
     );
   }
 
-  Widget _seg(String label, bool selected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: selected ? _ink : Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+  /// The next-up hint, or the perfect-day / rest-day flourish.
+  Widget _statusLine(BuildContext context,
+      {required bool rest, required bool perfect}) {
+    if (perfect) {
+      return Row(
+        children: [
+          const Icon(Icons.celebration_rounded,
+              size: 15, color: Color(0xFFFFC65C)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(context.t.perfectDay,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: _ink)),
+          ),
+        ],
+      );
+    }
+    if (rest) {
+      return Text(context.t.progressAllClear,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _ink.withValues(alpha: 0.8)));
+    }
+    final titles = pending
+        .map((t) => t.title.trim().isEmpty
+            ? context.t.untitledEntry
+            : t.title.trim())
+        .join('   ·   ');
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(children: [
+        TextSpan(
+            text: '${context.t.nextUp}   ',
+            style: const TextStyle(
+                fontSize: 11.5, fontWeight: FontWeight.w700, color: _fill)),
+        TextSpan(
+            text: titles.isEmpty ? '—' : titles,
             style: TextStyle(
                 fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: _ink.withValues(alpha: 0.92))),
+      ]),
+    );
+  }
+
+  /// A 7-day sparkline of daily completion (the whole card taps to analytics).
+  Widget _miniStrip(BuildContext context) {
+    final now = DateTime.now();
+    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (var i = 0; i < history.length; i++)
+          _miniBar(
+            history[i],
+            label: letters[now
+                    .subtract(Duration(days: history.length - 1 - i))
+                    .weekday -
+                1],
+            isToday: i == history.length - 1,
+          ),
+        const Icon(Icons.chevron_right_rounded,
+            size: 18, color: Colors.white54),
+      ],
+    );
+  }
+
+  Widget _miniBar(TodayProgress p,
+      {required String label, required bool isToday}) {
+    final has = p.total > 0;
+    final frac = has ? p.fraction.clamp(0.0, 1.0) : 0.0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 13,
+          height: 30,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(5),
+            border: isToday
+                ? Border.all(
+                    color: Colors.white.withValues(alpha: 0.55), width: 1)
+                : null,
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.bottomCenter,
+            heightFactor: frac,
+            child: Container(
+              decoration: BoxDecoration(
+                color: has ? _fill : Colors.transparent,
+                borderRadius: BorderRadius.circular(5),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 9.5,
                 fontWeight: FontWeight.w700,
-                color: selected
-                    ? const Color(0xFF1D4C3B)
-                    : _ink.withValues(alpha: 0.85))),
-      ),
+                color: _ink.withValues(alpha: isToday ? 0.9 : 0.5))),
+      ],
     );
   }
 
@@ -399,41 +482,25 @@ class _RingPaint extends CustomPainter {
 
 /// The green "Today's progress" dashboard as a standalone, always-visible card,
 /// pinned just below the journal's week strip (rather than living inside a
-/// reorderable section). It stays put regardless of section order and shows
-/// even when the tracked impulse has nothing scheduled today (0%). Tracks every
-/// reflex ("All") or one chosen impulse — long-press to switch, tap for
-/// analytics.
+/// reorderable section). It shows one thing: the whole daily day — the
+/// cumulative list of everything due today across every reflex — so it always
+/// matches the list below it. The 7-day strip taps through to the history.
 class TodayProgressCard extends StatelessWidget {
   const TodayProgressCard({super.key});
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final showAll = state.progressShowAll;
-    final tracked = state.progressImpulse;
-    final trackedName = state.isDailyDay(tracked.id)
-        ? context.t.dailyDay
-        : (tracked.title.trim().isEmpty
-            ? context.t.untitledImpulse
-            : tracked.title);
-    final progress =
-        showAll ? state.todayProgress : state.todayProgressFor(tracked);
-    final streak = showAll
-        ? ReflexStreak(state.activityStreak(), state.activityStreak())
-        : state.streakFor(tracked);
     return _TodayProgressRing(
-      progress: progress,
-      streak: streak,
-      name: trackedName,
-      showAll: showAll,
-      onAll: () => state.setProgressShowAll(true),
-      onOne: () => state.setProgressShowAll(false),
+      progress: state.dueProgressOn(DateTime.now()),
+      streak: state.dueStreak(),
+      history: state.dueHistory(7),
+      pending: state.pendingDueToday(limit: 2),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ImpulseAnalyticsScreen(impulseId: tracked.id),
+          builder: (_) => const ImpulseAnalyticsScreen(),
         ),
       ),
-      onLongPress: () => _pickTrackedImpulse(context, state),
     );
   }
 }
@@ -455,7 +522,8 @@ class DailyDayList extends StatelessWidget {
     // Note: the green "Today's progress" card used to live here; it's now the
     // standalone [TodayProgressCard], pinned below the journal's week strip.
 
-    return Column(
+    return _FrostedBox(
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
@@ -489,7 +557,7 @@ class DailyDayList extends StatelessWidget {
                 style: TextStyle(color: AppPalette.inkSecondary)),
           )
         else
-          _DueTaskTimeline(items: due, date: date),
+          DueTaskTimeline(items: due, date: date),
         // An always-visible inline add, straight to the daily-day list.
         Padding(
           padding: const EdgeInsets.only(top: 2),
@@ -500,19 +568,86 @@ class DailyDayList extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }
 
-/// The cumulative daily-day timeline: threads due today from every impulse,
-/// ordered by time, each ticked against its own impulse.
-class _DueTaskTimeline extends StatelessWidget {
-  const _DueTaskTimeline({required this.items, required this.date});
+/// A rounded, theme-aware frosted panel: one clipped [BackdropFilter] with a
+/// translucent fill so content over the feed wallpaper stays legible. Wrapped in
+/// a [RepaintBoundary] and used for a single card (never per-row), so the blur
+/// stays cheap while scrolling.
+class _FrostedBox extends StatelessWidget {
+  const _FrostedBox({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = AppPalette.dark;
+    final radius = BorderRadius.circular(20);
+    return RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            decoration: BoxDecoration(
+              color: dark
+                  ? const Color(0xFF191B23).withValues(alpha: 0.42)
+                  : Colors.white.withValues(alpha: 0.52),
+              borderRadius: radius,
+              border: Border.all(
+                color: dark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.white.withValues(alpha: 0.60),
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A cumulative task timeline for a day: threads due from every impulse,
+/// ordered by time, each ticked against its own impulse. Shared by the journal
+/// feed and the calendar's day view, so both read and tick the same way.
+class DueTaskTimeline extends StatelessWidget {
+  const DueTaskTimeline({super.key, required this.items, required this.date});
   final List<({String impulseId, Thread thread})> items;
   final DateTime date;
 
   Future<void> _toggle(BuildContext context, AppState state, String impulseId,
       String threadId, String dayKey) async {
+    // Editing a day more than 2 days from today asks once (per that day) before
+    // the first change; cancelling leaves the list exactly as it was.
+    if (state.farEditNeedsConfirm(dayKey)) {
+      final future = state.isFutureDay(dayKey);
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dctx) => AlertDialog(
+          title: Text(future
+              ? context.t.editFutureTitle
+              : context.t.editPastTitle),
+          content: Text(future
+              ? context.t.editFutureBody
+              : context.t.editPastBody),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dctx, false),
+                child: Text(context.t.cancel)),
+            FilledButton(
+                onPressed: () => Navigator.pop(dctx, true),
+                child: Text(context.t.proceed)),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      state.confirmFarEdit(dayKey);
+    }
+    if (!context.mounted) return;
     final before = state.dueProgressOn(date);
     HapticFeedback.selectionClick();
     await state.toggleThreadOn(impulseId, threadId, dayKey);
@@ -534,7 +669,8 @@ class _DueTaskTimeline extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final dayKey = AppState.dayKeyFor(date);
-    final canToggle = dayKey.compareTo(state.todayKey) <= 0;
+    // Past and future days are both tickable; far edits are guarded in _toggle.
+    const canToggle = true;
 
     final ordered = [...items];
     ordered.sort((a, b) {
@@ -851,7 +987,10 @@ class _TaskRow extends StatelessWidget {
                         Icons.flag_rounded,
                         _flagLabel(context, thread.flag),
                         _flagColor(thread.flag)),
-                  if (_weekdaysLabel(thread.days).isNotEmpty)
+                  if (thread.once)
+                    _chip(Icons.looks_one_rounded, context.t.repeatOnce,
+                        AppPalette.inkSecondary)
+                  else if (_weekdaysLabel(thread.days).isNotEmpty)
                     _chip(Icons.event_repeat_rounded,
                         _weekdaysLabel(thread.days), AppPalette.inkSecondary),
                 ],
@@ -1054,74 +1193,6 @@ Future<void> openNewThread(
   final id = await context.read<AppState>().addBlankThread(impulseId);
   if (id == null || !context.mounted) return;
   await showTaskDetailSheet(context, impulseId, id, date, isNew: true);
-}
-
-/// A sheet to choose which impulse the green progress card tracks. Long-pressing
-/// the card opens this; the daily day plus every active project are listed.
-Future<void> _pickTrackedImpulse(BuildContext context, AppState state) {
-  final options = state.reflexes; // [dailyDay, ...active projects]
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppPalette.sheet,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (sheetCtx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-            child: Text(context.t.pickProgressImpulse.toUpperCase(),
-                style: TextStyle(
-                    fontSize: 12,
-                    letterSpacing: 1.1,
-                    fontWeight: FontWeight.w700,
-                    color: AppPalette.inkSecondary)),
-          ),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final imp in options)
-                  ListTile(
-                    leading: Icon(
-                        state.isDailyDay(imp.id)
-                            ? Icons.wb_sunny_rounded
-                            : Icons.bolt_rounded,
-                        color: imp.id == state.progressImpulseId
-                            ? AppPalette.scheme.primary
-                            : AppPalette.inkSecondary),
-                    title: Text(
-                      state.isDailyDay(imp.id)
-                          ? context.t.dailyDay
-                          : (imp.title.trim().isEmpty
-                              ? context.t.untitledImpulse
-                              : imp.title),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppPalette.inkPrimary),
-                    ),
-                    trailing: imp.id == state.progressImpulseId
-                        ? Icon(Icons.check_rounded,
-                            color: AppPalette.scheme.primary)
-                        : null,
-                    onTap: () {
-                      state.setProgressImpulse(imp.id);
-                      Navigator.pop(sheetCtx);
-                    },
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
-  );
 }
 
 class _TaskDetailSheet extends StatefulWidget {
@@ -1345,18 +1416,43 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
               ],
               const SizedBox(height: 22),
               _sectionLabel(context, context.t.daysSection),
+              const SizedBox(height: 8),
+              // "Once" = a one-time task; "Everyday" = runs daily. Picking a
+              // specific weekday below drops into a custom recurrence (and
+              // switches "once" off), so the selector works either way.
+              _RepeatToggle(
+                once: thread.once,
+                everyday: !thread.once && thread.days.isEmpty,
+                onOnce: () => _persist((t) {
+                  t.once = true;
+                  t.days.clear();
+                }),
+                onEveryday: () => _persist((t) {
+                  t.once = false;
+                  t.days.clear();
+                }),
+              ),
+              const SizedBox(height: 12),
+              Opacity(
+                // Dimmed but still tappable while "once" — a tap adopts that
+                // day and turns the one-time flag off.
+                opacity: thread.once ? 0.4 : 1,
+                child: _WeekPicker(
+                  days: thread.days,
+                  onToggle: (d) => _persist((t) {
+                    t.once = false;
+                    if (!t.days.remove(d)) t.days.add(d);
+                  }),
+                ),
+              ),
               Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(context.t.daysHint,
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                    thread.once
+                        ? context.t.repeatOnceHint
+                        : context.t.daysHint,
                     style: TextStyle(
                         fontSize: 12, color: AppPalette.inkSecondary)),
-              ),
-              const SizedBox(height: 8),
-              _WeekPicker(
-                days: thread.days,
-                onToggle: (d) => _persist((t) {
-                  if (!t.days.remove(d)) t.days.add(d);
-                }),
               ),
               if (isLong) ...[
                 const SizedBox(height: 22),
@@ -2005,6 +2101,61 @@ class _ThreadDateTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A two-option recurrence toggle for a thread: a one-time "Once" task or an
+/// "Everyday" one. Neither pill is lit when the thread instead runs on a
+/// specific set of weekdays (a custom recurrence).
+class _RepeatToggle extends StatelessWidget {
+  const _RepeatToggle({
+    required this.once,
+    required this.everyday,
+    required this.onOnce,
+    required this.onEveryday,
+  });
+  final bool once;
+  final bool everyday;
+  final VoidCallback onOnce;
+  final VoidCallback onEveryday;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _seg(context.t.repeatOnce, once, onOnce)),
+        const SizedBox(width: 10),
+        Expanded(child: _seg(context.t.repeatEveryday, everyday, onEveryday)),
+      ],
+    );
+  }
+
+  Widget _seg(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color:
+              selected ? AppPalette.scheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? AppPalette.scheme.primary
+                : AppPalette.cardOutline,
+            width: 1.4,
+          ),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? AppPalette.scheme.onPrimary
+                    : AppPalette.inkSecondary)),
       ),
     );
   }

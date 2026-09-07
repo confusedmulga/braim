@@ -7,11 +7,13 @@ import '../l10n/l10n.dart';
 import '../models/impulse.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/bouncy_route.dart';
 import '../widgets/bubble_button.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
 import 'daily_day_screen.dart';
+import 'impulse_history_screen.dart';
 import 'pomodoro_screen.dart';
 
 const _weekdayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -126,7 +128,6 @@ class _ReflexesScreenState extends State<ReflexesScreen> {
                             child: _ImpulseCard(
                               impulse: impulses[i],
                               today: today,
-                              isDailyDay: state.isDailyDay(impulses[i].id),
                               isPinned: impulses[i].id == pinnedId,
                               onPin: () =>
                                   state.setPinnedReflex(impulses[i].id),
@@ -135,8 +136,6 @@ class _ReflexesScreenState extends State<ReflexesScreen> {
                                 state,
                                 impulses[i],
                                 isPinned: impulses[i].id == pinnedId,
-                                isDailyDay: state.isDailyDay(impulses[i].id),
-                                today: today,
                               ),
                               // An iOS-style horizontal slide (parallax +
                               // edge-swipe back), no fade — a calmer open/close.
@@ -443,18 +442,14 @@ class _ReflexHeader extends StatelessWidget {
 const _completeGreen = Color(0xFF2FA36B);
 
 /// Long-press options for a reflex: pin/unpin, pause/resume, mark complete (or
-/// reopen), and colour-code it. The daily day gets a reduced menu (pin, and
-/// "mark all complete" which just ticks today's threads — it never finishes).
+/// reopen), colour-code and archive it. The daily day is an ordinary reflex now,
+/// so it gets the same full menu.
 Future<void> _showImpulseMenu(
   BuildContext context,
   AppState state,
   Impulse impulse, {
   required bool isPinned,
-  required bool isDailyDay,
-  required String today,
 }) async {
-  final allDone = impulse.totalThreads > 0 &&
-      impulse.doneCount(today) == impulse.totalThreads;
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -468,74 +463,58 @@ Future<void> _showImpulseMenu(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Pin/unpin (the daily day, when already pinned, is the fallback,
-              // so there's nothing to unpin to).
-              if (!(isDailyDay && isPinned))
-                ListTile(
-                  leading: Icon(
-                      isPinned
-                          ? Icons.push_pin_rounded
-                          : Icons.push_pin_outlined,
-                      color: AppPalette.inkPrimary),
-                  title: Text(isPinned
-                      ? context.t.unpinFromFeed
-                      : context.t.pinToFeed),
-                  onTap: () => Navigator.pop(context, 'pin'),
-                ),
-              if (isDailyDay)
-                ListTile(
-                  leading: Icon(
-                      allDone
-                          ? Icons.refresh_rounded
-                          : Icons.check_circle_outline_rounded,
-                      color: allDone ? AppPalette.inkPrimary : _completeGreen),
-                  title: Text(
-                      allDone ? context.t.markActive : context.t.markComplete),
-                  onTap: () => Navigator.pop(context, 'markall'),
-                )
-              else ...[
-                ListTile(
-                  leading: Icon(
-                      impulse.paused
-                          ? Icons.play_circle_outline_rounded
-                          : Icons.pause_circle_outline_rounded,
-                      color: AppPalette.inkPrimary),
-                  title: Text(impulse.paused
-                      ? context.t.resumeImpulse
-                      : context.t.pauseImpulse),
-                  onTap: () => Navigator.pop(context, 'pause'),
-                ),
-                ListTile(
-                  leading: Icon(
-                      impulse.isCompletedManually
-                          ? Icons.refresh_rounded
-                          : Icons.check_circle_outline_rounded,
-                      color: impulse.isCompletedManually
-                          ? AppPalette.inkPrimary
-                          : _completeGreen),
-                  title: Text(impulse.isCompletedManually
-                      ? context.t.markActive
-                      : context.t.markComplete),
-                  onTap: () => Navigator.pop(context, 'complete'),
-                ),
-                ListTile(
-                  leading: Icon(Icons.palette_outlined,
-                      color: AppPalette.inkPrimary),
-                  title: Text(context.t.noteColor),
-                  onTap: () => Navigator.pop(context, 'colour'),
-                ),
-                ListTile(
-                  leading: Icon(
-                      impulse.archived
-                          ? Icons.unarchive_outlined
-                          : Icons.archive_outlined,
-                      color: AppPalette.inkPrimary),
-                  title: Text(impulse.archived
-                      ? context.t.unarchiveImpulse
-                      : context.t.archiveImpulse),
-                  onTap: () => Navigator.pop(context, 'archive'),
-                ),
-              ],
+              ListTile(
+                leading: Icon(
+                    isPinned
+                        ? Icons.push_pin_rounded
+                        : Icons.push_pin_outlined,
+                    color: AppPalette.inkPrimary),
+                title: Text(isPinned
+                    ? context.t.unpinFromFeed
+                    : context.t.pinToFeed),
+                onTap: () => Navigator.pop(context, 'pin'),
+              ),
+              ListTile(
+                leading: Icon(
+                    impulse.paused
+                        ? Icons.play_circle_outline_rounded
+                        : Icons.pause_circle_outline_rounded,
+                    color: AppPalette.inkPrimary),
+                title: Text(impulse.paused
+                    ? context.t.resumeImpulse
+                    : context.t.pauseImpulse),
+                onTap: () => Navigator.pop(context, 'pause'),
+              ),
+              ListTile(
+                leading: Icon(
+                    impulse.isCompletedManually
+                        ? Icons.refresh_rounded
+                        : Icons.check_circle_outline_rounded,
+                    color: impulse.isCompletedManually
+                        ? AppPalette.inkPrimary
+                        : _completeGreen),
+                title: Text(impulse.isCompletedManually
+                    ? context.t.markActive
+                    : context.t.markComplete),
+                onTap: () => Navigator.pop(context, 'complete'),
+              ),
+              ListTile(
+                leading: Icon(Icons.palette_outlined,
+                    color: AppPalette.inkPrimary),
+                title: Text(context.t.noteColor),
+                onTap: () => Navigator.pop(context, 'colour'),
+              ),
+              ListTile(
+                leading: Icon(
+                    impulse.archived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    color: AppPalette.inkPrimary),
+                title: Text(impulse.archived
+                    ? context.t.unarchiveImpulse
+                    : context.t.archiveImpulse),
+                onTap: () => Navigator.pop(context, 'archive'),
+              ),
             ],
           ),
         ),
@@ -546,8 +525,6 @@ Future<void> _showImpulseMenu(
   switch (choice) {
     case 'pin':
       await state.setPinnedReflex(isPinned ? AppState.dailyDayId : impulse.id);
-    case 'markall':
-      await state.markAllThreadsDone(impulse.id, today, !allDone);
     case 'pause':
       await state.setImpulsePaused(impulse.id, !impulse.paused);
     case 'complete':
@@ -641,7 +618,6 @@ class _ImpulseCard extends StatelessWidget {
   const _ImpulseCard({
     required this.impulse,
     required this.today,
-    required this.isDailyDay,
     required this.isPinned,
     required this.onPin,
     required this.onTap,
@@ -650,7 +626,6 @@ class _ImpulseCard extends StatelessWidget {
 
   final Impulse impulse;
   final String today;
-  final bool isDailyDay;
   final bool isPinned;
   final VoidCallback onPin;
   final VoidCallback onTap;
@@ -681,13 +656,10 @@ class _ImpulseCard extends StatelessWidget {
     final pct = complete ? 100 : (progress * 100).round();
     final barColor =
         complete ? const Color(0xFF2FA36B) : AppPalette.scheme.primary;
-    final title = isDailyDay
-        ? context.t.dailyDay
-        : (impulse.title.trim().isEmpty
-            ? context.t.untitledImpulse
-            : impulse.title);
-    final description =
-        isDailyDay ? context.t.dailyDaySubtitle : impulse.goal.trim();
+    final title = impulse.title.trim().isEmpty
+        ? context.t.untitledImpulse
+        : impulse.title;
+    final description = impulse.goal.trim();
 
     final card = GlassPanel(
       borderRadius: 20,
@@ -863,21 +835,18 @@ class _ImpulseDetailScreenState extends State<ImpulseDetailScreen> {
                     title: Text(context.t.changeAllTimes),
                     onTap: () => Navigator.pop(context, 'time'),
                   ),
-                // The daily day isn't an editable/deletable project.
-                if (impulse.id != AppState.dailyDayId) ...[
-                  ListTile(
-                    leading: Icon(Icons.edit_outlined,
-                        color: AppPalette.inkPrimary),
-                    title: Text(context.t.editImpulse),
-                    onTap: () => Navigator.pop(context, 'edit'),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.delete_outline_rounded,
-                        color: Color(0xFFE0567B)),
-                    title: Text(context.t.deleteImpulse),
-                    onTap: () => Navigator.pop(context, 'delete'),
-                  ),
-                ],
+                ListTile(
+                  leading: Icon(Icons.edit_outlined,
+                      color: AppPalette.inkPrimary),
+                  title: Text(context.t.editImpulse),
+                  onTap: () => Navigator.pop(context, 'edit'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded,
+                      color: Color(0xFFE0567B)),
+                  title: Text(context.t.deleteImpulse),
+                  onTap: () => Navigator.pop(context, 'delete'),
+                ),
               ],
             ),
           ),
@@ -982,7 +951,8 @@ class _ImpulseDetailScreenState extends State<ImpulseDetailScreen> {
         ),
       ],
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+        // Extra bottom room so the last threads clear the floating edit button.
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
           // Overview: goal, progress, meta.
           GlassPanel(
@@ -1338,27 +1308,19 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
     final gridOrigin = startDay.subtract(Duration(days: startDay.weekday - 1));
     final cols = (endDay.difference(gridOrigin).inDays / 7).floor() + 1;
 
-    // Tally completions per day over the right thread set — long-term goals pull
-    // in their nested curriculum threads, not just the flat reminder list.
+    // The thread set the heatmap scores — long-term goals pull in their nested
+    // curriculum threads, not just the flat reminder list.
     final threads = impulse.isLongTerm ? impulse.allThreads : impulse.threads;
-    final doneByDay = <String, int>{};
-    for (final t in threads) {
-      for (final d in t.doneDays) {
-        doneByDay[d] = (doneByDay[d] ?? 0) + 1;
-      }
-    }
-    final total = threads.length;
 
-    // Footer counters: window length and how many elapsed days were fully done.
+    // Footer counters: window length and how many elapsed days had every task
+    // that was due that day ticked (a "complete" day).
     final totalDays = endDay.difference(startDay).inDays + 1;
     var doneDays = 0;
-    if (total > 0) {
-      for (var c = startDay;
-          !c.isAfter(endDay) && !c.isAfter(today);
-          c = c.add(const Duration(days: 1))) {
-        if (!impulse.scheduledOn(c.weekday)) continue;
-        if ((doneByDay[AppState.dayKeyFor(c)] ?? 0) >= total) doneDays++;
-      }
+    for (var c = startDay;
+        !c.isAfter(endDay) && !c.isAfter(today);
+        c = c.add(const Duration(days: 1))) {
+      final (done, scheduled) = _dayTally(threads, c);
+      if (scheduled > 0 && done >= scheduled) doneDays++;
     }
     final daysLeft = endDay.difference(today).inDays;
 
@@ -1377,7 +1339,14 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
       });
     }
 
-    return Column(
+    return GestureDetector(
+      // Tapping the heatmap opens the full day-by-day history calendar, with
+      // the iOS-style left/right slide push.
+      onTap: () => Navigator.of(context).push(
+        cupertinoRoute(ImpulseHistoryScreen(impulseId: impulse.id)),
+      ),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
@@ -1388,6 +1357,9 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
                     letterSpacing: 1.1,
                     fontWeight: FontWeight.w700,
                     color: AppPalette.inkSecondary)),
+            const SizedBox(width: 5),
+            Icon(Icons.chevron_right_rounded,
+                size: 16, color: AppPalette.inkSecondary),
             const Spacer(),
             if (streak.current > 0) ...[
               const Icon(Icons.local_fire_department_rounded,
@@ -1424,7 +1396,7 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
                     Padding(
                       padding: EdgeInsets.only(bottom: d == 6 ? 0 : _gap),
                       child: _cellFor(gridOrigin.add(Duration(days: w * 7 + d)),
-                          startDay, endDay, today, doneByDay, total),
+                          startDay, endDay, today, threads),
                     ),
                 ],
               ),
@@ -1442,11 +1414,36 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
               color: AppPalette.inkSecondary),
         ),
       ],
+      ),
     );
   }
 
+  /// (done, scheduled) for [day]: how many of the day's due threads are ticked,
+  /// and how many were due. A one-time [Thread.once] task, and every milestone
+  /// of a checklist reflex, counts only on the day it was completed; every
+  /// other thread counts on the weekdays it runs (empty = every day). Kept
+  /// identical to the history calendar so both read the same.
+  (int done, int scheduled) _dayTally(List<Thread> threads, DateTime day) {
+    final key = AppState.dayKeyFor(day);
+    final onceLike = widget.impulse.mode == ImpulseMode.checklist;
+    var done = 0;
+    var scheduled = 0;
+    for (final t in threads) {
+      if (t.once || onceLike) {
+        if (t.doneDays.contains(key)) {
+          scheduled++;
+          done++;
+        }
+      } else if (t.days.isEmpty || t.days.contains(day.weekday)) {
+        scheduled++;
+        if (t.doneDays.contains(key)) done++;
+      }
+    }
+    return (done, scheduled);
+  }
+
   Widget _cellFor(DateTime day, DateTime startDay, DateTime endDay,
-      DateTime today, Map<String, int> doneByDay, int total) {
+      DateTime today, List<Thread> threads) {
     // Outside the created→deadline window: an invisible spacer that keeps the
     // weekday rows aligned.
     if (day.isBefore(startDay) || day.isAfter(endDay)) {
@@ -1456,19 +1453,23 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
     if (day.isAfter(today)) {
       // Upcoming day before the deadline — a faint placeholder.
       color = AppPalette.cardOutline.withValues(alpha: 0.16);
-    } else if (!widget.impulse.scheduledOn(day.weekday)) {
-      color = AppPalette.cardOutline.withValues(alpha: 0.25);
-    } else if (total == 0) {
-      color = AppPalette.cardOutline.withValues(alpha: 0.5);
     } else {
-      final frac = (doneByDay[AppState.dayKeyFor(day)] ?? 0) / total;
-      if (frac >= 1.0) {
-        color = AppPalette.journalAccent;
-      } else if (frac > 0) {
-        color = Color.lerp(AppPalette.cardOutline, AppPalette.journalAccent,
-            0.3 + frac * 0.5)!;
+      final (done, scheduled) = _dayTally(threads, day);
+      if (scheduled == 0) {
+        // Nothing was due this day.
+        color = AppPalette.cardOutline.withValues(alpha: 0.25);
       } else {
-        color = AppPalette.cardOutline.withValues(alpha: 0.5);
+        // Intensity tracks the *percentage* of the day's tasks completed, so it
+        // reads correctly no matter how many tasks there are.
+        final frac = done / scheduled;
+        if (frac >= 1.0) {
+          color = AppPalette.journalAccent;
+        } else if (frac > 0) {
+          color = Color.lerp(AppPalette.cardOutline, AppPalette.journalAccent,
+              0.3 + frac * 0.5)!;
+        } else {
+          color = AppPalette.cardOutline.withValues(alpha: 0.5);
+        }
       }
     }
     return Container(

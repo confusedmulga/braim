@@ -6,11 +6,12 @@ import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 
 /// The quick actions offered when a note/card is long-pressed.
-enum QuickAction { move, archive, select, delete }
+enum QuickAction { move, select, pin, theme, archive, delete }
 
-/// A frosted, rounded list of the four quick actions, shown on long-press.
-/// Returns the chosen action, or null if dismissed.
-Future<QuickAction?> showQuickActions(BuildContext context) {
+/// A frosted, rounded list of the quick actions, shown on long-press. [pinned]
+/// picks the Pin vs Unpin label. Returns the chosen action, or null if dismissed.
+Future<QuickAction?> showQuickActions(BuildContext context,
+    {bool pinned = false}) {
   return showModalBottomSheet<QuickAction>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -33,10 +34,19 @@ Future<QuickAction?> showQuickActions(BuildContext context) {
                 children: [
                   _row(context, Icons.drive_file_move_outline,
                       context.t.moveToFolder, QuickAction.move),
-                  _row(context, Icons.archive_outlined, context.t.archive,
-                      QuickAction.archive),
                   _row(context, Icons.check_circle_outline_rounded,
                       context.t.select, QuickAction.select),
+                  _row(
+                      context,
+                      pinned
+                          ? Icons.push_pin_rounded
+                          : Icons.push_pin_outlined,
+                      pinned ? context.t.unpinFromFeed : context.t.pinToFeed,
+                      QuickAction.pin),
+                  _row(context, Icons.palette_outlined, context.t.chooseTheme,
+                      QuickAction.theme),
+                  _row(context, Icons.archive_outlined, context.t.archive,
+                      QuickAction.archive),
                   _row(context, Icons.delete_outline_rounded, context.t.delete,
                       QuickAction.delete,
                       danger: true),
@@ -93,6 +103,7 @@ class SelectionActionBar extends StatelessWidget {
     super.key,
     required this.count,
     required this.onMove,
+    required this.onPin,
     required this.onArchive,
     required this.onDelete,
     required this.onClose,
@@ -100,6 +111,7 @@ class SelectionActionBar extends StatelessWidget {
 
   final int count;
   final VoidCallback onMove;
+  final VoidCallback onPin;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
   final VoidCallback onClose;
@@ -137,6 +149,7 @@ class SelectionActionBar extends StatelessWidget {
               ),
               const Spacer(),
               _act(Icons.drive_file_move_outline, onMove, AppPalette.inkPrimary),
+              _act(Icons.push_pin_outlined, onPin, AppPalette.inkPrimary),
               _act(Icons.archive_outlined, onArchive, AppPalette.inkPrimary),
               _act(Icons.delete_outline_rounded, onDelete,
                   const Color(0xFFE0567B)),

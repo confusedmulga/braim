@@ -161,13 +161,9 @@ class SeedData {
         updatedAt: ago(const Duration(days: 8)),
       ),
 
-      // A short saved article (byline, opens in the reading view).
+      // A short reflective note.
       Note(
         title: 'On slow mornings',
-        isArticle: true,
-        articleDraft: false,
-        authorName: 'Maya Ellison',
-        articleSavedAt: ago(const Duration(days: 6)),
         blocks: [
           text(
             'The best hour of my day is the one nobody knows about.\n\n'

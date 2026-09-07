@@ -110,6 +110,9 @@ class JournalScreenState extends State<JournalScreen> {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
+      // Size to the calendar's own height instead of the default ~56% cap,
+      // which clipped the last week row on taller screens.
+      isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
         builder: (ctx, setSheet) => SafeArea(
           child: Padding(
@@ -137,6 +140,16 @@ class JournalScreenState extends State<JournalScreen> {
         ),
       ),
     ).whenComplete(ctrl.dispose);
+  }
+
+  /// Opens a fresh journal entry for [day] — a double-tap on a day in the strip.
+  void _openNewEntry(DateTime day) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => NoteEditorScreen(
+        note: Note(journalDate: AppState.journalKey(day)),
+        isNew: true,
+      ),
+    ));
   }
 
   Future<void> _pickDate() async {
@@ -191,6 +204,7 @@ class JournalScreenState extends State<JournalScreen> {
             today: today,
             pinned: state.pinnedReflex,
             onSelect: _selectDay,
+            onNewEntry: _openNewEntry,
           ),
         ),
         const SizedBox(height: 6),
@@ -412,6 +426,7 @@ class _WeekStrip extends StatelessWidget {
     required this.today,
     required this.pinned,
     required this.onSelect,
+    required this.onNewEntry,
   });
 
   final PageController controller;
@@ -419,6 +434,7 @@ class _WeekStrip extends StatelessWidget {
   final DateTime today;
   final Impulse pinned;
   final ValueChanged<DateTime> onSelect;
+  final ValueChanged<DateTime> onNewEntry;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +464,7 @@ class _WeekStrip extends StatelessWidget {
                       completion:
                           _completionFor(pinned, weekMonday.add(Duration(days: i))),
                       onSelect: onSelect,
+                      onDoubleTap: onNewEntry,
                     ),
                   ),
               ],
@@ -474,6 +491,7 @@ class _DayCell extends StatelessWidget {
     required this.today,
     required this.completion,
     required this.onSelect,
+    required this.onDoubleTap,
   });
 
   final DateTime day;
@@ -481,6 +499,7 @@ class _DayCell extends StatelessWidget {
   final DateTime today;
   final double? completion;
   final ValueChanged<DateTime> onSelect;
+  final ValueChanged<DateTime> onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -495,6 +514,7 @@ class _DayCell extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onSelect(day),
+      onDoubleTap: () => onDoubleTap(day),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: isSelected
@@ -624,6 +644,7 @@ class _CalendarCard extends StatelessWidget {
         border: Border.all(color: AppPalette.cardOutline),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(

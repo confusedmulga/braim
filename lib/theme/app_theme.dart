@@ -47,11 +47,13 @@ class AppPalette {
   static Color get inkPrimary => scheme.onSurface;
   static Color get inkSecondary => scheme.onSurfaceVariant;
 
-  /// Translucent fill under the nav island's blur (kept translucent so the
-  /// frost shows; tinted by the scheme so both modes harmonise).
+  /// Translucent fill under the frosted chrome's blur — the nav island, top bar
+  /// (search + sort + menu), back button and the note/spark 3-dots pill. Kept
+  /// see-through so the frost reads over the feed; tinted by the scheme so both
+  /// modes harmonise.
   static Color get whiteFill => dark
-      ? scheme.surfaceContainerHigh.withValues(alpha: 0.66)
-      : scheme.surface.withValues(alpha: 0.66);
+      ? scheme.surfaceContainerHigh.withValues(alpha: 0.52)
+      : scheme.surface.withValues(alpha: 0.52);
 
   /// Near-opaque fill for cards that sit over the wallpaper without blur.
   static Color get cardFill => scheme.surface.withValues(alpha: 0.95);
@@ -70,10 +72,10 @@ class AppPalette {
   /// search-bar / tonal icon-button surface.
   static Color get bubbleGlass => scheme.surfaceContainerHigh;
 
-  /// Fill for the editor's floating format island (kept as-is: part of the
-  /// text editor chrome that stays unchanged).
+  /// Fill for the editor's floating format island — a touch more see-through
+  /// than before so the frost shows more of the note behind it.
   static Color get islandGlass =>
-      dark ? const Color(0xCC191B23) : const Color(0xCCFFFFFF);
+      dark ? const Color(0xA6191B23) : const Color(0xA6FFFFFF);
 
   /// Side pane surface (M3 navigation-drawer container).
   static Color get paneFill => scheme.surfaceContainerLow;

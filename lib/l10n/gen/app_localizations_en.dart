@@ -108,6 +108,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newNote => 'New node';
 
   @override
+  String get newMarkdown => 'New markdown';
+
+  @override
+  String get importFile => 'Import file';
+
+  @override
+  String get markdownHint => 'Write or paste Markdown…';
+
+  @override
+  String get preview => 'Preview';
+
+  @override
   String get saveALink => 'Save a link';
 
   @override
@@ -1068,31 +1080,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moreOptions => 'More';
 
   @override
+  String get chooseTheme => 'Colour & background';
+
+  @override
   String get createNote => 'Node';
 
   @override
-  String get createArticle => 'Article';
-
-  @override
-  String get newArticle => 'New article';
-
-  @override
-  String get saveAsDraft => 'Save as draft';
-
-  @override
   String get editAction => 'Edit';
-
-  @override
-  String get articleSavedToast => 'Article saved';
-
-  @override
-  String get draftSavedToast => 'Saved as draft';
-
-  @override
-  String get articleLabel => 'Article';
-
-  @override
-  String get draftLabel => 'Draft';
 
   @override
   String get accountSection => 'Account';
@@ -1318,18 +1312,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noteHint => 'What do you make of it?';
-
-  @override
-  String pagesLeft(int n) {
-    String _temp0 = intl.Intl.pluralLogic(
-      n,
-      locale: localeName,
-      other: '$n pages left',
-      one: '1 page left',
-      zero: 'Last page',
-    );
-    return '$_temp0';
-  }
 
   @override
   String get bookAuthor => 'Author';
@@ -1675,6 +1657,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get progressAllClear => 'Nothing due today';
 
   @override
+  String get perfectDay => 'Perfect day';
+
+  @override
+  String get nextUp => 'Next up';
+
+  @override
   String get analyticsTitle => 'Analytics';
 
   @override
@@ -1702,16 +1690,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get analyticsConsistency => 'Consistency';
 
   @override
-  String get analyticsPeriodWeek => '7D';
+  String get analyticsPeriodToday => 'Today';
 
   @override
-  String get analyticsPeriodMonth => '30D';
+  String get analyticsPeriodWeek => '1W';
+
+  @override
+  String get analyticsPeriodMonth => '1M';
 
   @override
   String get analyticsPeriodYear => '1Y';
 
   @override
+  String get analyticsPeriodAll => 'All';
+
+  @override
   String get analyticsPeriodMax => 'Max';
+
+  @override
+  String get analyticsAllImpulses => 'All impulses';
+
+  @override
+  String get analyticsTrackLabel => 'Track';
+
+  @override
+  String get analyticsAverage => 'Average progress';
+
+  @override
+  String get analyticsMissed => 'Missed';
+
+  @override
+  String get proceed => 'Proceed';
+
+  @override
+  String get editPastTitle => 'Editing a past day';
+
+  @override
+  String get editPastBody =>
+      'You\'re changing a task in the past. Are you sure you want to proceed?';
+
+  @override
+  String get editFutureTitle => 'Editing a future day';
+
+  @override
+  String get editFutureBody =>
+      'You\'re changing a task in the future. Are you sure you want to proceed?';
 
   @override
   String get analyticsComingSoon =>
@@ -1724,7 +1747,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String get combinedProgressLabel => 'All reflexes today';
 
   @override
+  String get cropTitle => 'Crop';
+
+  @override
+  String get cropReset => 'Reset';
+
+  @override
+  String get cropFreeform => 'Free';
+
+  @override
+  String get cropSquare => 'Square';
+
+  @override
   String get consistencyHeatmap => 'Consistency';
+
+  @override
+  String get historyTitle => 'History';
+
+  @override
+  String get historyJumpToDate => 'Jump to date';
+
+  @override
+  String get textStyle => 'Text style';
+
+  @override
+  String get textSize => 'Text size';
+
+  @override
+  String get resetSize => 'Reset';
+
+  @override
+  String get moveCheckedToBottom => 'Move ticked items to the bottom';
+
+  @override
+  String get backgroundForDark => 'Background for dark mode';
+
+  @override
+  String get backgroundForLight => 'Background for light mode';
+
+  @override
+  String get historyEmpty => 'No task history yet.';
+
+  @override
+  String get historyNoTasksDay => 'No tasks scheduled this day.';
+
+  @override
+  String historyCompletedOf(int done, int total) {
+    return '$done of $total completed';
+  }
 
   @override
   String get rearrangeJournal => 'Rearrange';
@@ -1839,6 +1909,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get daysHint => 'Pick the days this runs on (none = every day).';
 
   @override
+  String get repeatOnce => 'Once';
+
+  @override
+  String get repeatEveryday => 'Everyday';
+
+  @override
+  String get repeatOnceHint =>
+      'A one-time task. Tick it off and it stays, done, until you delete it.';
+
+  @override
   String get addLink => 'Add link';
 
   @override
@@ -1887,35 +1967,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tutWelcomeBody =>
-      'Your nodes live on Home. Tap the pencil to write one, it saves automatically. Long-press any node for quick actions.';
+      'Your notes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add and crop photos or set the text size. Long-press any note for quick actions.';
 
   @override
   String get tutCardsTitle => 'Sparks';
 
   @override
   String get tutCardsBody =>
-      'Share a link from any app to Braim and a small popup saves it as a spark, no app switching. Duplicates merge automatically. Switch the feed between Open and Blocks views with the toggle.';
+      'Share a link from any app to Braim and it saves as a spark, no app switching. Add your own note under any spark, and duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.';
 
   @override
   String get tutCortexTitle => 'Cortex';
 
   @override
   String get tutCortexBody =>
-      'Folds for your nodes and sparks. Create one with the + button, give it a photo thumbnail, or file things from the long-press menu.';
+      'Folders for your notes and sparks. Make one with the plus button, give it a cover photo, and file things from the long-press menu.';
+
+  @override
+  String get tutReflexesTitle => 'Reflexes';
+
+  @override
+  String get tutReflexesBody =>
+      'Build habits and projects as Reflexes. Add daily tasks or one-time ones, tick them off, and watch your streak grow. Tap the heatmap to open the full day-by-day history.';
+
+  @override
+  String get tutBooksTitle => 'Books';
+
+  @override
+  String get tutBooksBody =>
+      'Write long pieces as Books made of chapters. Read them in a clean, scrollable reader with themes, adjustable font size, bookmarks and highlights.';
+
+  @override
+  String get tutJournalTitle => 'Journal';
+
+  @override
+  String get tutJournalBody =>
+      'Keep a daily diary from the Journal tab. Entries stay tied to their day and never show up in Home or search.';
 
   @override
   String get tutCryptTitle => 'Crypt';
 
   @override
   String get tutCryptBody =>
-      'A fold that only opens with your fingerprint or screen lock, its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and included readable in backups. Don\'t keep passwords or bank details in it.';
+      'A folder that only opens with your fingerprint or screen lock, and its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and are readable in backups. Do not keep passwords or bank details in it.';
 
   @override
   String get tutTipsTitle => 'Good to know';
 
   @override
   String get tutTipsBody =>
-      'Search finds nodes, sparks and folds in one place. Pin up to 10 favourites per feed. Archive hides without deleting; deleted items wait 30 days in Recently deleted. Back up everything from Settings, and there\'s a dark mode in there too.';
+      'Search finds notes, sparks and folders in one place. Pin up to 10 favourites per feed. Archive hides things without deleting, and deleted items wait 30 days in Recently deleted. Back up everything and switch to dark mode from Settings.';
+
+  @override
+  String get guideTitle => 'How Braim works';
+
+  @override
+  String get guideSettingsLabel => 'Guide';
 
   @override
   String get driveSection => 'Google Drive';

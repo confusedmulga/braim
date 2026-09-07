@@ -14,8 +14,10 @@ import '../services/backup_service.dart';
 import '../services/book_text_ops.dart';
 import '../services/drive_backup_service.dart';
 import '../services/link_preview_service.dart';
+import '../services/note_markdown.dart';
 import '../services/notification_service.dart';
 import '../services/seed_data.dart';
+import '../services/db/db_store.dart';
 import '../services/storage_service.dart';
 import '../services/wiki_links.dart';
 import '../theme/app_theme.dart';
@@ -70,9 +72,18 @@ class MentionTarget {
 }
 
 class AppState extends ChangeNotifier {
-  AppState();
+  /// [dbStore] lets tests hand in a store on an FFI / temp-file database; the
+  /// app uses the default (the device's `braim.db`).
+  AppState({DbStore? dbStore}) : _dbStore = dbStore ?? DbStore();
 
   final _storage = StorageService.instance;
+
+  /// SQLite store of the library (migration Phase 2): the app loads from here at
+  /// startup and mirrors every save into it, while the JSON file is still
+  /// written alongside as a belt-and-suspenders copy and the instant-revert
+  /// path. Disabled where sqflite is unavailable (unit tests), where the app
+  /// simply stays on the JSON store.
+  final DbStore _dbStore;
   final _linkPreview = LinkPreviewService();
 
   final List<Note> _notes = [];
@@ -104,12 +115,6 @@ class AppState extends ChangeNotifier {
   // These were the per-document cloud-write hooks. They're kept as no-ops so
   // the many mutation sites stay untouched — a local build simply persists the
   // whole library through _persist().
-  void _putNote(Note n) {}
-  void _putSpace(Space s) {}
-  void _putCard(TweetCard c) {}
-  void _putBook(Book b) {}
-  void _removeDoc(String collection, String id) {}
-  void _markSettings() {}
 
   /// Cards feed view: false = Open (full cards), true = Blocks (compact grid).
   bool _cardsCompact = false;
@@ -117,7 +122,6 @@ class AppState extends ChangeNotifier {
 
   Future<void> setCardsCompact(bool value) async {
     _cardsCompact = value;
-    _markSettings();
     await _persist();
   }
 
@@ -128,7 +132,6 @@ class AppState extends ChangeNotifier {
   Future<void> setSortMode(NoteSort value) async {
     if (value == _sortMode) return;
     _sortMode = value;
-    _markSettings();
     await _persist(); // bumps _rev, so the memoized feeds re-sort
   }
 
@@ -145,7 +148,6 @@ class AppState extends ChangeNotifier {
   Future<void> setFeedWallpaper(int index) async {
     if (index == _feedWallpaper) return;
     _feedWallpaper = index;
-    _markSettings();
     await _persist();
   }
 
@@ -169,7 +171,6 @@ class AppState extends ChangeNotifier {
     } else {
       _feedBackgroundLight = path;
     }
-    _markSettings();
     await _persist();
   }
 
@@ -177,7 +178,6 @@ class AppState extends ChangeNotifier {
     if (_feedBackgroundLight.isEmpty && _feedBackgroundDark.isEmpty) return;
     _feedBackgroundLight = '';
     _feedBackgroundDark = '';
-    _markSettings();
     await _persist();
   }
 
@@ -209,7 +209,6 @@ class AppState extends ChangeNotifier {
   Future<void> setDarkFollowSystem(bool value) async {
     _darkFollowSystem = value;
     AppPalette.dark = effectiveDark;
-    _markSettings();
     await _persist();
   }
 
@@ -219,7 +218,6 @@ class AppState extends ChangeNotifier {
     _darkFollowSystem = followSystem;
     if (!followSystem) _darkMode = dark;
     AppPalette.dark = effectiveDark;
-    _markSettings();
     await _persist();
   }
 
@@ -351,7 +349,7 @@ class AppState extends ChangeNotifier {
     await flushNow();
     final bytes = await DriveBackupService.instance.downloadBackup(fileId);
     await BackupService.instance.restoreFromZipBytes(bytes);
-    await init();
+    await init(restored: true);
   }
 
   /// Best-effort silent backup when the app goes to the background: only if
@@ -375,7 +373,6 @@ class AppState extends ChangeNotifier {
   Future<void> setDarkMode(bool value) async {
     _darkMode = value;
     AppPalette.dark = effectiveDark;
-    _markSettings();
     await _persist();
   }
 
@@ -386,12 +383,103 @@ class AppState extends ChangeNotifier {
   Future<void> setNoteBodyFont(String family) async {
     _noteBodyFont = family;
     activeBodyFont = family; // the global that body widgets read
-    _markSettings();
     await _persist();
   }
 
-  Future<void> init() async {
-    final data = await _storage.load();
+  /// Loads the library into memory and gets the app running.
+  ///
+  /// Migration Phase 2: SQLite is the source of truth once it has imported
+  /// cleanly and [DbStore.readFromDb] is on; otherwise we fall back to the JSON
+  /// store. Pass [restored] after a backup has overwritten the JSON on disk —
+  /// then we reload that JSON and fold it back into the DB (which the restore
+  /// didn't touch) so the next launch, reading from the DB, sees it.
+  Future<void> init({bool restored = false}) async {
+    // Lazily load the legacy JSON: it's the one-time import source, the fallback
+    // when the DB isn't usable, and the authoritative copy right after a
+    // restore. On a normal launch with the DB in charge it isn't read at all.
+    AppData? legacyCache;
+    // The importer's view of the JSON: null = no legacy store at all (a fresh
+    // install), throws = a store exists but can't be read. The importer must
+    // not mark done on a throw, or the intact library would sit hidden behind
+    // an empty DB.
+    Future<AppData?> loadForImport() async =>
+        legacyCache ??= await _storage.loadLegacyForImport();
+    // The app's own view: always yields a library (empty at worst).
+    Future<AppData> loadLegacy() async =>
+        legacyCache ??= await _storage.load();
+
+    // Bring up the SQLite store and run the one-time import. Idempotent (a
+    // no-op once open), never throws, and disables itself where sqflite is
+    // missing (unit tests) so we transparently stay on JSON there.
+    await _dbStore.init(loadLegacy: loadForImport);
+
+    // Whether the on-disk JSON is the freshest copy of the library: right after
+    // a restore, or when an earlier launch had to save to JSON because the DB
+    // wasn't usable then (see StorageService.markJsonAhead). Either way the
+    // JSON is read and folded back into the DB below.
+    final jsonAhead = restored || await _storage.jsonAhead;
+
+    // Pick this launch's source of truth.
+    final AppData data;
+    if (!jsonAhead && DbStore.readFromDb && _dbStore.usableForReads) {
+      data = (await _dbStore.readAppData()) ?? await loadLegacy();
+    } else {
+      data = await loadLegacy();
+    }
+
+    await _applyData(data);
+
+    if (jsonAhead && _dbStore.enabled) {
+      // The JSON is ahead of the DB (a restore, or JSON-only edits from a
+      // launch where the DB was down); reconcile the DB from it. The dirty-diff
+      // handles both added and removed items, so a smaller restored library
+      // correctly drops the extra DB rows. Routed through the same write chain
+      // as _flush so it can't overlap a debounced save firing right after, then
+      // awaited so the DB is consistent on return. The flag is lowered only
+      // once the DB really holds the library.
+      final snapshot = _snapshot();
+      var synced = false;
+      _dbWriteChain = _dbWriteChain.then((_) async {
+        synced = await _dbStore.syncFromAppData(snapshot);
+      }).catchError((_) {});
+      await _dbWriteChain;
+      if (synced) {
+        await _storage.clearJsonAhead();
+        _jsonAheadMarked = false;
+      }
+    }
+
+    // First launch with full-text search available (or after an index bump):
+    // index the library the app just loaded. Chained after any reconcile above
+    // and ahead of any later save, so the index never lags a newer row.
+    if (_dbStore.enabled) {
+      final snapshot = _snapshot();
+      _dbWriteChain = _dbWriteChain
+          .then((_) => _dbStore.ensureSearchIndex(snapshot))
+          .catchError((_) {});
+    }
+  }
+
+  /// The app came back to the foreground. Only the share popup (a separate
+  /// engine) can have added to the library meanwhile, and it does so through
+  /// the inbox, so just drain that. A full [init] here used to re-read the
+  /// whole store, re-sort every feed, reschedule every reminder and swap the
+  /// note objects out from under any open editor.
+  Future<void> resume() async {
+    if (!_loaded) return;
+    await _importSharedInbox();
+  }
+
+  /// Ranked full-text hits (best first) for [query] from the SQLite index, or
+  /// null when the index isn't available, in which case the caller keeps its
+  /// in-memory substring search.
+  Future<List<SearchHit>?> searchIndex(String query) =>
+      _dbStore.search(query);
+
+  /// Populates the in-memory library and settings from [data] and finishes
+  /// bringing the app up (trash purge, shared-inbox drain, reminder rescheduling
+  /// and the like). Shared by the cold start and the post-restore reload.
+  Future<void> _applyData(AppData data) async {
     _notes
       ..clear()
       ..addAll(data.notes);
@@ -407,6 +495,13 @@ class AppState extends ChangeNotifier {
     _impulses
       ..clear()
       ..addAll(data.impulses);
+    // The daily day is now an ordinary grey catch-all rather than a special
+    // pinned card. Tint an existing one grey so it reads that way too, unless
+    // the user already chose a colour for it.
+    final existingDaily = impulseById(dailyDayId);
+    if (existingDaily != null && existingDaily.colorValue == null) {
+      existingDaily.colorValue = dailyDayColorValue;
+    }
     _cardsCompact = data.cardsCompact;
     _darkMode = data.darkMode;
     _darkFollowSystem = data.darkFollowSystem;
@@ -486,7 +581,6 @@ class AppState extends ChangeNotifier {
         .toList()) {
       c.enrichAttempts++;
       _linkPreview.enrich(c).then((_) {
-        _putCard(c);
         _persist();
       });
     }
@@ -664,7 +758,6 @@ class AppState extends ChangeNotifier {
     } else {
       _journalMonthCovers[monthKey] = path;
     }
-    _markSettings();
     await _persist();
   }
 
@@ -1026,7 +1119,6 @@ class AppState extends ChangeNotifier {
   Future<Note> createLinkedNote(String title) async {
     final note = Note(title: title.trim());
     _notes.add(note);
-    _putNote(note);
     await _persist();
     return note;
   }
@@ -1059,7 +1151,6 @@ class AppState extends ChangeNotifier {
       auto: auto,
     ));
     _trimHistory(note);
-    _putNote(note);
     await _persist();
   }
 
@@ -1108,7 +1199,6 @@ class AppState extends ChangeNotifier {
     note.blocks = _copyBlocks(snap.blocks);
     note.updatedAt = DateTime.now();
     _trimHistory(note);
-    _putNote(note);
     await _persist();
   }
 
@@ -1116,7 +1206,6 @@ class AppState extends ChangeNotifier {
     final note = noteById(noteId);
     if (note == null) return;
     note.history.removeWhere((s) => s.id == snapshotId);
-    _putNote(note);
     await _persist();
   }
 
@@ -1176,7 +1265,6 @@ class AppState extends ChangeNotifier {
     } else {
       _notes.add(note);
     }
-    _putNote(note);
     await _persist();
   }
 
@@ -1198,7 +1286,31 @@ class AppState extends ChangeNotifier {
     }
     final note = Note(blocks: blocks, spaceId: spaceId);
     _notes.add(note);
-    _putNote(note);
+    await _persist();
+    return note;
+  }
+
+  /// Creates a note from the contents of a shared Markdown/plain-text file and
+  /// adds it to the home feed. Returns the new note.
+  Future<Note> addSharedMarkdown(String markdown, {String? spaceId}) async {
+    final note = noteFromMarkdown(markdown, spaceId: spaceId);
+    _notes.add(note);
+    await _persist();
+    return note;
+  }
+
+  /// Creates a GitHub-flavored Markdown node from raw [source] and adds it to
+  /// the home feed. Unlike [addSharedMarkdown], the raw markdown is kept as the
+  /// source of truth (rendered by a GFM engine) rather than converted to the
+  /// rich format. The card title / search text track the first heading.
+  Future<Note> addMarkdownNode(String source, {String? spaceId}) async {
+    final note = Note(
+      markdown: true,
+      title: markdownTitle(source),
+      blocks: [NoteBlock(type: NoteBlockType.text, text: source)],
+      spaceId: spaceId,
+    );
+    _notes.add(note);
     await _persist();
     return note;
   }
@@ -1210,7 +1322,6 @@ class AppState extends ChangeNotifier {
     _notes[idx]
       ..deletedAt = DateTime.now()
       ..updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     unawaited(NotificationService.instance.cancel(id));
     await _persist();
   }
@@ -1221,7 +1332,6 @@ class AppState extends ChangeNotifier {
     _notes[idx]
       ..deletedAt = null
       ..updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1233,21 +1343,18 @@ class AppState extends ChangeNotifier {
     for (final path in note.imagePaths) {
       await _storage.deleteImage(path);
     }
-    _removeDoc('notes', note.id);
     await _persist();
   }
 
   Future<void> emptyTrash() async {
     for (final n in _notes.where((n) => n.deletedAt != null).toList()) {
       _notes.remove(n);
-      _removeDoc('notes', n.id);
       for (final path in n.imagePaths) {
         await _storage.deleteImage(path);
       }
     }
     for (final c in _cards.where((c) => c.deletedAt != null).toList()) {
       _cards.remove(c);
-      _removeDoc('cards', c.id);
       for (final path in c.imagePaths) {
         await _storage.deleteImage(path);
       }
@@ -1276,14 +1383,12 @@ class AppState extends ChangeNotifier {
     }
     for (final n in expiredNotes) {
       _notes.remove(n);
-      _removeDoc('notes', n.id);
       for (final path in n.imagePaths) {
         await _storage.deleteImage(path);
       }
     }
     for (final c in expiredCards) {
       _cards.remove(c);
-      _removeDoc('cards', c.id);
       for (final path in c.imagePaths) {
         await _storage.deleteImage(path);
       }
@@ -1300,7 +1405,6 @@ class AppState extends ChangeNotifier {
     final note = _notes.firstWhere((n) => n.id == noteId);
     note.spaceId = spaceId;
     note.updatedAt = DateTime.now();
-    _putNote(note);
     await _persist();
   }
 
@@ -1308,7 +1412,6 @@ class AppState extends ChangeNotifier {
     final note = _notes.firstWhere((n) => n.id == noteId);
     note.archived = archived;
     note.updatedAt = DateTime.now();
-    _putNote(note);
     await _persist();
   }
 
@@ -1321,7 +1424,6 @@ class AppState extends ChangeNotifier {
     final note = _notes.firstWhere((n) => n.id == noteId);
     note.pinned = pinned;
     note.updatedAt = DateTime.now();
-    _putNote(note);
     await _persist();
     return true;
   }
@@ -1335,9 +1437,33 @@ class AppState extends ChangeNotifier {
       n
         ..pinned = pinned
         ..updatedAt = DateTime.now();
-      _putNote(n);
     }
     await _persist();
+  }
+
+  /// Pins as many of [ids] as the pin limit allows (already-pinned ones don't
+  /// count against the batch). Returns how many were newly pinned and how many
+  /// were skipped because the feed was already at [kMaxPins].
+  Future<({int pinned, int skipped})> bulkPinNotesLimited(
+      Set<String> ids) async {
+    var slots =
+        kMaxPins - _notes.where((n) => _isFeedNote(n) && n.pinned).length;
+    var pinnedCount = 0;
+    var skipped = 0;
+    for (final n in _notes) {
+      if (!ids.contains(n.id) || n.pinned) continue;
+      if (slots > 0) {
+        n
+          ..pinned = true
+          ..updatedAt = DateTime.now();
+        slots--;
+        pinnedCount++;
+      } else {
+        skipped++;
+      }
+    }
+    if (pinnedCount > 0) await _persist();
+    return (pinned: pinnedCount, skipped: skipped);
   }
 
   Future<void> bulkArchiveNotes(Set<String> ids, bool archived) async {
@@ -1346,7 +1472,6 @@ class AppState extends ChangeNotifier {
       n
         ..archived = archived
         ..updatedAt = DateTime.now();
-      _putNote(n);
     }
     await _persist();
   }
@@ -1357,7 +1482,6 @@ class AppState extends ChangeNotifier {
       n
         ..spaceId = spaceId
         ..updatedAt = DateTime.now();
-      _putNote(n);
     }
     await _persist();
   }
@@ -1369,7 +1493,6 @@ class AppState extends ChangeNotifier {
       n
         ..deletedAt = now
         ..updatedAt = now;
-      _putNote(n);
       unawaited(NotificationService.instance.cancel(n.id));
     }
     await _persist();
@@ -1384,7 +1507,6 @@ class AppState extends ChangeNotifier {
     final card = _cards.firstWhere((c) => c.id == cardId);
     card.pinned = pinned;
     card.updatedAt = DateTime.now();
-    _putCard(card);
     await _persist();
     return true;
   }
@@ -1402,7 +1524,6 @@ class AppState extends ChangeNotifier {
     final space =
         Space(name: name, thumbnailPath: thumbnailPath, colorValue: colorValue);
     _spaces.add(space);
-    _putSpace(space);
     await _persist();
     return space;
   }
@@ -1411,7 +1532,6 @@ class AppState extends ChangeNotifier {
     final idx = _spaces.indexWhere((s) => s.id == space.id);
     if (idx >= 0) _spaces[idx] = space;
     space.updatedAt = DateTime.now();
-    _putSpace(space);
     await _persist();
   }
 
@@ -1423,7 +1543,6 @@ class AppState extends ChangeNotifier {
     _spaces[idx]
       ..deletedAt = DateTime.now()
       ..updatedAt = DateTime.now();
-    _putSpace(_spaces[idx]);
     await _persist();
   }
 
@@ -1434,7 +1553,6 @@ class AppState extends ChangeNotifier {
       ..deletedAt = null
       ..archived = false
       ..updatedAt = DateTime.now();
-    _putSpace(_spaces[idx]);
     await _persist();
   }
 
@@ -1444,7 +1562,6 @@ class AppState extends ChangeNotifier {
     _spaces[idx]
       ..archived = archived
       ..updatedAt = DateTime.now();
-    _putSpace(_spaces[idx]);
     await _persist();
   }
 
@@ -1458,19 +1575,16 @@ class AppState extends ChangeNotifier {
   /// Removes the folder for good: contents fall back to no folder.
   Future<void> _reallyDeleteSpace(Space space) async {
     _spaces.remove(space);
-    _removeDoc('spaces', space.id);
     if (space.thumbnailPath != null) {
       await _storage.deleteImage(space.thumbnailPath!);
     }
     for (final n in _notes.where((n) => n.spaceId == space.id)) {
       n.spaceId = null;
       n.updatedAt = DateTime.now();
-      _putNote(n);
     }
     for (final c in _cards.where((c) => c.spaceId == space.id)) {
       c.spaceId = null;
       c.updatedAt = DateTime.now();
-      _putCard(c);
     }
   }
 
@@ -1519,7 +1633,6 @@ class AppState extends ChangeNotifier {
   Future<Book> addBook(String title, {String? coverPath}) async {
     final book = Book(title: title, coverPath: coverPath);
     _books.add(book);
-    _putBook(book);
     var order = 0;
     Note page(String kind, String pageTitle) {
       final n = Note(
@@ -1529,7 +1642,6 @@ class AppState extends ChangeNotifier {
         bookOrder: order++,
       );
       _notes.add(n);
-      _putNote(n);
       return n;
     }
 
@@ -1619,7 +1731,6 @@ class AppState extends ChangeNotifier {
       }
       if (changed) {
         page.updatedAt = DateTime.now();
-        _putNote(page);
       }
     }
     if (total > 0) await _persist();
@@ -1642,7 +1753,6 @@ class AppState extends ChangeNotifier {
       pages[i]
         ..bookOrder = i
         ..updatedAt = DateTime.now();
-      _putNote(pages[i]);
     }
     await _persist();
   }
@@ -1660,19 +1770,16 @@ class AppState extends ChangeNotifier {
 
   Future<void> setReaderFontScale(double v) async {
     _readerFontScale = v.clamp(0.8, 1.8);
-    _markSettings();
     await _persist();
   }
 
   Future<void> setReaderFont(String family) async {
     _readerFont = family;
-    _markSettings();
     await _persist();
   }
 
   Future<void> setReaderTheme(String theme) async {
     _readerTheme = theme;
-    _markSettings();
     await _persist();
   }
 
@@ -1692,7 +1799,6 @@ class AppState extends ChangeNotifier {
     if (minutes != null) {
       _journalReminderMinutes = minutes.clamp(0, 24 * 60 - 1);
     }
-    _markSettings();
     await _persist();
     await _syncJournalReminder();
   }
@@ -1722,7 +1828,6 @@ class AppState extends ChangeNotifier {
     final f = fraction.clamp(0.0, 1.0);
     if (((_readerPositions[bookId] ?? 0) - f).abs() < 0.001) return;
     _readerPositions[bookId] = f;
-    _markSettings();
     await _persist();
   }
 
@@ -1737,7 +1842,6 @@ class AppState extends ChangeNotifier {
     list
       ..add(f)
       ..sort();
-    _markSettings();
     await _persist();
   }
 
@@ -1746,7 +1850,6 @@ class AppState extends ChangeNotifier {
     if (list == null) return;
     list.removeWhere((b) => (b - fraction).abs() < 0.0001);
     if (list.isEmpty) _readerBookmarks.remove(bookId);
-    _markSettings();
     await _persist();
   }
 
@@ -1756,7 +1859,6 @@ class AppState extends ChangeNotifier {
     if (idx < 0) return;
     _notes[idx].annotations.add(annotation);
     _notes[idx].updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1768,7 +1870,6 @@ class AppState extends ChangeNotifier {
       if (a.id == annotationId) a.note = note;
     }
     _notes[idx].updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1777,7 +1878,6 @@ class AppState extends ChangeNotifier {
     if (idx < 0) return;
     _notes[idx].annotations.removeWhere((a) => a.id == annotationId);
     _notes[idx].updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1794,7 +1894,6 @@ class AppState extends ChangeNotifier {
     _notes[idx]
       ..bookStatus = status
       ..updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1805,7 +1904,6 @@ class AppState extends ChangeNotifier {
     if (idx < 0) return;
     _notes[idx].title = title;
     _notes[idx].updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1813,7 +1911,6 @@ class AppState extends ChangeNotifier {
     final idx = _books.indexWhere((b) => b.id == book.id);
     if (idx >= 0) _books[idx] = book;
     book.updatedAt = DateTime.now();
-    _putBook(book);
     await _persist();
   }
 
@@ -1829,7 +1926,6 @@ class AppState extends ChangeNotifier {
       bookOrder: maxOrder + 1,
     );
     _notes.add(chapter);
-    _putNote(chapter);
     await _persist();
     return chapter;
   }
@@ -1846,7 +1942,6 @@ class AppState extends ChangeNotifier {
       bookOrder: maxOrder + 1,
     );
     _notes.add(page);
-    _putNote(page);
     await _persist();
     return page;
   }
@@ -1863,7 +1958,6 @@ class AppState extends ChangeNotifier {
       bookOrder: maxOrder + 1,
     );
     _notes.add(page);
-    _putNote(page);
     await _persist();
     return page;
   }
@@ -1875,7 +1969,6 @@ class AppState extends ChangeNotifier {
     _notes[idx]
       ..targetWords = target < 0 ? 0 : target
       ..updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1886,7 +1979,6 @@ class AppState extends ChangeNotifier {
     _notes[idx]
       ..linkedPageId = pageId
       ..updatedAt = DateTime.now();
-    _putNote(_notes[idx]);
     await _persist();
   }
 
@@ -1900,7 +1992,6 @@ class AppState extends ChangeNotifier {
       linkedPageId: linkedPageId,
     );
     _notes.add(note);
-    _putNote(note);
     await _persist();
     return note;
   }
@@ -1921,7 +2012,6 @@ class AppState extends ChangeNotifier {
     for (final p in page.imagePaths) {
       await _storage.deleteImage(p);
     }
-    _removeDoc('notes', page.id);
     await _persist();
   }
 
@@ -1930,11 +2020,9 @@ class AppState extends ChangeNotifier {
     final idx = _books.indexWhere((b) => b.id == bookId);
     if (idx < 0) return;
     final book = _books.removeAt(idx);
-    _removeDoc('books', book.id);
     if (book.coverPath != null) await _storage.deleteImage(book.coverPath!);
     for (final n in _notes.where((n) => n.bookId == bookId).toList()) {
       _notes.remove(n);
-      _removeDoc('notes', n.id);
       for (final p in n.imagePaths) {
         await _storage.deleteImage(p);
       }
@@ -1965,19 +2053,16 @@ class AppState extends ChangeNotifier {
       if (spaceId != null) card.spaceId = spaceId;
       card.archived = false;
       card.updatedAt = DateTime.now();
-      _putCard(card);
       await _persist();
       return card;
     }
     final card = TweetCard(url: cleaned, spaceId: spaceId);
     _cards.add(card);
-    _putCard(card);
     await _persist();
 
     // Fetch preview without blocking the UI.
     _linkPreview.enrich(card).then((_) {
       card.updatedAt = DateTime.now();
-      _putCard(card);
       _persist();
     });
     return card;
@@ -2024,7 +2109,10 @@ class AppState extends ChangeNotifier {
       if (url != null && url.isNotEmpty) {
         await addCardFromUrl(url, spaceId: spaceId);
       } else {
-        await addSharedNote(text: noteText, spaceId: spaceId);
+        // Parse the shared text as Markdown so any formatting (headings,
+        // bullets, checkboxes, bold/italic, links) renders instead of showing
+        // its raw symbols. Plain text passes through unchanged.
+        await addSharedMarkdown(noteText!, spaceId: spaceId);
       }
     }
   }
@@ -2033,7 +2121,6 @@ class AppState extends ChangeNotifier {
     final card = _cards.firstWhere((c) => c.id == id);
     await _linkPreview.enrich(card);
     card.updatedAt = DateTime.now();
-    _putCard(card);
     await _persist();
   }
 
@@ -2041,7 +2128,6 @@ class AppState extends ChangeNotifier {
     final idx = _cards.indexWhere((c) => c.id == card.id);
     if (idx >= 0) _cards[idx] = card;
     card.updatedAt = DateTime.now();
-    _putCard(card);
     await _persist();
   }
 
@@ -2052,7 +2138,6 @@ class AppState extends ChangeNotifier {
     _cards[idx]
       ..deletedAt = DateTime.now()
       ..updatedAt = DateTime.now();
-    _putCard(_cards[idx]);
     await _persist();
   }
 
@@ -2063,7 +2148,6 @@ class AppState extends ChangeNotifier {
       ..deletedAt = null
       ..archived = false
       ..updatedAt = DateTime.now();
-    _putCard(_cards[idx]);
     await _persist();
   }
 
@@ -2073,7 +2157,6 @@ class AppState extends ChangeNotifier {
     _cards[idx]
       ..archived = archived
       ..updatedAt = DateTime.now();
-    _putCard(_cards[idx]);
     await _persist();
   }
 
@@ -2084,7 +2167,6 @@ class AppState extends ChangeNotifier {
     for (final path in card.imagePaths) {
       await _storage.deleteImage(path);
     }
-    _removeDoc('cards', card.id);
     await _persist();
   }
 
@@ -2092,7 +2174,6 @@ class AppState extends ChangeNotifier {
     final card = _cards.firstWhere((c) => c.id == cardId);
     card.spaceId = spaceId;
     card.updatedAt = DateTime.now();
-    _putCard(card);
     await _persist();
   }
 
@@ -2115,19 +2196,15 @@ class AppState extends ChangeNotifier {
     final bundle = SeedData.build();
     for (final s in bundle.spaces) {
       _spaces.add(s);
-      _putSpace(s);
     }
     for (final n in bundle.notes) {
       _notes.add(n);
-      _putNote(n);
     }
     for (final c in bundle.cards) {
       _cards.add(c);
-      _putCard(c);
     }
     for (final b in bundle.books) {
       _books.add(b);
-      _putBook(b);
     }
     await _persist();
     // Arm any reminders the demo notes carry.
@@ -2140,17 +2217,14 @@ class AppState extends ChangeNotifier {
 
   Future<void> clearAll() async {
     for (final n in _notes) {
-      _removeDoc('notes', n.id);
       for (final p in n.imagePaths) {
         await _storage.deleteImage(p);
       }
     }
     for (final s in _spaces) {
-      _removeDoc('spaces', s.id);
       if (s.thumbnailPath != null) await _storage.deleteImage(s.thumbnailPath!);
     }
     for (final c in _cards) {
-      _removeDoc('cards', c.id);
       for (final p in c.imagePaths) {
         await _storage.deleteImage(p);
       }
@@ -2174,10 +2248,16 @@ class AppState extends ChangeNotifier {
   /// The 'yyyy-MM-dd' key for any day (used to tick a task on a chosen day).
   static String dayKeyFor(DateTime d) => _dayKey(d);
 
-  /// The fixed id of the one "daily day" reflex surfaced in the Journal. It is
-  /// an ordinary daily-mode Impulse, just pinned and kept out of the Reflexes
-  /// list so it lives only at the journal's root.
+  /// The fixed id of the "daily day" catch-all reflex: an ordinary daily-mode
+  /// Impulse holding loose tasks that don't belong to any project. It's created
+  /// only when the user actually adds a loose task (via "add to daily day"), and
+  /// from then on behaves like any other reflex — editable, deletable, and shown
+  /// in the Reflexes list. New users don't get one by default.
   static const dailyDayId = '__daily_day__';
+
+  /// The grey tint the catch-all daily day wears by default, so it reads as the
+  /// "loose tasks" bucket rather than a real project (the "stone" swatch).
+  static const int dailyDayColorValue = 0xFFDDDFE4;
 
   /// The always-present daily-day reflex. Returns a transient (unsaved) one
   /// until the first task is added, so an untouched daily day never persists.
@@ -2204,18 +2284,19 @@ class AppState extends ChangeNotifier {
           i.id != dailyDayId && i.deletedAt == null && !i.archived)
       .length;
 
-  /// All reflexes for the date-card feed: the daily day first, then the rest,
-  /// most-recently-updated first (finished checklists sink).
+  /// All live reflexes, most-recently-updated first (finished checklists sink).
+  /// The daily day is no longer force-injected — it appears here only when it
+  /// exists as a real impulse (i.e. the user has added loose tasks to it), like
+  /// any other reflex.
   List<Impulse> get reflexes {
-    final rest = _impulses
-        .where((i) =>
-            i.id != dailyDayId && i.deletedAt == null && !i.archived)
+    final list = _impulses
+        .where((i) => i.deletedAt == null && !i.archived)
         .toList();
-    rest.sort((a, b) {
+    list.sort((a, b) {
       if (a.isComplete != b.isComplete) return a.isComplete ? 1 : -1;
       return b.updatedAt.compareTo(a.updatedAt);
     });
-    return [dailyDay, ...rest];
+    return list;
   }
 
   /// The distinct, non-empty category labels across the live reflexes, sorted,
@@ -2264,6 +2345,172 @@ class AppState extends ChangeNotifier {
       if (imp != null && imp.threadDone(item.thread, key)) done++;
     }
     return TodayProgress(done, total);
+  }
+
+  /// Consecutive days, ending at the most recent completed day, on which the
+  /// whole cumulative daily list was cleared. Days with nothing due are neutral
+  /// (they neither extend nor break the run). Powers the green card's streak.
+  int dueStreak() {
+    final now = DateTime.now();
+    var day = DateTime(now.year, now.month, now.day);
+    final todayP = dueProgressOn(day);
+    // Today still in progress doesn't count yet — start from yesterday.
+    if (!(todayP.total > 0 && todayP.done >= todayP.total)) {
+      day = day.subtract(const Duration(days: 1));
+    }
+    var streak = 0;
+    for (var i = 0; i < 180; i++) {
+      final p = dueProgressOn(day);
+      if (p.total == 0) {
+        day = day.subtract(const Duration(days: 1)); // nothing due: neutral
+        continue;
+      }
+      if (p.done >= p.total) {
+        streak++;
+        day = day.subtract(const Duration(days: 1));
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  /// The last [days] days of the cumulative daily list, oldest first — the data
+  /// behind the green card's mini history strip.
+  List<TodayProgress> dueHistory(int days) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return [
+      for (var i = days - 1; i >= 0; i--)
+        dueProgressOn(today.subtract(Duration(days: i)))
+    ];
+  }
+
+  /// Today's still-unfinished due threads, earliest-scheduled first, capped at
+  /// [limit] — the "next up" hint on the green card.
+  List<Thread> pendingDueToday({int limit = 2}) {
+    final key = todayKey;
+    final pending = <({int? at, Thread thread})>[];
+    for (final item in dueThreadsOn(DateTime.now())) {
+      final imp = impulseById(item.impulseId);
+      if (imp != null && imp.threadDone(item.thread, key)) continue;
+      pending.add((at: item.thread.reminderMinutes, thread: item.thread));
+    }
+    pending.sort((a, b) {
+      final aa = a.at, bb = b.at;
+      if (aa == null && bb == null) return 0;
+      if (aa == null) return 1;
+      if (bb == null) return -1;
+      return aa.compareTo(bb);
+    });
+    return [for (final p in pending.take(limit)) p.thread];
+  }
+
+  /// The earliest day any live reflex thread was completed — the lower bound for
+  /// the cumulative daily-day history calendar. Null when nothing's done yet.
+  DateTime? earliestActivityDay() {
+    String? min;
+    for (final i in _impulses) {
+      if (i.deletedAt != null) continue;
+      for (final t in i.allThreads) {
+        for (final d in t.doneDays) {
+          if (min == null || d.compareTo(min) < 0) min = d;
+        }
+      }
+    }
+    if (min == null) return null;
+    final p = min.split('-');
+    if (p.length != 3) return null;
+    return DateTime(
+        int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+  }
+
+  // ---- Analytics: scope tallies -------------------------------------------
+  //
+  // One tally used everywhere the analytics screen counts a day — the heatmap,
+  // the curve and the period stats — so they always agree. It mirrors the
+  // per-impulse heatmap/history rules, aggregated over a set of impulses.
+
+  /// (done, scheduled) across [scope] for [day].
+  (int done, int scheduled) scopeTallyOn(List<Impulse> scope, DateTime day) {
+    final key = dayKeyFor(day);
+    var done = 0;
+    var scheduled = 0;
+    for (final imp in scope) {
+      if (imp.deletedAt != null) continue;
+      final threads = imp.isLongTerm ? imp.allThreads : imp.threads;
+      final onceLike = imp.mode == ImpulseMode.checklist;
+      for (final t in threads) {
+        if (t.once || onceLike) {
+          if (t.doneDays.contains(key)) {
+            scheduled++;
+            done++;
+          }
+        } else if (t.days.isEmpty || t.days.contains(day.weekday)) {
+          scheduled++;
+          if (t.doneDays.contains(key)) done++;
+        }
+      }
+    }
+    return (done, scheduled);
+  }
+
+  /// (done, scheduled) across [scope] over the trailing [days] ending today.
+  (int done, int scheduled) scopeTallyOver(List<Impulse> scope, int days) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var done = 0;
+    var scheduled = 0;
+    for (var i = 0; i < days; i++) {
+      final (d, s) = scopeTallyOn(scope, today.subtract(Duration(days: i)));
+      done += d;
+      scheduled += s;
+    }
+    return (done, scheduled);
+  }
+
+  // ---- Past/future edit guard ---------------------------------------------
+  //
+  // Ticking a thread within +/-2 days of today is free; editing a day further
+  // out prompts once (per that day), and the confirmation resets each new
+  // calendar day. In-memory only — a lost confirmation just re-prompts.
+
+  final Set<String> _farEditOkDays = {};
+  String _farEditOkOn = '';
+
+  void _resetFarEditIfNewDay() {
+    final t = todayKey;
+    if (_farEditOkOn != t) {
+      _farEditOkOn = t;
+      _farEditOkDays.clear();
+    }
+  }
+
+  int _dayOffsetFromToday(String dayKey) {
+    final p = dayKey.split('-');
+    if (p.length != 3) return 0;
+    final d = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return d.difference(today).inDays;
+  }
+
+  /// Whether ticking a thread on [dayKey] needs the "you're editing the
+  /// past/future" confirmation: it's more than 2 days from today and hasn't been
+  /// confirmed yet today.
+  bool farEditNeedsConfirm(String dayKey) {
+    _resetFarEditIfNewDay();
+    if (_dayOffsetFromToday(dayKey).abs() <= 2) return false;
+    return !_farEditOkDays.contains(dayKey);
+  }
+
+  /// True when [dayKey] is in the future (for wording the confirmation).
+  bool isFutureDay(String dayKey) => _dayOffsetFromToday(dayKey) > 0;
+
+  /// Records that far-edits on [dayKey] were confirmed for today.
+  void confirmFarEdit(String dayKey) {
+    _resetFarEditIfNewDay();
+    _farEditOkDays.add(dayKey);
   }
 
   TodayProgress get todayProgress {
@@ -2450,7 +2697,13 @@ class AppState extends ChangeNotifier {
   Impulse _dailyDayImpulse() {
     var d = impulseById(dailyDayId);
     if (d == null) {
-      d = Impulse(id: dailyDayId, title: 'Daily day', mode: ImpulseMode.daily);
+      // Born grey so it's visibly the "loose tasks" bucket, not a real project.
+      d = Impulse(
+        id: dailyDayId,
+        title: 'Daily day',
+        mode: ImpulseMode.daily,
+        colorValue: dailyDayColorValue,
+      );
       _impulses.add(d);
     }
     d.updatedAt = DateTime.now();
@@ -2727,6 +2980,9 @@ class AppState extends ChangeNotifier {
     for (final t in impulse.threads) {
       if (done) {
         t.doneDays.add(dayKey);
+      } else if (t.once) {
+        // One-time tasks are done for good, so clearing means clearing all.
+        t.doneDays.clear();
       } else {
         t.doneDays.remove(dayKey);
       }
@@ -2757,13 +3013,20 @@ class AppState extends ChangeNotifier {
   /// (keeping the per-day history); a checklist thread flips done-for-good.
   Future<void> toggleThreadOn(
       String impulseId, String threadId, String dayKey) async {
-    // You can view a future day, but not mark its threads complete.
-    if (dayKey.compareTo(todayKey) > 0) return;
+    // Past and future days can both be ticked now (the calendar/journal guard
+    // any edits more than 2 days out with a confirmation first).
     final impulse = impulseById(impulseId);
     if (impulse == null) return;
     final thread = impulse.findThread(threadId);
     if (thread == null) return;
-    if (impulse.isDaily || impulse.isLongTerm) {
+    if (thread.once) {
+      // One-time task: done for good, so flip the whole thing on/off.
+      if (thread.doneDays.isEmpty) {
+        thread.doneDays.add(dayKey);
+      } else {
+        thread.doneDays.clear();
+      }
+    } else if (impulse.isDaily || impulse.isLongTerm) {
       if (!thread.doneDays.remove(dayKey)) thread.doneDays.add(dayKey);
     } else if (thread.doneDays.isEmpty) {
       thread.doneDays.add(dayKey);
@@ -2961,11 +3224,28 @@ class AppState extends ChangeNotifier {
   Timer? _flushTimer;
   bool _dirty = false;
   Future<void> _writeChain = Future.value();
+  Future<void> _dbWriteChain = Future.value();
+
+  /// The `_rev` captured at the last whole-file JSON checkpoint, so repeated
+  /// pauses with no edits in between don't re-write an identical file.
+  int _revAtJsonCheckpoint = -1;
+
+  /// Whether this launch has already raised the JSON-ahead flag (it only needs
+  /// raising once per stretch of JSON-mode saves).
+  bool _jsonAheadMarked = false;
+
+  /// Whether SQLite is the live store this launch: it imported cleanly and the
+  /// read flag is on. When false (fallback, or unit tests where sqflite is off)
+  /// the app runs on the JSON store exactly as it did before the migration.
+  bool get _dbIsPrimary => DbStore.readFromDb && _dbStore.usableForReads;
 
   /// Marks the library dirty and notifies immediately; the actual disk write
   /// is coalesced (~400ms) and runs on a background isolate. A burst of
   /// mutations becomes a single write.
   Future<void> _persist() async {
+    // A late async callback (a link preview finishing, say) may land after
+    // dispose; there is nothing left to notify or save for.
+    if (_disposed) return;
     _rev++;
     _dirty = true;
     notifyListeners();
@@ -2975,62 +3255,108 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  /// The whole in-memory library and settings as an [AppData] — what a save
+  /// persists. Kept in one place so the disk write, the DB sync and the
+  /// post-restore reconcile all serialize exactly the same state.
+  AppData _snapshot() => AppData(
+        notes: _notes,
+        spaces: _spaces,
+        cards: _cards,
+        books: _books,
+        impulses: _impulses,
+        cardsCompact: _cardsCompact,
+        darkMode: _darkMode,
+        darkFollowSystem: _darkFollowSystem,
+        noteBodyFont: _noteBodyFont,
+        tutorialSeen: _tutorialSeen,
+        lastBackupAt: _lastBackupAt,
+        backupReminderDismissedAt: _backupReminderDismissedAt,
+        driveAutoBackup: _driveAutoBackup,
+        lastDriveBackupAt: _lastDriveBackupAt,
+        driveAccountEmail: _driveAccountEmail,
+        sortMode: _sortMode.name,
+        feedWallpaper: _feedWallpaper,
+        feedBackgroundLight: _feedBackgroundLight,
+        feedBackgroundDark: _feedBackgroundDark,
+        readerFontScale: _readerFontScale,
+        readerFont: _readerFont,
+        readerTheme: _readerTheme,
+        journalReminderOn: _journalReminderOn,
+        journalReminderMinutes: _journalReminderMinutes,
+        pinnedReflexId: _pinnedReflexId,
+        progressImpulseId: _progressImpulseId,
+        journalPaneOpen: _journalPaneOpen,
+        cortexPaneOpen: _cortexPaneOpen,
+        progressShowAll: _progressShowAll,
+        typingMillis: _typingMillis,
+        journalOrder: _journalOrder,
+        journalMonthCovers: Map.of(_journalMonthCovers),
+        readerPositions: Map.of(_readerPositions),
+        readerBookmarks: {
+          for (final e in _readerBookmarks.entries) e.key: List.of(e.value)
+        },
+      );
+
   void _flush() {
     if (!_dirty) return;
     _dirty = false;
-    final snapshot = AppData(
-      notes: _notes,
-      spaces: _spaces,
-      cards: _cards,
-      books: _books,
-      impulses: _impulses,
-      cardsCompact: _cardsCompact,
-      darkMode: _darkMode,
-      darkFollowSystem: _darkFollowSystem,
-      noteBodyFont: _noteBodyFont,
-      tutorialSeen: _tutorialSeen,
-      lastBackupAt: _lastBackupAt,
-      backupReminderDismissedAt: _backupReminderDismissedAt,
-      driveAutoBackup: _driveAutoBackup,
-      lastDriveBackupAt: _lastDriveBackupAt,
-      driveAccountEmail: _driveAccountEmail,
-      sortMode: _sortMode.name,
-      feedWallpaper: _feedWallpaper,
-      feedBackgroundLight: _feedBackgroundLight,
-      feedBackgroundDark: _feedBackgroundDark,
-      readerFontScale: _readerFontScale,
-      readerFont: _readerFont,
-      readerTheme: _readerTheme,
-      journalReminderOn: _journalReminderOn,
-      journalReminderMinutes: _journalReminderMinutes,
-      pinnedReflexId: _pinnedReflexId,
-      progressImpulseId: _progressImpulseId,
-      journalPaneOpen: _journalPaneOpen,
-      cortexPaneOpen: _cortexPaneOpen,
-      progressShowAll: _progressShowAll,
-      typingMillis: _typingMillis,
-      journalOrder: _journalOrder,
-      journalMonthCovers: Map.of(_journalMonthCovers),
-      readerPositions: Map.of(_readerPositions),
-      readerBookmarks: {
-        for (final e in _readerBookmarks.entries) e.key: List.of(e.value)
-      },
-    );
-    // Chain writes so they never interleave.
-    _writeChain = _writeChain.then((_) => _storage.save(snapshot));
+    final snapshot = _snapshot();
+    // Phase 3: SQLite is the sole per-save store — one edit writes one row, not
+    // the whole library. Serialized on its own chain; a failed DB write is
+    // retried on the next save and never surfaces.
+    _dbWriteChain = _dbWriteChain.then((_) async {
+      await _dbStore.syncFromAppData(snapshot);
+    }).catchError((_) {});
+    // The whole-file JSON is written per save only when the DB isn't the live
+    // store (fallback / unit tests) or the Phase 2 mirror is kept on; otherwise
+    // it's refreshed at checkpoints in flushNow() as a rollback + backup copy.
+    if (!_dbIsPrimary || DbStore.writeJsonOnSave) {
+      _revAtJsonCheckpoint = _rev;
+      // Saving to JSON because the DB isn't the live store: flag the JSON as
+      // ahead (once per stretch), so the next launch that does get the DB
+      // folds these edits into it instead of reading the stale DB over them.
+      final markAhead = !_dbIsPrimary && !_jsonAheadMarked;
+      if (markAhead) _jsonAheadMarked = true;
+      // catchError: one failed write (disk full, say) must not poison the
+      // chain and silently skip every save after it.
+      _writeChain = _writeChain.then((_) async {
+        if (markAhead) await _storage.markJsonAhead();
+        await _storage.save(snapshot);
+      }).catchError((_) {});
+    }
   }
 
   /// Forces any pending changes to disk now (app pause, before backup or
-  /// restore).
+  /// restore). Awaits both stores so nothing is left in flight — the DB in
+  /// particular, since the next launch reads from it.
   Future<void> flushNow() async {
     _flushTimer?.cancel();
     _flushTimer = null;
     _flush();
+    // Phase 3 checkpoint: per-save JSON writes are off, so refresh the on-disk
+    // JSON here (pause, before a backup/restore) — it keeps `keepy_data.json`
+    // current for the backup zip and as the rollback artifact. Skipped when the
+    // library hasn't changed since the last checkpoint, or when _flush already
+    // wrote JSON this call.
+    if (_loaded &&
+        _dbIsPrimary &&
+        !DbStore.writeJsonOnSave &&
+        _rev != _revAtJsonCheckpoint) {
+      _revAtJsonCheckpoint = _rev;
+      final snapshot = _snapshot();
+      _writeChain = _writeChain
+          .then((_) => _storage.save(snapshot))
+          .catchError((_) {});
+    }
     await _writeChain;
+    await _dbWriteChain;
   }
+
+  bool _disposed = false;
 
   @override
   void dispose() {
+    _disposed = true;
     _flushTimer?.cancel();
     super.dispose();
   }

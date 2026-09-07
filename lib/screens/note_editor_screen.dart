@@ -9,10 +9,13 @@ import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/note.dart';
 import '../services/journal_format.dart';
+import '../services/note_markdown.dart';
 import '../services/notification_service.dart';
 import '../services/wiki_links.dart';
 import '../state/app_state.dart';
@@ -30,7 +33,6 @@ import '../widgets/note_body_editor.dart';
 import '../widgets/note_link_picker.dart';
 import '../widgets/note_links_section.dart';
 import '../widgets/note_tags_editor.dart';
-import '../widgets/text_prompt.dart';
 import '../widgets/wiki_text.dart';
 import 'card_detail_screen.dart';
 import 'reflexes_screen.dart';
@@ -78,9 +80,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   /// and no folder controls; everything else works like a note.
   bool get _isJournal => _note.journalDate != null;
 
-  /// Articles are notes with a byline and a reading view.
-  bool get _isArticle => _note.isArticle;
-
   /// Every note opens as a page you read; the pencil starts the writing.
   /// A note created just now skips straight to the editor — the compose
   /// button it grew out of already made that intent clear.
@@ -104,10 +103,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   /// Done writing: fold the editor away and commit the note.
   void _finishEditing() {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (_isArticle) {
-      _saveArticle(draft: false);
-      return;
-    }
     _collect();
     final state = context.read<AppState>();
     setState(() => _editing = false);
@@ -131,11 +126,196 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     context.read<AppState>().upsertNote(_note);
   }
 
+  /// Adjusts the whole note's text size (a per-note multiplier). Rebuilds the
+  /// editor (and read view) live and persists the choice.
+  void _pickFontSize() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (sheetCtx, setSheet) {
+          void set(double v) {
+            _collect();
+            setState(() => _note.fontScale = v.clamp(0.8, 1.6));
+            setSheet(() {});
+            _persisted = true;
+            context.read<AppState>().upsertNote(_note);
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                decoration: BoxDecoration(
+                  color: AppPalette.sheet,
+                  borderRadius: BorderRadius.circular(26),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.t.textSize,
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppPalette.inkPrimary)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        _sizeButton('A', 15,
+                            () => set(_note.fontScale - 0.1)),
+                        const SizedBox(width: 12),
+                        _sizeButton('A', 26,
+                            () => set(_note.fontScale + 0.1)),
+                        const Spacer(),
+                        Text('${(_note.fontScale * 100).round()}%',
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppPalette.inkSecondary)),
+                        const SizedBox(width: 8),
+                        TextButton(
+                            onPressed: () => set(1.0),
+                            child: Text(context.t.resetSize)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _sizeButton(String label, double size, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppPalette.cardOutline),
+          ),
+          child: Text(label,
+              style: TextStyle(fontSize: size, color: AppPalette.inkPrimary)),
+        ),
+      );
+
+  /// Whether the note has any checklist lines (so the "sink ticked items"
+  /// option is worth showing).
+  bool _hasChecklist() => _note.blocks
+      .any((b) => b.isText && richToLines(b.text).any((l) => l.isCheckItem));
+
+  /// The overflow menu behind the 3-dots button: share as Markdown, copy, sink
+  /// ticked items, archive, delete.
+  void _showNoteMenu() {
+    final state = context.read<AppState>();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: GlassPanel(
+            borderRadius: 26,
+            strong: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _menuTile(sheetCtx, Icons.ios_share_rounded, context.t.share,
+                    _shareMarkdown),
+                _menuTile(sheetCtx, Icons.copy_all_rounded, context.t.copyNote,
+                    _copyNote),
+                if (_hasChecklist())
+                  _menuTile(
+                    sheetCtx,
+                    _note.checkedToBottom
+                        ? Icons.check_box_rounded
+                        : Icons.vertical_align_bottom_rounded,
+                    context.t.moveCheckedToBottom,
+                    () {
+                      setState(() =>
+                          _note.checkedToBottom = !_note.checkedToBottom);
+                      _persisted = true;
+                      state.upsertNote(_note);
+                    },
+                  ),
+                if (!widget.isNew && !_isJournal)
+                  _menuTile(
+                    sheetCtx,
+                    _note.archived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    _note.archived ? context.t.unarchive : context.t.archive,
+                    () {
+                      _note.archived = !_note.archived;
+                      _close();
+                    },
+                  ),
+                if (!widget.isNew)
+                  _menuTile(
+                    sheetCtx,
+                    Icons.delete_outline_rounded,
+                    context.t.delete,
+                    () {
+                      setState(() => _closing = true);
+                      Navigator.of(context).pop();
+                      _persistLater(state, delete: true);
+                    },
+                    danger: true,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _menuTile(BuildContext sheetCtx, IconData icon, String label,
+      VoidCallback onTap,
+      {bool danger = false}) {
+    final tint = danger ? const Color(0xFFE0567B) : null;
+    return ListTile(
+      leading: Icon(icon, color: tint ?? AppPalette.inkSecondary),
+      title: Text(label,
+          style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: tint ?? AppPalette.inkPrimary)),
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        onTap();
+      },
+    );
+  }
+
+  /// Writes the note to a temporary `.md` file and opens the share sheet.
+  Future<void> _shareMarkdown() async {
+    try {
+      final md = noteToMarkdown(_note);
+      final dir = await getTemporaryDirectory();
+      final base = _note.title.trim().isEmpty
+          ? 'note'
+          : _note.title
+              .trim()
+              .replaceAll(RegExp(r'[^\w\s-]'), '')
+              .replaceAll(RegExp(r'\s+'), '-');
+      final file = File('${dir.path}/$base.md');
+      await file.writeAsString(md);
+      await SharePlus.instance
+          .share(ShareParams(files: [XFile(file.path)]));
+    } catch (_) {}
+  }
+
   /// True once this note has been written to the library, so an emptied note
   /// gets cleaned up on close even if it was created in this session.
   bool _persisted = false;
-
-  final _menuKey = GlobalKey();
 
   /// Live save while writing: every few seconds, changed content is
   /// persisted (and synced when signed in) — an open note updates on other
@@ -246,98 +426,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     });
   }
 
-  /// Saves the article: stamps the save time, snapshots the byline from the
-  /// signed-in account, and (for a real save) flips into the reading view.
-  void _saveArticle({required bool draft}) {
-    _collect();
-    if (_note.isEmpty) return;
-    final state = context.read<AppState>();
-    setState(() {
-      _note.articleDraft = draft;
-      _note.articleSavedAt = DateTime.now();
-      if (_note.authorName.isEmpty) {
-        _note.authorName = state.accountName ?? state.accountEmail ?? '';
-        _note.authorPhoto = state.accountPhotoUrl ?? '';
-      }
-      _savedFingerprint = _fingerprint();
-      _persisted = true;
-      if (!draft) _editing = false;
-    });
-    state.upsertNote(_note);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          draft ? context.t.draftSavedToast : context.t.articleSavedToast),
-    ));
-  }
-
-  /// The article's overflow menu: save as draft, then archive and delete.
-  Future<void> _articleMenu() async {
-    final box = _menuKey.currentContext?.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (box == null || overlay == null) return;
-    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final choice = await showMenu<String>(
-      context: context,
-      // Softly rounded, matching the island language.
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(26))),
-      clipBehavior: Clip.antiAlias,
-      position: RelativeRect.fromLTRB(
-        topLeft.dx,
-        topLeft.dy + box.size.height + 6,
-        overlay.size.width - topLeft.dx - box.size.width,
-        0,
-      ),
-      items: [
-        PopupMenuItem(
-          value: 'draft',
-          child: Row(children: [
-            Icon(Icons.drafts_outlined, color: AppPalette.inkSecondary),
-            const SizedBox(width: 12),
-            Text(context.t.saveAsDraft),
-          ]),
-        ),
-        PopupMenuItem(
-          value: 'archive',
-          child: Row(children: [
-            Icon(
-                _note.archived
-                    ? Icons.unarchive_outlined
-                    : Icons.archive_outlined,
-                color: AppPalette.inkSecondary),
-            const SizedBox(width: 12),
-            Text(_note.archived ? context.t.unarchive : context.t.archive),
-          ]),
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: Row(children: [
-            Icon(Icons.delete_outline_rounded,
-                color: AppPalette.inkSecondary),
-            const SizedBox(width: 12),
-            Text(context.t.delete),
-          ]),
-        ),
-      ],
-    );
-    if (!mounted || choice == null) return;
-    switch (choice) {
-      case 'draft':
-        _saveArticle(draft: true);
-      case 'archive':
-        _note.archived = !_note.archived;
-        _close();
-      case 'delete':
-        final state = context.read<AppState>();
-        setState(() => _closing = true);
-        Navigator.of(context).pop();
-        _persistLater(state, delete: true);
-    }
-  }
-
   void _close() {
-    // Reading a saved article changes nothing — leave without rewriting it.
+    // Reading a saved note changes nothing — leave without rewriting it.
     if (_readOnly) {
       Navigator.of(context).pop();
       return;
@@ -473,14 +563,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
       final card = state.cardById(ref.id);
       if (card != null) {
         await Navigator.of(context)
-            .push(bouncyRoute(CardDetailScreen(card: card)));
+            .push(cupertinoRoute(CardDetailScreen(card: card)));
       }
       return;
     }
     final target = state.noteById(ref.id);
     if (target != null) {
       await Navigator.of(context)
-          .push(bouncyRoute(NoteEditorScreen(note: target, isNew: false)));
+          .push(cupertinoRoute(NoteEditorScreen(note: target, isNew: false)));
     }
   }
 
@@ -492,7 +582,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final created = await state.createLinkedNote(title);
     if (!mounted) return;
     await Navigator.of(context)
-        .push(bouncyRoute(NoteEditorScreen(note: created, isNew: true)));
+        .push(cupertinoRoute(NoteEditorScreen(note: created, isNew: true)));
   }
 
   /// Follows a `[[link]]` tapped in the body: open the target, or create it.
@@ -550,53 +640,16 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         _note.isManuscriptPage ? state.bookById(_note.bookId!)?.fontFamily : null;
     final titleFont = bookFont ?? kNoteHeadingFont;
 
-    // The right-hand chrome: a saved article keeps only its overflow menu;
-    // everything else gets the copy / archive / delete pill.
-    final Widget topActions = _isArticle
-        ? GlassBubble(
-            key: _menuKey,
-            icon: Icons.more_vert_rounded,
-            tooltip: context.t.moreOptions,
-            iconColor: AppPalette.inkPrimary,
-            glassColor: const Color(0x14000000),
-            size: 44,
-            iconSize: 22,
-            shadow: false,
-            onTap: _articleMenu,
-          )
-        : BubblePill(
+    // The right-hand chrome: a single overflow button whose menu collects
+    // share / copy / (sink ticked) / archive / delete.
+    final Widget topActions = BubblePill(
             children: [
               IconButton(
                 visualDensity: VisualDensity.compact,
-                tooltip: context.t.copyNote,
-                icon: const Icon(Icons.copy_all_rounded),
-                onPressed: _copyNote,
+                tooltip: context.t.moreOptions,
+                icon: const Icon(Icons.more_horiz_rounded),
+                onPressed: _showNoteMenu,
               ),
-              if (!widget.isNew && !_isJournal)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: _note.archived
-                      ? context.t.unarchive
-                      : context.t.archive,
-                  icon: Icon(_note.archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined),
-                  onPressed: () {
-                    _note.archived = !_note.archived;
-                    _close();
-                  },
-                ),
-              if (!widget.isNew)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  onPressed: () {
-                    final state = context.read<AppState>();
-                    setState(() => _closing = true);
-                    Navigator.of(context).pop();
-                    _persistLater(state, delete: true);
-                  },
-                ),
             ],
           );
 
@@ -722,8 +775,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                       ),
                     )
                   else if (_readOnly)
-                    // A finished article: its title is set in type, not in
-                    // a text field.
+                    // Reading: the title is set in type, not a text field.
                     _Entrance(
                       animation: routeAnim,
                       interval:
@@ -733,8 +785,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                         _note.title,
                         style: TextStyle(
                           fontFamily: titleFont,
-                          // Articles carry a slightly grander headline.
-                          fontSize: _isArticle ? 28 : 24,
+                          fontSize: 24,
                           height: 1.15,
                           fontWeight: FontWeight.w800,
                           color: AppPalette.inkPrimary,
@@ -777,12 +828,17 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                   if (_readOnly)
                     // Reading: no Quill controllers are built at all, which
                     // is why opening a note is cheap.
-                    _StaticBody(
-                        note: _note,
-                        fontFamily: bookFont,
-                        onOpenLink: _isArticle ? null : _openWikiLink,
-                        onOpenMention: _isArticle ? null : _openMention,
-                        onToggleCheck: _isArticle ? null : _toggleCheck)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _StaticBody(
+                            note: _note,
+                            fontFamily: bookFont,
+                            onOpenLink: _openWikiLink,
+                            onOpenMention: _openMention,
+                            onToggleCheck: _toggleCheck),
+                      ],
+                    )
                   else
                     _Entrance(
                       animation: routeAnim,
@@ -797,6 +853,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                                 activeController: _activeController,
                                 onLight: true,
                                 bodyFontFamily: bookFont,
+                                fontScale: _note.fontScale,
                                 onBackspaceAtStart: _focusTitle,
                                 onRemoveImagePath: (path) => context
                                     .read<AppState>()
@@ -852,8 +909,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                         onCreateOpen: _createAndOpenLinkedNote,
                       ),
                     ),
-                  // The byline signs the piece off, article-style.
-                  if (_isArticle) _ArticleByline(note: _note),
                 ],
               ),
               if (_settled && !_closing) ...[
@@ -889,6 +944,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                         onReminder: _note.isBookPage ? null : _pickReminder,
                         reminderSet: _note.reminderAt != null,
                         onLinkNote: _note.isBookPage ? null : _insertNoteLink,
+                        onFontSize: _pickFontSize,
                       ),
                     ),
                   ),
@@ -982,126 +1038,6 @@ class _Entrance extends StatelessWidget {
   }
 }
 
-/// The article's sign-off: the author's picture, their name, and the date the
-/// piece was saved. The name comes from the byline snapshot taken at save
-/// time, falling back to the signed-in account while the piece is unsaved.
-class _ArticleByline extends StatelessWidget {
-  const _ArticleByline({required this.note});
-
-  final Note note;
-
-  Future<void> _editAuthor(BuildContext context, Note note) async {
-    final state = context.read<AppState>();
-    final name = await promptForText(
-      context,
-      title: context.t.bookAuthor,
-      hint: context.t.authorHint,
-      initial: note.authorName.isNotEmpty
-          ? note.authorName
-          : (state.accountName ?? state.accountEmail ?? ''),
-      capitalization: TextCapitalization.words,
-    );
-    if (name == null) return;
-    note.authorName = name.trim();
-    await state.upsertNote(note);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final name = note.authorName.isNotEmpty
-        ? note.authorName
-        : (state.accountName ?? state.accountEmail ?? '');
-    if (name.isEmpty) return const SizedBox.shrink();
-    final photo =
-        note.authorPhoto.isNotEmpty ? note.authorPhoto : state.accountPhotoUrl;
-    final saved = note.articleSavedAt;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Divider(color: AppPalette.cardOutline, height: 26),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: AppPalette.scheme.secondaryContainer,
-                foregroundImage:
-                    photo != null && photo.isNotEmpty ? NetworkImage(photo) : null,
-                onForegroundImageError:
-                    photo != null && photo.isNotEmpty ? (_, _) {} : null,
-                child: Text(
-                  name[0].toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppPalette.scheme.onSecondaryContainer,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Tap the byline to write under a different name.
-                    GestureDetector(
-                      onTap: () => _editAuthor(context, note),
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: kNoteHeadingFont,
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppPalette.inkPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      saved == null
-                          ? context.t.draftLabel
-                          : DateFormat('MMMM d, yyyy').format(saved),
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: AppPalette.inkSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (note.articleDraft && saved != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppPalette.chipFill,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    context.t.draftLabel,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.inkSecondary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A cheap, static lookalike of the note body shown while the open animation
-/// runs — mirrors the editor's text style and image layout so the swap to the
-/// real Quill editors is invisible. It doubles as the article reading view.
 /// A small chip showing a note's reminder time, with a clear button (unless
 /// read-only). Turns red once the time has passed.
 class _ReminderChip extends StatelessWidget {
@@ -1221,53 +1157,37 @@ class _StaticBody extends StatelessWidget {
           ),
         ));
       } else if (b.isText) {
-        final lines = richToLines(b.text);
+        // Render line by line from the styled delta so every inline mark
+        // (bold/italic/…) and block format (headings, quotes, lists, indent,
+        // alignment) the editor showed survives into the saved read view.
+        final lines = richToStyledLines(b.text);
         if (lines.isEmpty) continue;
-        final style = TextStyle(
-          fontFamily: fontFamily ?? activeBodyFont,
-          fontSize: fontFamily != null ? 18 : 21,
-          height: fontFamily != null ? 1.5 : 1.35,
-          color: AppPalette.inkPrimary,
-        );
-        final hasStructure =
-            lines.any((l) => l.kind != RichLineKind.plain);
-        if (!hasStructure) {
-          // Ordinary prose: keep the old single-Text path so paragraph flow
-          // and wiki-links across the whole block are unchanged.
-          final plain = richToPlain(b.text);
-          if (plain.isEmpty) continue;
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: onOpenLink != null && plain.contains('[[')
-                ? WikiText(
-                    text: plain,
-                    style: style,
-                    onOpenLink: onOpenLink!,
-                    onOpenMention: onOpenMention)
-                : Text(plain, style: style),
-          ));
-        } else {
-          // Checklist / bulleted / numbered content: render line by line so
-          // the checkboxes and markers survive into the read view.
-          final lineWidgets = <Widget>[];
-          var ordinal = 0;
-          for (var li = 0; li < lines.length; li++) {
-            final l = lines[li];
-            if (l.kind == RichLineKind.ordered) {
-              ordinal++;
-            } else {
-              ordinal = 0;
-            }
-            lineWidgets.add(_lineWidget(l, bi, li, ordinal, style));
-          }
-          children.add(Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: lineWidgets,
-            ),
-          ));
+        // Keep each line's original index (for tap-to-tick), then optionally
+        // sink ticked items to the bottom for display only.
+        var indexed = [for (var i = 0; i < lines.length; i++) (i, lines[i])];
+        if (note.checkedToBottom) {
+          indexed = [
+            ...indexed.where((e) => e.$2.kind != RichLineKind.checkedItem),
+            ...indexed.where((e) => e.$2.kind == RichLineKind.checkedItem),
+          ];
         }
+        final lineWidgets = <Widget>[];
+        var ordinal = 0;
+        for (final (li, l) in indexed) {
+          if (l.kind == RichLineKind.ordered) {
+            ordinal++;
+          } else {
+            ordinal = 0;
+          }
+          lineWidgets.add(_lineWidget(l, bi, li, ordinal));
+        }
+        children.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: lineWidgets,
+          ),
+        ));
       }
     }
     return Column(
@@ -1276,23 +1196,71 @@ class _StaticBody extends StatelessWidget {
     );
   }
 
-  Widget _text(RichLine l, TextStyle style) =>
-      onOpenLink != null && l.text.contains('[[')
-          ? WikiText(
-              text: l.text,
-              style: style,
-              onOpenLink: onOpenLink!,
-              onOpenMention: onOpenMention)
-          : Text(l.text, style: style);
+  /// The base text style for a line, honouring its heading level / quote.
+  /// Inline run marks are layered on top of this by [RichBodyText].
+  TextStyle _baseStyle(RichLine l) {
+    final book = fontFamily != null;
+    final color = AppPalette.inkPrimary;
+    // The per-note multiplier keeps the read view in step with the editor.
+    final scale = note.fontScale;
+    if (l.header == 1) {
+      return TextStyle(
+        fontFamily: fontFamily ?? kNoteHeadingFont,
+        fontSize: (book ? 24 : 26) * scale,
+        height: 1.25,
+        fontWeight: FontWeight.w700,
+        color: color,
+      );
+    }
+    if (l.header == 2) {
+      return TextStyle(
+        fontFamily: fontFamily ?? kNoteHeadingFont,
+        fontSize: (book ? 20 : 21) * scale,
+        height: 1.25,
+        fontWeight: FontWeight.w600,
+        color: color,
+      );
+    }
+    var s = TextStyle(
+      fontFamily: fontFamily ?? activeBodyFont,
+      fontSize: (book ? 18 : 21) * scale,
+      height: book ? 1.5 : 1.35,
+      color: color,
+    );
+    if (l.quote) {
+      s = s.copyWith(
+          color: color.withValues(alpha: 0.72), fontStyle: FontStyle.italic);
+    }
+    return s;
+  }
 
-  Widget _lineWidget(
-      RichLine l, int blockIndex, int lineIndex, int ordinal, TextStyle style) {
+  TextAlign? _alignOf(RichLine l) {
+    switch (l.align) {
+      case 'center':
+        return TextAlign.center;
+      case 'right':
+        return TextAlign.right;
+      case 'justify':
+        return TextAlign.justify;
+      default:
+        return null;
+    }
+  }
+
+  Widget _text(RichLine l, TextStyle style) => RichBodyText(
+        runs: l.runs.isEmpty ? [RichRun(l.text)] : l.runs,
+        style: style,
+        onOpenLink: onOpenLink,
+        onOpenMention: onOpenMention,
+        textAlign: _alignOf(l),
+      );
+
+  Widget _lineWidget(RichLine l, int blockIndex, int lineIndex, int ordinal) {
+    final style = _baseStyle(l);
+    Widget content;
     switch (l.kind) {
       case RichLineKind.plain:
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: _text(l, style),
-        );
+        content = _text(l, style);
       case RichLineKind.checkedItem:
       case RichLineKind.uncheckedItem:
         final checked = l.kind == RichLineKind.checkedItem;
@@ -1301,62 +1269,73 @@ class _StaticBody extends StatelessWidget {
                 decoration: TextDecoration.lineThrough,
                 color: AppPalette.inkSecondary)
             : style;
-        final row = Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 1, right: 10),
-                child: Icon(
-                  checked
-                      ? Icons.check_box_rounded
-                      : Icons.check_box_outline_blank_rounded,
-                  size: 22,
-                  color: checked
-                      ? AppPalette.scheme.primary
-                      : AppPalette.inkSecondary,
-                ),
+        final row = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1, right: 10),
+              child: Icon(
+                checked
+                    ? Icons.check_box_rounded
+                    : Icons.check_box_outline_blank_rounded,
+                size: 22,
+                color: checked
+                    ? AppPalette.scheme.primary
+                    : AppPalette.inkSecondary,
               ),
-              Expanded(child: _text(l, itemStyle)),
-            ],
-          ),
+            ),
+            Expanded(child: _text(l, itemStyle)),
+          ],
         );
-        if (onToggleCheck == null) return row;
-        return InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => onToggleCheck!(blockIndex, lineIndex, !checked),
-          child: row,
-        );
+        content = onToggleCheck == null
+            ? row
+            : InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => onToggleCheck!(blockIndex, lineIndex, !checked),
+                child: row,
+              );
       case RichLineKind.bullet:
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 2, right: 10),
-                child: Text('•', style: style),
-              ),
-              Expanded(child: _text(l, style)),
-            ],
-          ),
+        content = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 2, right: 10),
+              child: Text('•', style: style),
+            ),
+            Expanded(child: _text(l, style)),
+          ],
         );
       case RichLineKind.ordered:
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 2, right: 10),
-                child: Text('$ordinal.', style: style),
-              ),
-              Expanded(child: _text(l, style)),
-            ],
-          ),
+        content = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 2, right: 10),
+              child: Text('$ordinal.', style: style),
+            ),
+            Expanded(child: _text(l, style)),
+          ],
         );
     }
+    // A quote gets a soft left rule; indent shifts the whole line in.
+    if (l.quote) {
+      content = Container(
+        padding: const EdgeInsets.only(left: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+                color: AppPalette.inkPrimary.withValues(alpha: 0.28),
+                width: 3),
+          ),
+        ),
+        child: content,
+      );
+    }
+    final topPad = l.header == 1 ? 10.0 : (l.header == 2 ? 8.0 : 3.0);
+    return Padding(
+      padding: EdgeInsets.only(top: topPad, bottom: 3, left: l.indent * 20.0),
+      child: content,
+    );
   }
 }
 

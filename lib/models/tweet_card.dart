@@ -25,6 +25,7 @@ class TweetCard {
     this.archived = false,
     this.deletedAt,
     this.noteTitle = '',
+    this.fontScale = 1.0,
     List<NoteBlock>? blocks,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -76,6 +77,9 @@ class TweetCard {
   String noteTitle;
   List<NoteBlock> blocks;
 
+  /// A per-card multiplier on the note body's text size.
+  double fontScale;
+
   final DateTime createdAt;
 
   /// Last mutation time; drives last-write-wins when syncing.
@@ -106,6 +110,7 @@ class TweetCard {
         'archived': archived,
         'deletedAt': deletedAt?.toIso8601String(),
         'noteTitle': noteTitle,
+        if (fontScale != 1.0) 'fontScale': fontScale,
         'blocks': blocks.map((b) => b.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -128,6 +133,7 @@ class TweetCard {
         archived: (json['archived'] as bool?) ?? false,
         deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),
         noteTitle: (json['noteTitle'] as String?) ?? '',
+        fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
         blocks: ((json['blocks'] as List?) ?? [])
             .map((e) => NoteBlock.fromJson(e as Map<String, dynamic>))
             .toList(),
