@@ -8,17 +8,28 @@ import 'package:pdf/widgets.dart' as pw;
 /// Renders a Markdown node to a US-Letter PDF that reads like the committed
 /// document: an 11pt body (a default Word size) with headings scaled up, plus
 /// bold/italic, lists, task boxes, inline + fenced code, tables, quotes, links
-/// and rules. Built-in fonts keep it dependency-free; emoji/CJK may not appear.
+/// and rules. The body uses the bundled SpaceGrotesk and code uses the bundled
+/// JetBrains Mono, so Latin, Cyrillic and Greek all render; emoji and CJK still
+/// may not appear.
 class NotePdf {
   const NotePdf._();
 
   static const double _body = 11; // pt — the body size the user asked for.
+
+  /// The bundled monospace face for code, loaded once per render in
+  /// [fromMarkdown]. Null until loaded (or if the asset can't be read), in which
+  /// case [_codeFont] falls back to the built-in Courier (Latin only).
+  static pw.Font? _monoFont;
+
+  /// The face for code blocks and inline code.
+  static pw.Font _codeFont() => _monoFont ?? pw.Font.courier();
 
   /// Builds the PDF bytes for [source] (raw markdown). [title] is used only as
   /// document metadata; the markdown's own headings carry the visible title.
   static Future<Uint8List> fromMarkdown(String source, {String? title}) async {
     final doc = pw.Document(title: title);
     final base = await _theme();
+    _monoFont = await _loadMono();
 
     final nodes = md.Document(
       extensionSet: md.ExtensionSet.gitHubFlavored,
@@ -56,6 +67,17 @@ class NotePdf {
           base: regular, bold: bold, italic: regular, boldItalic: bold);
     } catch (_) {
       return pw.ThemeData.withFont();
+    }
+  }
+
+  /// The bundled JetBrains Mono for code, or null if the asset can't be loaded
+  /// (e.g. in a unit test), in which case code falls back to Courier.
+  static Future<pw.Font?> _loadMono() async {
+    try {
+      return pw.Font.ttf(
+          await rootBundle.load('assets/fonts/JetBrainsMono-Regular.ttf'));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -171,7 +193,7 @@ class NotePdf {
                     style: pw.TextStyle(
                         fontSize: _body,
                         color: _ink,
-                        font: checkbox != null ? pw.Font.courier() : null)),
+                        font: checkbox != null ? _codeFont() : null)),
                 pw.Expanded(
                     child: pw.RichText(
                         text: _inline(inlineNodes, _bodyStyle()))),
@@ -225,7 +247,7 @@ class NotePdf {
       ),
       child: pw.Text(text,
           style: pw.TextStyle(
-              font: pw.Font.courier(), fontSize: _body - 1.5, color: _ink)),
+              font: _codeFont(), fontSize: _body - 1.5, color: _ink)),
     );
   }
 
@@ -300,7 +322,7 @@ class NotePdf {
         out.add(pw.TextSpan(
           text: node.textContent,
           style: style.copyWith(
-              font: pw.Font.courier(), fontSize: style.fontSize! - 1),
+              font: _codeFont(), fontSize: style.fontSize! - 1),
         ));
       case 'br':
         out.add(pw.TextSpan(text: '\n', style: style));

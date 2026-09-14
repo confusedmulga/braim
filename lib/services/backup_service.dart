@@ -6,6 +6,21 @@ import 'package:path_provider/path_provider.dart';
 
 import 'storage_service.dart';
 
+/// One backup zip sitting in the on-device Backups folder.
+class DeviceBackupFile {
+  DeviceBackupFile({
+    required this.path,
+    required this.name,
+    required this.sizeBytes,
+    required this.modifiedTime,
+  });
+
+  final String path;
+  final String name;
+  final int sizeBytes;
+  final DateTime modifiedTime;
+}
+
 /// Creates and restores full backups (data + images) as a single .zip.
 class BackupService {
   BackupService._();
@@ -65,20 +80,106 @@ class BackupService {
   /// Writes a backup zip into a stable "Backups" folder the app can reach
   /// without a save dialog — used by the scheduled on-device auto-backup. Prefers
   /// the app-specific external directory (visible to a file manager, no
-  /// permission needed), falling back to the documents directory. Old files are
-  /// never pruned here: auto-backups accumulate for the user to manage.
-  Future<File> exportToBackupsDir() async {
-    final base =
-        await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
-    final dir = Directory('${base.path}/Backups');
-    if (!await dir.exists()) await dir.create(recursive: true);
+  /// permission needed), falling back to the documents directory.
+  ///
+  /// The zip is streamed to a temp file, copied onto the destination volume
+  /// under a hidden staging name, then renamed into place: a rename is atomic on
+  /// the same volume, so a process kill mid-write can never leave a truncated
+  /// zip where a reader would find it (a plain copy could). Afterwards the
+  /// folder is pruned to the newest [keep] Braim backups — each zip carries the
+  /// whole image library, so a daily schedule would otherwise grow without
+  /// bound. Only files this app itself named are ever removed.
+  Future<File> exportToBackupsDir({int keep = 5}) async {
     final tmp = await exportToTempFile();
-    final dest = File('${dir.path}/${_base(tmp.path)}');
-    await tmp.copy(dest.path);
     try {
-      await tmp.delete();
-    } catch (_) {}
+      return await placeInBackupsDir(tmp, keep: keep);
+    } finally {
+      try {
+        await tmp.delete();
+      } catch (_) {}
+    }
+  }
+
+  /// The on-device Backups folder: the app-specific external directory (visible
+  /// to a file manager, no permission needed) when available, else the documents
+  /// directory. This storage is app-private — Android clears it on uninstall and
+  /// it is lost with the device — so it guards against a bad write, not loss.
+  Future<Directory> _resolveBackupsDir() async {
+    final base = await getExternalStorageDirectory() ??
+        await getApplicationDocumentsDirectory();
+    return Directory('${base.path}/Backups');
+  }
+
+  /// The absolute path of the on-device Backups folder, for display in Settings.
+  Future<String> backupsDirPath() async => (await _resolveBackupsDir()).path;
+
+  /// The Braim backups sitting in the on-device Backups folder, newest first.
+  /// Only files this app named (`braim-backup-*.zip`) are listed.
+  Future<List<DeviceBackupFile>> listDeviceBackups() async {
+    final dir = await _resolveBackupsDir();
+    if (!await dir.exists()) return const [];
+    final out = <DeviceBackupFile>[];
+    for (final f in dir.listSync().whereType<File>()) {
+      final name = _base(f.path);
+      if (!name.startsWith('braim-backup-') || !name.endsWith('.zip')) continue;
+      final stat = f.statSync();
+      out.add(DeviceBackupFile(
+        path: f.path,
+        name: name,
+        sizeBytes: stat.size,
+        modifiedTime: stat.modified,
+      ));
+    }
+    out.sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
+    return out;
+  }
+
+  /// Places an already-built backup [tmp] into the app's Backups folder
+  /// atomically and prunes to the newest [keep] (see [exportToBackupsDir]).
+  /// Does not delete [tmp] — the caller owns it, so one zip can feed both the
+  /// Drive upload and the on-device copy on a single pause.
+  Future<File> placeInBackupsDir(File tmp, {int keep = 5}) async {
+    final dir = await _resolveBackupsDir();
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final destName = _base(tmp.path);
+    final dest = File('${dir.path}/$destName');
+    // A hidden ".part" sibling on the destination volume; renamed over the final
+    // name once fully written. Its name is filtered out of the prune below.
+    final staging = File('${dir.path}/.$destName.part');
+    await tmp.copy(staging.path);
+    try {
+      await staging.rename(dest.path);
+    } catch (_) {
+      // Rare fallback (destination momentarily locked): copy straight over,
+      // then drop the staging file.
+      await staging.copy(dest.path);
+      try {
+        await staging.delete();
+      } catch (_) {}
+    }
+    await _pruneBackupsDir(dir, keep: keep);
     return dest;
+  }
+
+  /// Keeps only the newest [keep] Braim backups in [dir], deleting older ones.
+  /// Only files this app named (`braim-backup-*.zip`) are touched, so anything
+  /// else the user dropped in the folder is left alone. Best effort.
+  Future<void> _pruneBackupsDir(Directory dir, {required int keep}) async {
+    try {
+      final backups = dir.listSync().whereType<File>().where((f) {
+        final name = _base(f.path);
+        return name.startsWith('braim-backup-') && name.endsWith('.zip');
+      }).toList()
+        ..sort((a, b) =>
+            b.statSync().modified.compareTo(a.statSync().modified));
+      for (final f in backups.skip(keep)) {
+        try {
+          await f.delete();
+        } catch (_) {}
+      }
+    } catch (_) {
+      // A failed prune isn't worth surfacing; retried on the next backup.
+    }
   }
 
   /// Restores from a backup zip: extracts images, rewrites their paths to this

@@ -58,8 +58,96 @@ class MarkdownView extends StatelessWidget {
   /// Rewrites `[[Title]]` note links into tappable Markdown links carrying a
   /// `wiki:` scheme, so the GitHub renderer shows them as links and taps route
   /// back into the note graph. `[[@mentions]]` are left as plain text.
-  static String _linkifyWiki(String src) =>
-      src.replaceAllMapped(wikiLinkPattern, (m) {
+  ///
+  /// Fenced code blocks and inline `code` spans are skipped: a `[[x]]` inside
+  /// them is source to show verbatim, not a link. (Indented code blocks are rare
+  /// in these notes and left untouched.)
+  static String _linkifyWiki(String src) {
+    final lines = src.split('\n');
+    String? fenceChar; // fence character of the open block, or null when outside
+    var fenceLen = 0;
+    for (var i = 0; i < lines.length; i++) {
+      final f = _codeFence(lines[i]);
+      if (fenceChar == null) {
+        if (f != null) {
+          fenceChar = f.$1;
+          fenceLen = f.$2;
+        } else {
+          lines[i] = _linkifyOutsideInlineCode(lines[i]);
+        }
+      } else if (f != null && f.$1 == fenceChar && f.$2 >= fenceLen && f.$3) {
+        // Closing fence: same char, at least as long, nothing but the run.
+        fenceChar = null;
+        fenceLen = 0;
+      }
+    }
+    return lines.join('\n');
+  }
+
+  /// If [line] is a code-fence line, returns (char, runLength, bareClose) where
+  /// bareClose is true when only whitespace follows the run (a valid closing
+  /// fence). Otherwise null. Up to three leading spaces are allowed.
+  static (String, int, bool)? _codeFence(String line) {
+    final m = RegExp(r'^ {0,3}(`{3,}|~{3,})(.*)$').firstMatch(line);
+    if (m == null) return null;
+    final run = m.group(1)!;
+    return (run[0], run.length, m.group(2)!.trim().isEmpty);
+  }
+
+  /// Rewrites wiki links in [line] but leaves any inline `code` spans untouched.
+  static String _linkifyOutsideInlineCode(String line) {
+    if (!line.contains('[[')) return line;
+    final buf = StringBuffer();
+    final n = line.length;
+    var i = 0;
+    while (i < n) {
+      if (line[i] == '`') {
+        // Measure the opening backtick run, then find a closing run of equal
+        // length; the span between (inclusive) is code, emitted verbatim.
+        var j = i;
+        while (j < n && line[j] == '`') {
+          j++;
+        }
+        final runLen = j - i;
+        var k = j;
+        var close = -1;
+        while (k < n) {
+          if (line[k] == '`') {
+            var e = k;
+            while (e < n && line[e] == '`') {
+              e++;
+            }
+            if (e - k == runLen) {
+              close = e;
+              break;
+            }
+            k = e;
+          } else {
+            k++;
+          }
+        }
+        if (close != -1) {
+          buf.write(line.substring(i, close));
+          i = close;
+        } else {
+          // No matching close: the backticks are literal text, keep scanning.
+          buf.write(line.substring(i, j));
+          i = j;
+        }
+      } else {
+        var j = i;
+        while (j < n && line[j] != '`') {
+          j++;
+        }
+        buf.write(_replaceWikiLinks(line.substring(i, j)));
+        i = j;
+      }
+    }
+    return buf.toString();
+  }
+
+  static String _replaceWikiLinks(String s) =>
+      s.replaceAllMapped(wikiLinkPattern, (m) {
         final title = m.group(1)!.trim();
         if (title.isEmpty || title.startsWith('@')) return m.group(0)!;
         return '[$title]($_wikiScheme${Uri.encodeComponent(title)})';

@@ -149,11 +149,11 @@ class _RootShellState extends State<RootShell>
       // Backgrounding: make sure coalesced edits reach disk.
       final app = context.read<AppState>();
       app.flushNow();
-      // A normal background (not a teardown) is a good moment for a silent
-      // Drive backup — it self-throttles and no-ops when nothing changed.
+      // A normal background (not a teardown) is a good moment for the silent
+      // scheduled backups — they self-throttle, no-op when nothing changed, and
+      // share a single zip when both the Drive and on-device schedules are due.
       if (state == AppLifecycleState.paused) {
-        app.maybeAutoBackup();
-        app.maybeLocalAutoBackup();
+        app.maybeBackupOnPause();
       }
     }
   }

@@ -106,8 +106,11 @@ class _UniversalSearchResultsState extends State<UniversalSearchResults> {
       return out;
     }
 
-    final notes = merge(state.notes, 'note', noteMatches, (n) => n.id);
-    final cards = merge(state.cards, 'card', cardMatches, (c) => c.id);
+    // Search over the *searchable* population, not the Home feed: it reaches
+    // into hidden folds (feed lists exclude those) and ignores the transient
+    // tag filter, while still keeping Crypt and deleted content out.
+    final notes = merge(state.searchableNotes, 'note', noteMatches, (n) => n.id);
+    final cards = merge(state.searchableCards, 'card', cardMatches, (c) => c.id);
     final archivedNotes =
         merge(state.archivedNotes, 'note', noteMatches, (n) => n.id);
     final archivedCards =

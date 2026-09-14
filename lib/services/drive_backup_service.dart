@@ -106,22 +106,6 @@ class DriveBackupService {
     }
   }
 
-  /// The connected account's profile (silent lightweight auth), or null when no
-  /// account is connected. Safe to call on startup to restore the name/avatar.
-  Future<GoogleAccountInfo?> currentAccount() async {
-    try {
-      // _ensureInit() must be inside the try: initialize() can throw on a
-      // device without Google Play services, and this runs on every launch.
-      await _ensureInit();
-      final account =
-          await GoogleSignIn.instance.attemptLightweightAuthentication();
-      if (account == null) return null;
-      return (email: account.email, name: null, photoUrl: null);
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<void> disconnect() async {
     await _ensureInit();
     await GoogleSignIn.instance.disconnect();
