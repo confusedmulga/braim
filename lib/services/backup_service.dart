@@ -62,6 +62,25 @@ class BackupService {
     return out;
   }
 
+  /// Writes a backup zip into a stable "Backups" folder the app can reach
+  /// without a save dialog — used by the scheduled on-device auto-backup. Prefers
+  /// the app-specific external directory (visible to a file manager, no
+  /// permission needed), falling back to the documents directory. Old files are
+  /// never pruned here: auto-backups accumulate for the user to manage.
+  Future<File> exportToBackupsDir() async {
+    final base =
+        await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
+    final dir = Directory('${base.path}/Backups');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final tmp = await exportToTempFile();
+    final dest = File('${dir.path}/${_base(tmp.path)}');
+    await tmp.copy(dest.path);
+    try {
+      await tmp.delete();
+    } catch (_) {}
+    return dest;
+  }
+
   /// Restores from a backup zip: extracts images, rewrites their paths to this
   /// device's images folder, and replaces the data file.
   Future<void> restoreFromZipBytes(List<int> zipBytes) async {

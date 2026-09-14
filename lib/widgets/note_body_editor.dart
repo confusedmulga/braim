@@ -11,8 +11,6 @@ import 'package:flutter_quill/quill_delta.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
-
 import '../models/note_block.dart';
 import '../screens/crop_screen.dart';
 import '../services/image_service.dart';
@@ -20,6 +18,7 @@ import '../services/link_preview_service.dart';
 import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'frosted_glass.dart';
 
 /// The highlighter's paint: a light background with a fixed dark ink so
 /// highlighted text stays legible in both light and dark themes (the default
@@ -1097,12 +1096,10 @@ class _RefractiveIsland extends StatelessWidget {
           ),
         ],
       ),
-      child: FakeGlass(
-        shape: const LiquidRoundedSuperellipse(borderRadius: 28),
-        settings: LiquidGlassSettings(
-          glassColor: AppPalette.islandGlass,
-          blur: 14,
-        ),
+      child: FrostedGlass(
+        borderRadius: 28,
+        color: AppPalette.islandGlass,
+        blur: 14,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: child,

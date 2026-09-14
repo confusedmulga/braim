@@ -4,6 +4,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -32,6 +34,27 @@ class FocusMedia(private val context: Context) {
     private fun notificationManager(): NotificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+    // The banner shown behind the media card, if a `focus_art` drawable exists.
+    // Set as the session's album art — the system media player renders it as the
+    // card artwork/background and applies its own readability scrim (the way
+    // Spotify's art appears). Loaded once and cached; null when absent.
+    private var artLoaded = false
+    private var art: Bitmap? = null
+
+    private fun focusArt(): Bitmap? {
+        if (artLoaded) return art
+        artLoaded = true
+        art = try {
+            val id = context.resources.getIdentifier(
+                "focus_art", "drawable", context.packageName
+            )
+            if (id != 0) BitmapFactory.decodeResource(context.resources, id) else null
+        } catch (_: Throwable) {
+            null
+        }
+        return art
+    }
+
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = notificationManager()
@@ -59,6 +82,14 @@ class FocusMedia(private val context: Context) {
             override fun onPause() {
                 onAction?.invoke("pause")
             }
+
+            // Declaring the session seekable is what makes the media seek-bar
+            // draw its scrubber thumb (the "dot"). A focus countdown can't
+            // actually be scrubbed, so we just re-sync — the thumb snaps back to
+            // the true position.
+            override fun onSeekTo(pos: Long) {
+                onAction?.invoke("resync")
+            }
         })
         s.isActive = true
         session = s
@@ -76,19 +107,22 @@ class FocusMedia(private val context: Context) {
         ensureChannel()
         val s = ensureSession()
 
-        s.setMetadata(
-            MediaMetadataCompat.Builder()
-                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, text)
-                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
-                .build()
-        )
+        val meta = MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, text)
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
+        focusArt()?.let {
+            meta.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+        }
+        s.setMetadata(meta.build())
         s.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
                         PlaybackStateCompat.ACTION_PAUSE or
-                        PlaybackStateCompat.ACTION_PLAY_PAUSE
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        // Makes the seek-bar show its scrubber thumb (the dot).
+                        PlaybackStateCompat.ACTION_SEEK_TO
                 )
                 .setState(
                     if (playing) PlaybackStateCompat.STATE_PLAYING
@@ -112,7 +146,9 @@ class FocusMedia(private val context: Context) {
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            // The Braim "character" (a white-on-transparent brain silhouette),
+            // the same one the reminder notifications use — the system tints it.
+            .setSmallIcon(R.drawable.ic_stat_braim)
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(contentPi)

@@ -10,6 +10,7 @@ class Space {
     this.thumbnailPath,
     this.colorValue,
     this.archived = false,
+    this.hiddenFromFeed = false,
     this.deletedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -30,6 +31,10 @@ class Space {
   /// Archived folders are hidden from Cortex and live in the Archive.
   bool archived;
 
+  /// When true, this fold's notes and sparks are kept out of the Home and
+  /// Sparks feeds — they appear only inside the fold itself.
+  bool hiddenFromFeed;
+
   /// When set, the folder is in Recently Deleted (kept ~30 days, then purged).
   DateTime? deletedAt;
 
@@ -44,6 +49,7 @@ class Space {
         'thumbnailPath': thumbnailPath,
         if (colorValue != null) 'colorValue': colorValue,
         'archived': archived,
+        if (hiddenFromFeed) 'hiddenFromFeed': true,
         'deletedAt': deletedAt?.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
@@ -55,6 +61,7 @@ class Space {
         thumbnailPath: json['thumbnailPath'] as String?,
         colorValue: json['colorValue'] as int?,
         archived: (json['archived'] as bool?) ?? false,
+        hiddenFromFeed: (json['hiddenFromFeed'] as bool?) ?? false,
         deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
         updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),

@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/note.dart';
 import '../models/tweet_card.dart';
 import '../screens/card_detail_screen.dart';
-import '../screens/note_editor_screen.dart';
+import '../screens/note_open.dart';
 import '../screens/space_detail_screen.dart';
 import '../services/db/db_store.dart';
 import '../state/app_state.dart';
@@ -213,7 +213,7 @@ class _UniversalSearchResultsState extends State<UniversalSearchResults> {
 
   void _openNote(BuildContext context, Note n) {
     Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => NoteEditorScreen(note: n, isNew: false)));
+        builder: (_) => noteScreen(n)));
   }
 
   Widget _label(BuildContext context, String text) {

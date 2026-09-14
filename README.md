@@ -50,7 +50,14 @@ stations. Search filters notes, cards, and folders as characters are entered;
 notes and cards are ranked by relevance, each word matches from its start, and
 accents are ignored.
 Sort orders the feed by recently added (default), oldest first, alphabetical
-A to Z, or alphabetical Z to A.
+A to Z, or alphabetical Z to A. The sort panel also carries a "Filter by tag"
+control listing every tag in use; pick one to show only the notes that carry it,
+or "All tags" to clear it. The Home feed shows the active tag as a chip that
+clears on a tap. The same tags are listed under the Home entry in the drawer:
+tap the arrow beside Home to open them and pick one to filter the feed.
+
+1-5. Inside a folder the sort control is folded into the search button. Press and
+hold the search button to open the same sort and tag options for that folder.
 
 ---
 
@@ -111,8 +118,12 @@ reflex, or a journal entry for the selected day.
 Folders that hold both notes and cards, shown as square, round-cornered tiles
 with an uploadable cover photo and a contrast-matched label. A folder with a
 cover opens with a header that collapses into the top bar as the feed scrolls; a
-folder without one shows a plain titled bar. Hold any note or card to move it
-into a folder. Press the action button to create a folder.
+folder without one shows a plain titled bar, and its feed slides up under that
+bar behind a soft fade. Hold any note or card to move it into a folder. Press
+the action button to create a folder.
+
+Each folder has a "Hide from feeds" switch. Turn it on to keep that folder's
+notes and cards out of Home and Sparks; they still show inside the folder itself.
 
 ---
 
@@ -173,10 +184,15 @@ selectable from the bundled font set.
 
 ### 3-7. BACKUP AND RESTORE
 
-- **Local.** Export a single zip containing all data and images and share it to
-  Drive, Files, or any target. Restore replaces the current contents from a
-  chosen zip. A reminder banner appears on Home when data has not been backed up
-  recently.
+- **On device.** Export a single zip of all data and images. The system save
+  sheet writes it to Files, Drive, an SD card, or any target, so one action
+  covers both a local and a cloud copy. Restore replaces the current contents
+  from a chosen zip. A reminder banner appears on Home when data has not been
+  backed up recently.
+- **Automatic on device.** A switch keeps a zip copy on a schedule of daily,
+  weekly, or monthly. It runs when the application is sent to the background and
+  is skipped when nothing has changed. Copies land in the application's own
+  folder and are never pruned, so clear out older ones yourself.
 - **Google Drive.** An optional automated backup uploads the same zip into
   Google Drive's private application-data folder (the `drive.appdata` scope). It
   is invisible in the operator's Drive and holds only Braim's own files. Once
@@ -192,6 +208,35 @@ selectable from the bundled font set.
 On Android, images, text, and links shared to Braim from other applications are
 accepted through the intent filters in `AndroidManifest.xml`. Shared links become
 cards; shared images and text become a note.
+
+### 3-9. SIGNING IN WITH GOOGLE
+
+Signing in with a Google account has one purpose: automatic backup to that
+account's Google Drive. It is optional and changes nothing else about how Braim
+operates on the device.
+
+On sign-in:
+
+- **Scope.** Braim requests two permissions only: `drive.appdata` (its own
+  private Drive folder) and the non-sensitive profile scope, used solely to show
+  the operator's name and photo in Settings. Braim cannot see, read, or touch
+  any other file in the operator's Drive.
+- **Destination.** Backups go to Drive's hidden application-data folder — not a
+  folder the operator picks, and invisible in the Drive interface. Only Braim
+  can see it. It never clutters the operator's Drive.
+- **Routine.** Daily automatic backup switches on. Braim uploads a zip of the
+  whole library (notes, cards, books, journal, reflexes) silently when the app
+  is sent to the background — about once a day, and only when something has
+  changed since the last upload.
+- **Retention.** The five most recent backups are kept; older copies are removed
+  automatically.
+- **Manual control.** "Back up now" and "Restore" (from any of the five copies)
+  live in Settings. Auto-backup can be switched off, and the account
+  disconnected, at any time.
+
+No password is handled by Braim, no server operated by the developer is
+contacted, and nothing leaves the device except the backup zip, which goes to
+the operator's own Drive.
 
 ---
 

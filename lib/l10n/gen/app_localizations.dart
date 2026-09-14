@@ -238,6 +238,36 @@ abstract class AppLocalizations {
   /// **'Turn on notifications to get reminders.'**
   String get notifPermNeeded;
 
+  /// No description provided for @testNotification.
+  ///
+  /// In en, this message translates to:
+  /// **'Test notifications'**
+  String get testNotification;
+
+  /// No description provided for @testNotificationSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send one now and one in 10 seconds to check they reach you'**
+  String get testNotificationSubtitle;
+
+  /// No description provided for @notifBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are off for Braim. Turn them on in system settings.'**
+  String get notifBlocked;
+
+  /// No description provided for @notifTestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent one now and scheduled one for 10 seconds. If nothing appears, notifications are blocked in system settings.'**
+  String get notifTestSent;
+
+  /// No description provided for @notifExactOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent, but exact alarms are off — scheduled reminders can arrive late. Allow \"Alarms & reminders\" for Braim in system settings.'**
+  String get notifExactOff;
+
   /// No description provided for @delete.
   ///
   /// In en, this message translates to:
@@ -261,6 +291,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copy'**
   String get copy;
+
+  /// No description provided for @copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get copied;
+
+  /// No description provided for @hideFromFeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide from feeds'**
+  String get hideFromFeed;
+
+  /// No description provided for @showInFeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in feeds'**
+  String get showInFeed;
+
+  /// No description provided for @hideFromFeedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this fold\'s notes and sparks out of Home and Sparks; they show only inside the fold'**
+  String get hideFromFeedSubtitle;
 
   /// No description provided for @skip.
   ///
@@ -303,6 +357,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Import file'**
   String get importFile;
+
+  /// No description provided for @exportAsPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Export as PDF'**
+  String get exportAsPdf;
+
+  /// No description provided for @exportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t export the PDF'**
+  String get exportFailed;
+
+  /// No description provided for @shareFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t share the note'**
+  String get shareFailed;
+
+  /// No description provided for @youtubeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get youtubeDescription;
+
+  /// No description provided for @youtubeTranscript.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcript'**
+  String get youtubeTranscript;
+
+  /// No description provided for @youtubeFetching.
+  ///
+  /// In en, this message translates to:
+  /// **'Fetching video details…'**
+  String get youtubeFetching;
+
+  /// No description provided for @youtubeUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No description or transcript available'**
+  String get youtubeUnavailable;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
 
   /// No description provided for @markdownHint.
   ///
@@ -1174,6 +1276,18 @@ abstract class AppLocalizations {
   /// **'Alphabetical (Z–A)'**
   String get sortZa;
 
+  /// No description provided for @filterByTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by tag'**
+  String get filterByTag;
+
+  /// No description provided for @tagAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All tags'**
+  String get tagAll;
+
   /// No description provided for @checklist.
   ///
   /// In en, this message translates to:
@@ -1797,6 +1911,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Backup saved'**
   String get backupSavedToDevice;
+
+  /// No description provided for @autoBackupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic backup'**
+  String get autoBackupTitle;
+
+  /// No description provided for @autoBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep a .zip copy on this device on a schedule'**
+  String get autoBackupSubtitle;
+
+  /// No description provided for @autoBackupFrequency.
+  ///
+  /// In en, this message translates to:
+  /// **'How often'**
+  String get autoBackupFrequency;
+
+  /// No description provided for @autoBackupDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get autoBackupDaily;
+
+  /// No description provided for @autoBackupWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get autoBackupWeekly;
+
+  /// No description provided for @autoBackupMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get autoBackupMonthly;
+
+  /// No description provided for @autoBackupNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Backups are saved to the app\'s folder and are never deleted automatically. Clear out older copies yourself from time to time, since the app will not remove them for you.'**
+  String get autoBackupNote;
 
   /// No description provided for @loadSampleData.
   ///
@@ -3571,7 +3727,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutWelcomeBody.
   ///
   /// In en, this message translates to:
-  /// **'Your notes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add and crop photos or set the text size. Long-press any note for quick actions.'**
+  /// **'A node is a note. Your nodes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add photos, crop them and set the text size. You can also bring in files. Share a .md or .txt file to Braim, or open one, and it becomes a node. A Markdown node opens in a clean reader that renders headings, tables, links and code the way GitHub does. Press and hold any node for quick actions.'**
   String get tutWelcomeBody;
 
   /// No description provided for @tutCardsTitle.
@@ -3583,7 +3739,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutCardsBody.
   ///
   /// In en, this message translates to:
-  /// **'Share a link from any app to Braim and it saves as a spark, no app switching. Add your own note under any spark, and duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.'**
+  /// **'A spark is a saved link. Share a link from any app to Braim and it lands here with no app switching. Braim reads the title, thumbnail and description once and stores them in the spark, so it does not fetch them again. Write your own note under any spark. Duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.'**
   String get tutCardsBody;
 
   /// No description provided for @tutCortexTitle.
@@ -3595,7 +3751,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutCortexBody.
   ///
   /// In en, this message translates to:
-  /// **'Folders for your notes and sparks. Make one with the plus button, give it a cover photo, and file things from the long-press menu.'**
+  /// **'Cortex holds your folders, called folds. A fold groups related nodes and sparks together. Make one with the plus button and give it a cover photo if you like. To file an item, press and hold it and pick the fold. Open a fold to see only what it holds. You can also hide a fold from Home to keep it apart.'**
   String get tutCortexBody;
 
   /// No description provided for @tutReflexesTitle.
@@ -3607,7 +3763,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutReflexesBody.
   ///
   /// In en, this message translates to:
-  /// **'Build habits and projects as Reflexes. Add daily tasks or one-time ones, tick them off, and watch your streak grow. Tap the heatmap to open the full day-by-day history.'**
+  /// **'Reflexes hold your habits, goals and projects. Each one is an impulse. An impulse contains threads, which are the tasks you tick off. A daily impulse resets its threads every morning and the bar shows today\'s progress. A milestone impulse keeps each thread ticked for good and the bar fills toward the finish. Give a thread a time and it sends you a reminder. Tap the heatmap to open the full day by day history.'**
   String get tutReflexesBody;
 
   /// No description provided for @tutBooksTitle.
@@ -3619,7 +3775,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutBooksBody.
   ///
   /// In en, this message translates to:
-  /// **'Write long pieces as Books made of chapters. Read them in a clean, scrollable reader with themes, adjustable font size, bookmarks and highlights.'**
+  /// **'Write long pieces as books made of chapters. Read them in a clean scrolling reader with themes, adjustable font size, bookmarks and highlights.'**
   String get tutBooksBody;
 
   /// No description provided for @tutJournalTitle.
@@ -3631,7 +3787,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutJournalBody.
   ///
   /// In en, this message translates to:
-  /// **'Keep a daily diary from the Journal tab. Entries stay tied to their day and never show up in Home or search.'**
+  /// **'Keep a daily diary from the Journal tab. Each entry stays tied to its day. Journal entries never show up on Home or in search.'**
   String get tutJournalBody;
 
   /// No description provided for @tutCryptTitle.
@@ -3643,7 +3799,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutCryptBody.
   ///
   /// In en, this message translates to:
-  /// **'A folder that only opens with your fingerprint or screen lock, and its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and are readable in backups. Do not keep passwords or bank details in it.'**
+  /// **'Crypt is a fold that opens only with your fingerprint or screen lock. Its contents stay out of every feed and out of search. It hides items rather than encrypting them, so keep passwords and bank details in a proper password manager.'**
   String get tutCryptBody;
 
   /// No description provided for @tutTipsTitle.
@@ -3655,7 +3811,7 @@ abstract class AppLocalizations {
   /// No description provided for @tutTipsBody.
   ///
   /// In en, this message translates to:
-  /// **'Search finds notes, sparks and folders in one place. Pin up to 10 favourites per feed. Archive hides things without deleting, and deleted items wait 30 days in Recently deleted. Back up everything and switch to dark mode from Settings.'**
+  /// **'Search covers nodes, sparks and folds in one place, and it reads your tags too. Pin up to 10 favourites in each feed. Sort a feed or filter it by tag from the sort button, and press and hold the search button inside a fold to sort it the same way. Archive hides items without deleting them. Deleted items wait 30 days in Recently deleted. Set backups, dark mode and reminders in Settings.'**
   String get tutTipsBody;
 
   /// No description provided for @guideTitle.
@@ -3697,7 +3853,7 @@ abstract class AppLocalizations {
   /// No description provided for @driveConnectSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to back up automatically to Drive'**
+  /// **'Sign in to enable daily automatic backup to a private app folder on your Drive'**
   String get driveConnectSubtitle;
 
   /// No description provided for @driveConnectedAs.
@@ -3715,13 +3871,13 @@ abstract class AppLocalizations {
   /// No description provided for @driveAutoTitle.
   ///
   /// In en, this message translates to:
-  /// **'Automatic backup'**
+  /// **'Daily automatic backup'**
   String get driveAutoTitle;
 
   /// No description provided for @driveAutoSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Back up to Drive when you leave the app'**
+  /// **'Backs up to Drive about once a day, keeping the 5 most recent copies in a private app folder'**
   String get driveAutoSubtitle;
 
   /// No description provided for @driveRestoreTitle.

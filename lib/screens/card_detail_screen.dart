@@ -9,6 +9,7 @@ import 'dart:io';
 
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +18,9 @@ import '../models/note.dart' show richToPlain;
 
 import '../models/tweet_card.dart';
 import '../services/note_markdown.dart';
+import '../services/note_pdf.dart';
 import '../services/wiki_links.dart';
+import '../services/youtube_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
@@ -30,6 +33,7 @@ import '../widgets/move_to_space_sheet.dart';
 import '../widgets/note_body_editor.dart';
 import '../widgets/note_links_section.dart';
 import 'note_editor_screen.dart';
+import 'note_open.dart';
 
 /// Opens a saved card/tweet/link as a note: the fetched preview and the link
 /// (with copy) are pinned at the top, with an editable note body below.
@@ -107,6 +111,9 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     context.read<AppState>().updateCard(_card);
   }
 
+  /// True while the YouTube description/transcript is being scraped on open.
+  bool _ytLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -115,6 +122,22 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     _savedFingerprint = _fingerprint();
     _autosave = Timer.periodic(
         const Duration(seconds: 3), (_) => _autosaveTick());
+    // A YouTube spark scrapes its description + transcript the first time it's
+    // opened; thereafter the stored copy shows instantly. A persistently-blocked
+    // video stops auto-scraping after a few tries (Retry still forces it).
+    if (_card.shouldAutoFetchYouTube) {
+      _loadYouTube();
+    }
+  }
+
+  Future<void> _loadYouTube({bool force = false}) async {
+    setState(() => _ytLoading = true);
+    try {
+      await context.read<AppState>().fetchYouTubeDetails(_card.id, force: force);
+    } catch (_) {
+      // Best-effort; the sections just stay empty.
+    }
+    if (mounted) setState(() => _ytLoading = false);
   }
 
   @override
@@ -287,6 +310,8 @@ class _CardDetailScreenState extends State<CardDetailScreen>
               children: [
                 _cardMenuTile(sheetCtx, Icons.ios_share_rounded,
                     context.t.share, _shareMarkdown),
+                _cardMenuTile(sheetCtx, Icons.picture_as_pdf_outlined,
+                    context.t.exportAsPdf, _exportPdf),
                 _cardMenuTile(sheetCtx, Icons.refresh_rounded,
                     context.t.refreshPreview, () => state.refreshCard(_card.id)),
                 _cardMenuTile(
@@ -334,20 +359,42 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     );
   }
 
+  String _fileBase() {
+    final title =
+        _card.noteTitle.trim().isNotEmpty ? _card.noteTitle.trim() : 'spark';
+    final base = title
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-');
+    return base.isEmpty ? 'spark' : base;
+  }
+
   Future<void> _shareMarkdown() async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final md = cardToMarkdown(_card);
       final dir = await getTemporaryDirectory();
-      final title = _card.noteTitle.trim().isNotEmpty
-          ? _card.noteTitle.trim()
-          : 'spark';
-      final base = title
-          .replaceAll(RegExp(r'[^\w\s-]'), '')
-          .replaceAll(RegExp(r'\s+'), '-');
-      final file = File('${dir.path}/${base.isEmpty ? 'spark' : base}.md');
+      final file = File('${dir.path}/${_fileBase()}.md');
       await file.writeAsString(md);
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
+      }
+    }
+  }
+
+  /// Renders the spark (via its Markdown form) to a PDF and shares it.
+  Future<void> _exportPdf() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await NotePdf.fromMarkdown(cardToMarkdown(_card),
+          title: _card.noteTitle.trim());
+      await Printing.sharePdf(bytes: bytes, filename: '${_fileBase()}.pdf');
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.exportFailed)));
+      }
+    }
   }
 
   Future<void> _pickSpace() async {
@@ -389,8 +436,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     }
     final note = state.noteById(ref.id);
     if (note != null) {
-      await Navigator.of(context)
-          .push(bouncyRoute(NoteEditorScreen(note: note, isNew: false)));
+      await Navigator.of(context).push(bouncyRoute(noteScreen(note)));
     }
   }
 
@@ -419,7 +465,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
       ],
     );
     return PopScope(
-      canPop: false,
+      // While viewing (the default), let the back gesture pop directly so
+      // Android's predictive-back peek can play; only intercept while editing,
+      // where _close() collects and persists the edits before popping.
+      canPop: _readOnly,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _close();
       },
@@ -445,6 +494,14 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                   const SizedBox(height: 10),
                   _LinkBar(
                       url: _card.url, onOpen: _openLink, onCopy: _copyLink),
+                  if (YouTubeService.isYouTube(_card.url)) ...[
+                    const SizedBox(height: 10),
+                    _YouTubeSections(
+                      card: _card,
+                      loading: _ytLoading,
+                      onRetry: () => _loadYouTube(force: true),
+                    ),
+                  ],
                   if (_card.articleText.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     _ArticleReader(text: _card.articleText),
@@ -676,12 +733,12 @@ class _CardPreview extends StatelessWidget {
               ),
             ),
           ],
-          if (card.imageUrl.isNotEmpty) ...[
+          if (card.coverImageUrl.isNotEmpty) ...[
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: Image.network(
-                card.imageUrl,
+                card.coverImageUrl,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 // Matches the feed tiles' cacheWidth, so this is a cache hit
@@ -851,6 +908,184 @@ class _LinkBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The Description + Transcript panels for a YouTube spark, scraped so the video
+/// doesn't have to be opened. Sections that came back empty are simply omitted.
+class _YouTubeSections extends StatelessWidget {
+  const _YouTubeSections(
+      {required this.card, required this.loading, required this.onRetry});
+
+  final TweetCard card;
+  final bool loading;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final description = card.videoDescription.trim().isNotEmpty
+        ? card.videoDescription.trim()
+        : card.text.trim(); // fall back to the OG blurb if scrape came up dry
+    final transcript = card.videoTranscript.trim();
+
+    if (loading && description.isEmpty && transcript.isEmpty) {
+      return _panel(
+        Row(children: [
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 12),
+          Text(context.t.youtubeFetching,
+              style: TextStyle(color: AppPalette.inkSecondary)),
+        ]),
+      );
+    }
+
+    final sections = <Widget>[];
+    if (description.isNotEmpty) {
+      sections.add(_ExpandableSection(
+        icon: Icons.notes_rounded,
+        title: context.t.youtubeDescription,
+        body: description,
+        initiallyExpanded: true,
+      ));
+    }
+    if (transcript.isNotEmpty) {
+      if (sections.isNotEmpty) sections.add(const SizedBox(height: 10));
+      sections.add(_ExpandableSection(
+        icon: Icons.subject_rounded,
+        title: context.t.youtubeTranscript,
+        body: transcript,
+        initiallyExpanded: false,
+      ));
+    }
+    if (sections.isEmpty) {
+      return _panel(
+        Row(children: [
+          Icon(Icons.smart_display_outlined,
+              size: 18, color: AppPalette.inkSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(context.t.youtubeUnavailable,
+                style: TextStyle(color: AppPalette.inkSecondary)),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: loading ? null : onRetry,
+            icon: loading
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(context.t.retry),
+            style: TextButton.styleFrom(
+                foregroundColor: AppPalette.inkPrimary,
+                padding: const EdgeInsets.symmetric(horizontal: 8)),
+          ),
+        ]),
+      );
+    }
+    return Column(children: sections);
+  }
+
+  Widget _panel(Widget child) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppPalette.surfaceGlass,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppPalette.cardOutline),
+        ),
+        child: child,
+      );
+}
+
+/// A tap-to-expand titled panel holding long, selectable text (description or
+/// transcript). The transcript starts collapsed since it can run long.
+class _ExpandableSection extends StatefulWidget {
+  const _ExpandableSection({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.initiallyExpanded = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final bool initiallyExpanded;
+
+  @override
+  State<_ExpandableSection> createState() => _ExpandableSectionState();
+}
+
+class _ExpandableSectionState extends State<_ExpandableSection> {
+  late bool _open = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppPalette.surfaceGlass,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppPalette.cardOutline),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Icon(widget.icon, size: 18, color: AppPalette.inkPrimary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(widget.title,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          color: AppPalette.inkPrimary)),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: context.t.copy,
+                  icon: Icon(Icons.copy_rounded,
+                      size: 17, color: AppPalette.inkSecondary),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: widget.body));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(context.t.copied)));
+                  },
+                ),
+                const SizedBox(width: 6),
+                AnimatedRotation(
+                  turns: _open ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 180),
+                  child: Icon(Icons.expand_more_rounded,
+                      color: AppPalette.inkSecondary),
+                ),
+              ]),
+            ),
+          ),
+          if (_open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: SelectableText(
+                widget.body,
+                style: TextStyle(
+                    fontSize: 13.5,
+                    height: 1.45,
+                    color: AppPalette.inkSecondary),
+              ),
+            ),
         ],
       ),
     );

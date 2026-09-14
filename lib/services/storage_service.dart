@@ -275,9 +275,13 @@ class AppData {
     this.tutorialSeen = false,
     this.lastBackupAt,
     this.backupReminderDismissedAt,
+    this.localAutoBackup = false,
+    this.localAutoBackupFreq = 'weekly',
     this.driveAutoBackup = false,
     this.lastDriveBackupAt,
     this.driveAccountEmail,
+    this.driveAccountName,
+    this.driveAccountPhotoUrl,
     this.sortMode = 'recent',
     this.feedWallpaper = 0,
     this.feedBackgroundPath = '',
@@ -329,9 +333,13 @@ class AppData {
         'lastBackupAt': lastBackupAt?.toIso8601String(),
         'backupReminderDismissedAt':
             backupReminderDismissedAt?.toIso8601String(),
+        'localAutoBackup': localAutoBackup,
+        'localAutoBackupFreq': localAutoBackupFreq,
         'driveAutoBackup': driveAutoBackup,
         'lastDriveBackupAt': lastDriveBackupAt?.toIso8601String(),
         'driveAccountEmail': driveAccountEmail,
+        'driveAccountName': driveAccountName,
+        'driveAccountPhotoUrl': driveAccountPhotoUrl,
         'sortMode': sortMode,
         'feedWallpaper': feedWallpaper,
         'feedBackgroundPath': feedBackgroundPath,
@@ -394,10 +402,15 @@ class AppData {
       lastBackupAt: DateTime.tryParse(json['lastBackupAt'] as String? ?? ''),
       backupReminderDismissedAt: DateTime.tryParse(
           json['backupReminderDismissedAt'] as String? ?? ''),
+      localAutoBackup: (json['localAutoBackup'] as bool?) ?? false,
+      localAutoBackupFreq:
+          (json['localAutoBackupFreq'] as String?) ?? 'weekly',
       driveAutoBackup: (json['driveAutoBackup'] as bool?) ?? false,
       lastDriveBackupAt:
           DateTime.tryParse(json['lastDriveBackupAt'] as String? ?? ''),
       driveAccountEmail: json['driveAccountEmail'] as String?,
+      driveAccountName: json['driveAccountName'] as String?,
+      driveAccountPhotoUrl: json['driveAccountPhotoUrl'] as String?,
       sortMode: (json['sortMode'] as String?) ?? 'recent',
       feedWallpaper: (json['feedWallpaper'] as num?)?.toInt() ?? 0,
       feedBackgroundPath: (json['feedBackgroundPath'] as String?) ?? '',
@@ -458,6 +471,13 @@ class AppData {
   /// When the backup nudge was last cross-dismissed (snoozes it a week).
   DateTime? backupReminderDismissedAt;
 
+  /// Whether the on-device automatic backup (a scheduled local .zip) is on.
+  bool localAutoBackup;
+
+  /// How often the on-device automatic backup runs: 'daily' | 'weekly' |
+  /// 'monthly'.
+  String localAutoBackupFreq;
+
   /// Whether automatic Google Drive backup is enabled.
   bool driveAutoBackup;
 
@@ -466,6 +486,12 @@ class AppData {
 
   /// The connected Google account email for Drive backup (null = not connected).
   String? driveAccountEmail;
+
+  /// The connected account's display name and profile photo URL, persisted so
+  /// the Settings row shows them immediately on launch without waiting for a
+  /// silent re-auth (which on Android can return a minimal profile).
+  String? driveAccountName;
+  String? driveAccountPhotoUrl;
 
   /// Feed sort order name (see NoteSort).
   String sortMode;

@@ -32,8 +32,11 @@ class NotificationService {
   static const int _focusOngoingId = 900001;
   static const String focusPayload = 'focus';
 
-  /// Brand accent tinting the small icon and app name in the notification.
-  static const _accent = Color(0xFF3D6EF7);
+  /// Accent tinting the small icon's badge and app name in the notification.
+  /// The app's Material seed colour (AppPalette.seed) — the same periwinkle the
+  /// whole UI's colour scheme is built from, so the badge reads as part of the
+  /// app rather than a stray green/blue.
+  static const _accent = Color(0xFF6C8CFF);
 
   /// Called when a notification (or one of its action buttons) is tapped, with
   /// the payload and the action id. Wired up by the app so the focus
@@ -150,6 +153,59 @@ class NotificationService {
     try {
       await _plugin.cancel(idFor(noteId));
     } catch (_) {}
+  }
+
+  /// The result of [sendTest]: whether a notification was actually posted, and
+  /// the two OS gates that most often silently stop reminders.
+  ///
+  /// [permission] false → the POST_NOTIFICATIONS permission is denied (nothing
+  /// will ever show). [exactAlarms] false → the app can't schedule exact alarms,
+  /// so scheduled reminders fall back to an inexact window Doze can defer.
+  Future<({bool shown, bool permission, bool exactAlarms})> sendTest() async {
+    if (!_ready) await init();
+    final permission = await requestPermission();
+    final mode = await _scheduleMode();
+    final exact = mode == AndroidScheduleMode.exactAllowWhileIdle;
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        'Reminders',
+        channelDescription: 'Node reminders',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: 'ic_stat_braim',
+        color: _accent,
+      ),
+    );
+    var shown = false;
+    if (_ready && permission) {
+      try {
+        // Immediate: proves the notification pipeline + permission work at all.
+        await _plugin.show(
+          555001,
+          'Braim notifications work',
+          exact
+              ? 'A scheduled test will arrive in ~10 seconds.'
+              : 'Scheduled reminders may arrive late (exact alarms are off).',
+          details,
+        );
+        shown = true;
+        // Delayed: proves scheduling reaches you end-to-end.
+        await _plugin.zonedSchedule(
+          555002,
+          'Braim scheduled reminder',
+          'This one was scheduled 10 seconds ago.',
+          tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10)),
+          details,
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      } catch (e) {
+        debugPrint('test notification failed: $e');
+      }
+    }
+    return (shown: shown, permission: permission, exactAlarms: exact);
   }
 
   /// Schedules the gentle nightly nudge to write a journal entry, repeating

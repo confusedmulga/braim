@@ -18,6 +18,7 @@ class WikiText extends StatefulWidget {
     this.onOpenLink,
     this.onOpenMention,
     this.maxLines,
+    this.accent,
   });
 
   final String text;
@@ -25,6 +26,11 @@ class WikiText extends StatefulWidget {
   final void Function(String title)? onOpenLink;
   final void Function(String name)? onOpenMention;
   final int? maxLines;
+
+  /// Overrides the link/mention colour. Feed cards with a colour swatch pass the
+  /// card's dark ink here so links stay legible on the light tile (the theme
+  /// accents are tuned for the dark app surface, not a bright card).
+  final Color? accent;
 
   @override
   State<WikiText> createState() => _WikiTextState();
@@ -50,11 +56,11 @@ class _WikiTextState extends State<WikiText> {
   Widget build(BuildContext context) {
     _clearRecognizers();
     final linkStyle = widget.style.copyWith(
-      color: AppPalette.scheme.primary,
+      color: widget.accent ?? AppPalette.scheme.primary,
       fontWeight: FontWeight.w700,
     );
     final mentionStyle = widget.style.copyWith(
-      color: AppPalette.mentionAccent,
+      color: widget.accent ?? AppPalette.mentionAccent,
       fontWeight: FontWeight.w700,
     );
     final spans = <InlineSpan>[];

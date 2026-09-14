@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter_highlight/themes/github.dart';
+import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/wiki_links.dart';
 import '../theme/app_theme.dart';
 
 /// Renders GitHub-flavored Markdown the way it reads on GitHub after a commit:
@@ -12,22 +14,59 @@ import '../theme/app_theme.dart';
 /// (the new Markdown node type) — deliberately a clean document look, distinct
 /// from the handwriting-style rich notes.
 class MarkdownView extends StatelessWidget {
-  const MarkdownView(this.data, {super.key, this.selectable = true});
+  const MarkdownView(this.data,
+      {super.key, this.selectable = true, this.onWikiTap});
 
   final String data;
   final bool selectable;
 
+  /// Called with the target title when a `[[wiki-link]]` is tapped. When null,
+  /// wiki-links render as plain text (no rewrite).
+  final void Function(String title)? onWikiTap;
+
+  static const _wikiScheme = 'wiki:';
+
   @override
   Widget build(BuildContext context) {
     return MarkdownBlock(
-      data: data,
+      data: onWikiTap == null ? data : _linkifyWiki(data),
       selectable: selectable,
-      config: _githubConfig(),
+      config: _githubConfig(onWikiTap),
+      generator: MarkdownGenerator(textGenerator: _flowSoftBreaks),
     );
   }
 
+  /// Rejoins "soft" line breaks so a hard-wrapped document flows as paragraphs,
+  /// the way GitHub renders it.
+  ///
+  /// A single newline inside a paragraph is a soft break: GitHub (like any HTML
+  /// renderer) collapses it to a space, so source wrapped at ~72 columns still
+  /// reads as one flowing paragraph. Flutter's Text renders a raw `\n` as a hard
+  /// line break instead, which is why an imported README broke mid-sentence.
+  /// Code blocks and inline code never reach here (they are built straight from
+  /// their own textContent), and genuine hard breaks are separate `<br>` nodes,
+  /// so both are preserved.
+  static SpanNode? _flowSoftBreaks(
+      m.Node node, MarkdownConfig config, WidgetVisitor visitor) {
+    if (node is m.Text) {
+      final flowed = node.text.replaceAll(RegExp(r'[ \t]*\n[ \t]*'), ' ');
+      return TextNode(text: flowed, style: config.p.textStyle);
+    }
+    return null;
+  }
+
+  /// Rewrites `[[Title]]` note links into tappable Markdown links carrying a
+  /// `wiki:` scheme, so the GitHub renderer shows them as links and taps route
+  /// back into the note graph. `[[@mentions]]` are left as plain text.
+  static String _linkifyWiki(String src) =>
+      src.replaceAllMapped(wikiLinkPattern, (m) {
+        final title = m.group(1)!.trim();
+        if (title.isEmpty || title.startsWith('@')) return m.group(0)!;
+        return '[$title]($_wikiScheme${Uri.encodeComponent(title)})';
+      });
+
   /// A GitHub-styled config that follows the app's light/dark mode.
-  static MarkdownConfig _githubConfig() {
+  static MarkdownConfig _githubConfig(void Function(String title)? onWikiTap) {
     final dark = AppPalette.dark;
     final ink = AppPalette.inkPrimary;
     final base =
@@ -60,7 +99,13 @@ class MarkdownView extends StatelessWidget {
       LinkConfig(
         style: TextStyle(
             color: linkColor, decoration: TextDecoration.underline),
-        onTap: (url) => _open(url),
+        onTap: (url) {
+          if (onWikiTap != null && url.startsWith(_wikiScheme)) {
+            onWikiTap(Uri.decodeComponent(url.substring(_wikiScheme.length)));
+            return;
+          }
+          _open(url);
+        },
       ),
       CodeConfig(
         style: TextStyle(

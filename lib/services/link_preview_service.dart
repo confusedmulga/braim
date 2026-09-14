@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/tweet_card.dart';
 import 'article_extractor.dart';
+import 'youtube_service.dart';
 
 /// Minimal preview for an inline note link card: title, image, site.
 class BasicLinkPreview {
@@ -119,6 +120,12 @@ class LinkPreviewService {
     } catch (_) {
       // Leave card as-is; the UI shows the raw link.
     }
+    // A YouTube link always has a cover derivable from its id, so guarantee one
+    // even if the OG image fetch was blocked or missing.
+    final vid = YouTubeService.videoId(card.url);
+    if (vid != null && card.imageUrl.isEmpty) {
+      card.imageUrl = YouTubeService.thumbnailUrl(vid);
+    }
     return card;
   }
 
@@ -169,6 +176,13 @@ class LinkPreviewService {
     if (imageOnly) return page.imageUrl.isNotEmpty;
 
     if (page.siteName.isNotEmpty) card.siteName = page.siteName;
+    // For a YouTube link, use the video's own title to name the spark (so the
+    // feed reads as the video, not "Link") as soon as it's saved.
+    if (YouTubeService.videoId(card.url) != null &&
+        card.noteTitle.trim().isEmpty &&
+        page.title.isNotEmpty) {
+      card.noteTitle = page.title;
+    }
     if (card.text.isEmpty) {
       final combined = [page.title, page.description]
           .where((s) => s.trim().isNotEmpty)

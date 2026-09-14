@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'braim_logo.dart';
 
 /// The Material 3 navigation drawer: a full-height surface that sits under
 /// the screen and is revealed when the shell pushes the screen right
@@ -18,6 +19,7 @@ class SidePane extends StatefulWidget {
     required this.onOpenArchive,
     required this.onOpenTrash,
     required this.onOpenSpace,
+    required this.onOpenTag,
     required this.onOpenJournalYear,
     required this.onOpenReflexes,
     required this.onOpenPomodoro,
@@ -30,6 +32,9 @@ class SidePane extends StatefulWidget {
   final VoidCallback onOpenArchive;
   final VoidCallback onOpenTrash;
   final ValueChanged<String> onOpenSpace;
+
+  /// Filters the Home feed to a tag and shows it (from the Home tag list).
+  final ValueChanged<String> onOpenTag;
   final VoidCallback onOpenJournalYear;
   final VoidCallback onOpenReflexes;
   final VoidCallback onOpenPomodoro;
@@ -40,10 +45,14 @@ class SidePane extends StatefulWidget {
 }
 
 class _SidePaneState extends State<SidePane> {
+  /// Whether Home's tag list is expanded (session-local, like a disclosure).
+  bool _homeTagsOpen = false;
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final spaces = state.spaces;
+    final tags = state.allTags;
     final journalOpen = state.journalPaneOpen;
     final cortexOpen = state.cortexPaneOpen;
 
@@ -64,11 +73,7 @@ class _SidePaneState extends State<SidePane> {
               padding: const EdgeInsets.fromLTRB(22, 16, 16, 12),
               child: Row(
                 children: [
-                  ClipOval(
-                    child: Image.asset('assets/logo.png',
-                        width: 40, height: 40, fit: BoxFit.cover,
-                        cacheWidth: 120),
-                  ),
+                  BraimLogo(size: 34, color: AppPalette.inkPrimary),
                   const SizedBox(width: 12),
                   Text(context.t.appTitle,
                       style: TextStyle(
@@ -84,9 +89,30 @@ class _SidePaneState extends State<SidePane> {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
+                  // Home, with an expand arrow that reveals the tag list.
                   _navItem(context, Icons.home_rounded, context.t.tabHome,
                       widget.currentIndex == 0,
-                      () => widget.onSelectTab(0)),
+                      () => widget.onSelectTab(0),
+                      trailing: tags.isEmpty
+                          ? null
+                          : _expandArrow(_homeTagsOpen,
+                              () => setState(
+                                  () => _homeTagsOpen = !_homeTagsOpen))),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: (_homeTagsOpen && tags.isNotEmpty)
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final tag in tags)
+                                _subItem(context, Icons.label_outline_rounded,
+                                    '#$tag', () => widget.onOpenTag(tag)),
+                            ],
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
                   _navItem(context, Icons.style_rounded, context.t.tabCards,
                       widget.currentIndex == 1,
                       () => widget.onSelectTab(1)),

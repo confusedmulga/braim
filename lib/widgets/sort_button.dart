@@ -65,9 +65,56 @@ class _SortSheet extends StatelessWidget {
                     Navigator.pop(context);
                   },
                 ),
+              _TagFilterRow(),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A "Filter by tag" row inside the sort sheet: a dropdown listing every tag in
+/// the library (plus "All tags" to clear it). Hidden when there are no tags.
+class _TagFilterRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final t = context.t;
+    final state = context.watch<AppState>();
+    final tags = state.allTags;
+    if (tags.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 16, 12),
+      child: Row(
+        children: [
+          Icon(Icons.label_outline_rounded, color: AppPalette.inkSecondary),
+          const SizedBox(width: 12),
+          Text(t.filterByTag,
+              style: TextStyle(color: AppPalette.inkPrimary, fontSize: 15)),
+          const Spacer(),
+          DropdownButton<String?>(
+            value: state.activeTag,
+            underline: const SizedBox.shrink(),
+            dropdownColor: AppPalette.sheet,
+            borderRadius: BorderRadius.circular(12),
+            // A dropdown's explicit style with no family falls back to the
+            // platform sans; name the app font so it reads like the rest.
+            style: TextStyle(
+                fontFamily: kNoteHeadingFont,
+                color: AppPalette.inkPrimary,
+                fontSize: 15),
+            items: [
+              DropdownMenuItem<String?>(
+                  value: null, child: Text(t.tagAll)),
+              for (final tag in tags)
+                DropdownMenuItem<String?>(value: tag, child: Text('#$tag')),
+            ],
+            onChanged: (v) {
+              context.read<AppState>().setActiveTag(v);
+              Navigator.pop(context);
+            },
+          ),
+        ],
       ),
     );
   }

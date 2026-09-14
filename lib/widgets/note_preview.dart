@@ -14,11 +14,22 @@ class NotePreview extends StatelessWidget {
     required this.note,
     required this.maxLines,
     required this.style,
+    this.onColor = false,
   });
 
   final Note note;
   final int maxLines;
   final TextStyle style;
+
+  /// True when this sits on a colour-swatch card. Then checkbox markers, ticked
+  /// items and links derive from the card's dark ink instead of the theme
+  /// accents (which are tuned for the dark app surface, not a bright tile).
+  final bool onColor;
+
+  Color get _ink => style.color ?? AppPalette.inkPrimary;
+  Color get _muted =>
+      onColor ? _ink.withValues(alpha: 0.6) : AppPalette.inkSecondary;
+  Color get _accent => onColor ? _ink : AppPalette.scheme.primary;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +65,10 @@ class NotePreview extends StatelessWidget {
     // fill the card), just with coloured links/mentions.
     if (!structured) {
       return WikiText(
-          text: note.textPreview, style: style, maxLines: maxLines);
+          text: note.textPreview,
+          style: style,
+          maxLines: maxLines,
+          accent: onColor ? _ink : null);
     }
 
     return Column(
@@ -68,7 +82,11 @@ class NotePreview extends StatelessWidget {
       case RichLineKind.plain:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 1.5),
-          child: WikiText(text: l.text, style: style, maxLines: 2),
+          child: WikiText(
+              text: l.text,
+              style: style,
+              maxLines: 2,
+              accent: onColor ? _ink : null),
         );
       case RichLineKind.checkedItem:
       case RichLineKind.uncheckedItem:
@@ -76,7 +94,10 @@ class NotePreview extends StatelessWidget {
         final itemStyle = checked
             ? style.copyWith(
                 decoration: TextDecoration.lineThrough,
-                color: AppPalette.inkSecondary)
+                color: _muted,
+                // Match the strike line to the text colour so it never renders
+                // in the ambient (white) ink over a checked item.
+                decorationColor: _muted)
             : style;
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 1.5),
@@ -90,12 +111,15 @@ class NotePreview extends StatelessWidget {
                       ? Icons.check_box_rounded
                       : Icons.check_box_outline_blank_rounded,
                   size: 17,
-                  color: checked
-                      ? AppPalette.scheme.primary
-                      : AppPalette.inkSecondary,
+                  color: checked ? _accent : _muted,
                 ),
               ),
-              Expanded(child: WikiText(text: l.text, style: itemStyle, maxLines: 1)),
+              Expanded(
+                  child: WikiText(
+                      text: l.text,
+                      style: itemStyle,
+                      maxLines: 1,
+                      accent: onColor ? _ink : null)),
             ],
           ),
         );
@@ -109,7 +133,12 @@ class NotePreview extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 2, right: 8),
                 child: Text('•', style: style),
               ),
-              Expanded(child: WikiText(text: l.text, style: style, maxLines: 1)),
+              Expanded(
+                  child: WikiText(
+                      text: l.text,
+                      style: style,
+                      maxLines: 1,
+                      accent: onColor ? _ink : null)),
             ],
           ),
         );
@@ -123,7 +152,12 @@ class NotePreview extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 2, right: 8),
                 child: Text('$ordinal.', style: style),
               ),
-              Expanded(child: WikiText(text: l.text, style: style, maxLines: 1)),
+              Expanded(
+                  child: WikiText(
+                      text: l.text,
+                      style: style,
+                      maxLines: 1,
+                      accent: onColor ? _ink : null)),
             ],
           ),
         );

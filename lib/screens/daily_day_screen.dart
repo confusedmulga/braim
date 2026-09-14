@@ -1607,7 +1607,21 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
     if (picked == null || !mounted) return;
     final minutes = picked.hour * 60 + picked.minute;
     if (start) {
-      _persist((th) => th.reminderMinutes = minutes);
+      // Choosing a reminder time turns the notification on by default — that is
+      // the point of setting a time — and asks for the OS permission the first
+      // time. The notify toggle below still lets a task keep a time silently.
+      final needPermission = !t.notify;
+      _persist((th) {
+        th.reminderMinutes = minutes;
+        th.notify = true;
+      });
+      if (needPermission) {
+        final granted = await NotificationService.instance.requestPermission();
+        if (!granted && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(context.t.notifPermNeeded)));
+        }
+      }
     } else {
       _persist((th) => th.endMinutes = minutes);
     }

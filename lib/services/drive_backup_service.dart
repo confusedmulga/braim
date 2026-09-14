@@ -20,6 +20,9 @@ const String kGoogleServerClientId = String.fromEnvironment(
       '354565440160-357hj1be88ljhg2kj7tidvd9mqp1vkvd.apps.googleusercontent.com',
 );
 
+/// The connected Google account's profile shown in Settings.
+typedef GoogleAccountInfo = ({String email, String? name, String? photoUrl});
+
 /// One backup file living in the app's private Drive folder.
 class DriveBackupFile {
   DriveBackupFile({
@@ -75,9 +78,9 @@ class DriveBackupService {
     _inited = true;
   }
 
-  /// Interactive connect. Returns the account email, or null if the user
-  /// cancelled the picker / consent.
-  Future<String?> connect() async {
+  /// Interactive connect. Returns the connected account's profile, or null if
+  /// the user cancelled the picker / consent.
+  Future<GoogleAccountInfo?> connect() async {
     await _ensureInit();
     if (!GoogleSignIn.instance.supportsAuthenticate()) {
       throw StateError('Google sign-in is not available on this device.');
@@ -86,10 +89,13 @@ class DriveBackupService {
       final account =
           await GoogleSignIn.instance.authenticate(scopeHint: const [_scope]);
       // Grab the Drive grant now (prompting once) so later backups are silent.
+      // Only the Drive scope is requested — adding a profile scope here made the
+      // authorization fail with "Account reauth failed", so the account is
+      // identified by email alone (which the sign-in always provides).
       final headers = await account.authorizationClient
           .authorizationHeaders(const [_scope], promptIfNecessary: true);
       if (headers == null) return null; // scope not granted
-      return account.email;
+      return (email: account.email, name: null, photoUrl: null);
     } on GoogleSignInException catch (e) {
       // A cancelled picker/consent is a quiet no-op, not an error.
       if (e.code == GoogleSignInExceptionCode.canceled ||
@@ -97,6 +103,22 @@ class DriveBackupService {
         return null;
       }
       rethrow;
+    }
+  }
+
+  /// The connected account's profile (silent lightweight auth), or null when no
+  /// account is connected. Safe to call on startup to restore the name/avatar.
+  Future<GoogleAccountInfo?> currentAccount() async {
+    try {
+      // _ensureInit() must be inside the try: initialize() can throw on a
+      // device without Google Play services, and this runs on every launch.
+      await _ensureInit();
+      final account =
+          await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (account == null) return null;
+      return (email: account.email, name: null, photoUrl: null);
+    } catch (_) {
+      return null;
     }
   }
 

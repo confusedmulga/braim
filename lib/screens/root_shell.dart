@@ -153,6 +153,7 @@ class _RootShellState extends State<RootShell>
       // Drive backup — it self-throttles and no-ops when nothing changed.
       if (state == AppLifecycleState.paused) {
         app.maybeAutoBackup();
+        app.maybeLocalAutoBackup();
       }
     }
   }
@@ -326,6 +327,13 @@ class _RootShellState extends State<RootShell>
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => SpaceDetailScreen(spaceId: spaceId)),
     );
+  }
+
+  /// From the side pane's Home tag list: filter the Home feed to [tag] and show
+  /// it (jumps to Home and closes the pane).
+  void _openTag(String tag) {
+    context.read<AppState>().setActiveTag(tag);
+    _selectTab(0);
   }
 
   void _openJournalYear() {
@@ -786,6 +794,7 @@ class _RootShellState extends State<RootShell>
                     onOpenArchive: _openArchive,
                     onOpenTrash: _openTrash,
                     onOpenSpace: _openSpace,
+                    onOpenTag: _openTag,
                     onOpenJournalYear: _openJournalYear,
                     onOpenReflexes: _openReflexesShortcut,
                     onOpenPomodoro: _openPomodoro,

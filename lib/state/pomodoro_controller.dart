@@ -61,6 +61,10 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
         resume();
       } else if (action == 'pause') {
         pause();
+      } else if (action == 'resync' && running) {
+        // The seek-bar can't scrub a countdown; snap the thumb back to the
+        // real position.
+        _syncMedia();
       }
     };
   }
