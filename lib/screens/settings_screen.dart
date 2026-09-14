@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../services/drive_backup_service.dart';
@@ -21,6 +20,22 @@ import '../widgets/tutorial_dialog.dart';
 String _lastBackupText(BuildContext context, DateTime? last) {
   if (last == null) return context.t.lastBackupNever;
   return context.t.lastBackupAgo(DateTime.now().difference(last).inDays);
+}
+
+/// The connected Google account's avatar — the profile photo, falling back to a
+/// generic account icon while it loads or when none is available.
+Widget _driveAvatar(String? photoUrl) {
+  final fallback = Icon(Icons.account_circle_rounded,
+      color: AppPalette.inkPrimary, size: 40);
+  if (photoUrl == null || photoUrl.isEmpty) return fallback;
+  return CircleAvatar(
+    radius: 20,
+    backgroundColor: AppPalette.chipFill,
+    foregroundImage: NetworkImage(photoUrl),
+    // Shown if the image fails to load; the photo paints over it otherwise.
+    child: Icon(Icons.account_circle_rounded,
+        color: AppPalette.inkSecondary, size: 40),
+  );
 }
 
 /// "2026-09-02 14:03 · 4.2 MB" for a Drive backup row.
@@ -42,72 +57,14 @@ String _driveFileSubtitle(DriveBackupFile f) {
   return parts.join(' · ');
 }
 
-/// Settings opens as a transparent overlay so the screen the user came from
-/// stays visible (and blurred) behind it.
+/// Settings is a standard opaque screen, so it takes part in Android's
+/// predictive-back peek (swipe from the edge reveals the feed underneath) like
+/// the rest of the app's pushed screens.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   static Route<void> route() {
-    return PageRouteBuilder(
-      opaque: false,
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 260),
-      pageBuilder: (_, _, _) => const SettingsScreen(),
-      // Slides in from the right edge; closing slides it back out to the
-      // right, landing on the feed.
-      transitionsBuilder: (_, animation, _, child) {
-        return SlideTransition(
-          position: Tween(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          )),
-          child: child,
-        );
-      },
-    );
-  }
-
-  Future<void> _backup(BuildContext context) async {
-    final t = context.t;
-    final messenger = ScaffoldMessenger.of(context);
-    final appState = context.read<AppState>();
-    final nav = Navigator.of(context, rootNavigator: true);
-    final progress = ValueNotifier<double?>(null);
-    var dialogOpen = true;
-    // Progress while the zip streams to disk.
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(context.t.preparingBackup),
-        content: ValueListenableBuilder<double?>(
-          valueListenable: progress,
-          builder: (_, v, _) => ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(value: v, minHeight: 6),
-          ),
-        ),
-      ),
-    ).then((_) => dialogOpen = false);
-    try {
-      // Pending coalesced edits must reach disk before we zip it.
-      if (context.mounted) await context.read<AppState>().flushNow();
-      final file = await BackupService.instance.exportToTempFile(
-        onProgress: (done, total) =>
-            progress.value = total == 0 ? null : done / total,
-      );
-      if (dialogOpen) nav.pop();
-      // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'Braim backup');
-      await appState.markBackedUp();
-    } catch (e) {
-      if (dialogOpen) nav.pop();
-      messenger.showSnackBar(SnackBar(content: Text(t.backupFailed(e.toString()))));
-    }
+    return MaterialPageRoute(builder: (_) => const SettingsScreen());
   }
 
   Future<void> _restore(BuildContext context) async {
@@ -352,6 +309,25 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
+  /// Fires an immediate + a 10-second test notification and reports which OS
+  /// gate (permission or exact alarms) is blocking reminders, if any.
+  Future<void> _testNotifications(BuildContext context) async {
+    final t = context.t;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await NotificationService.instance.sendTest();
+    if (!context.mounted) return;
+    final String msg;
+    if (!result.permission) {
+      msg = t.notifBlocked;
+    } else if (!result.exactAlarms) {
+      msg = t.notifExactOff;
+    } else {
+      msg = t.notifTestSent;
+    }
+    messenger.showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+  }
+
   Future<void> _pickJournalTime(BuildContext context) async {
     final appState = context.read<AppState>();
     final mins = appState.journalReminderMinutes;
@@ -413,11 +389,11 @@ class SettingsScreen extends StatelessWidget {
     final state = context.watch<AppState>();
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      // A near-opaque backdrop instead of a live blur: animating a full-screen
-      // BackdropFilter made the overlay stutter as it opened.
+      // A standard opaque screen surface, so the predictive-back peek reveals
+      // the feed cleanly behind it as you swipe.
+      backgroundColor: AppPalette.sheet,
       body: Container(
-          color: AppPalette.scrimFill,
+          color: AppPalette.sheet,
           child: SafeArea(
             child: Column(
               children: [
@@ -674,6 +650,22 @@ class SettingsScreen extends StatelessWidget {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 12),
+                      GlassPanel(
+                        borderRadius: 20,
+                        blur: 0,
+                        color: AppPalette.surfaceGlass,
+                        padding: EdgeInsets.zero,
+                        onTap: () => _testNotifications(context),
+                        child: ListTile(
+                          leading: Icon(Icons.notifications_active_outlined,
+                              color: AppPalette.inkPrimary),
+                          title: Text(context.t.testNotification,
+                              style: TextStyle(color: AppPalette.inkPrimary)),
+                          subtitle: Text(context.t.testNotificationSubtitle,
+                              style: TextStyle(color: Color(0xFF5E5F69))),
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       _SectionLabel(context.t.backupSection),
                       GlassPanel(
@@ -683,7 +675,10 @@ class SettingsScreen extends StatelessWidget {
                         blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
-                        onTap: () => _backup(context),
+                        // One manual backup: the Android save sheet writes the
+                        // .zip to Files, Drive, an SD card and more (this used to
+                        // be split into a separate "share" and "save" row).
+                        onTap: () => _saveToDevice(context),
                         child: ListTile(
                           leading: Icon(Icons.backup_outlined,
                               color: AppPalette.inkPrimary),
@@ -720,15 +715,95 @@ class SettingsScreen extends StatelessWidget {
                         blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
-                        onTap: () => _saveToDevice(context),
-                        child: ListTile(
-                          leading: Icon(Icons.save_alt_rounded,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.saveToDevice,
-                              style:
-                                  TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(context.t.saveToDeviceSubtitle,
-                              style: TextStyle(color: Color(0xFF5E5F69))),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SwitchListTile(
+                              secondary: Icon(Icons.schedule_rounded,
+                                  color: AppPalette.inkPrimary),
+                              title: Text(context.t.autoBackupTitle,
+                                  style: TextStyle(
+                                      color: AppPalette.inkPrimary)),
+                              subtitle: Text(context.t.autoBackupSubtitle,
+                                  style: const TextStyle(
+                                      color: Color(0xFF5E5F69))),
+                              value: state.localAutoBackup,
+                              onChanged: (v) => context
+                                  .read<AppState>()
+                                  .setLocalAutoBackup(v),
+                            ),
+                            if (state.localAutoBackup) ...[
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                                child: Row(
+                                  children: [
+                                    Text(context.t.autoBackupFrequency,
+                                        style: TextStyle(
+                                            color: AppPalette.inkPrimary,
+                                            fontWeight: FontWeight.w600)),
+                                    const Spacer(),
+                                    DropdownButton<String>(
+                                      value: state.localAutoBackupFreq,
+                                      underline: const SizedBox.shrink(),
+                                      dropdownColor: AppPalette.surfaceGlass,
+                                      borderRadius: BorderRadius.circular(12),
+                                      // An explicit style with no family falls
+                                      // back to the platform sans; name the app
+                                      // font so it matches the rest of the UI.
+                                      style: TextStyle(
+                                          fontFamily: kNoteHeadingFont,
+                                          color: AppPalette.inkPrimary,
+                                          fontSize: 15),
+                                      items: [
+                                        DropdownMenuItem(
+                                            value: 'daily',
+                                            child: Text(
+                                                context.t.autoBackupDaily)),
+                                        DropdownMenuItem(
+                                            value: 'weekly',
+                                            child: Text(
+                                                context.t.autoBackupWeekly)),
+                                        DropdownMenuItem(
+                                            value: 'monthly',
+                                            child: Text(
+                                                context.t.autoBackupMonthly)),
+                                      ],
+                                      onChanged: (v) {
+                                        if (v != null) {
+                                          context
+                                              .read<AppState>()
+                                              .setLocalAutoBackupFreq(v);
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(Icons.info_outline_rounded,
+                                        size: 16,
+                                        color: AppPalette.inkSecondary),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(context.t.autoBackupNote,
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              height: 1.35,
+                                              color:
+                                                  AppPalette.inkSecondary)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -774,12 +849,14 @@ class SettingsScreen extends StatelessWidget {
                           color: AppPalette.surfaceGlass,
                           padding: EdgeInsets.zero,
                           child: ListTile(
-                            leading: Icon(Icons.account_circle_outlined,
-                                color: AppPalette.inkPrimary),
-                            title: Text(
-                                context.t.driveConnectedAs(
-                                    state.driveAccountEmail ?? ''),
-                                style: TextStyle(color: AppPalette.inkPrimary)),
+                            leading: _driveAvatar(state.driveAccountPhotoUrl),
+                            // The connected account is identified by email (the
+                            // name/photo need a profile scope that broke Drive
+                            // authorization, so they're deliberately not shown).
+                            title: Text(state.driveAccountEmail ?? '',
+                                style: TextStyle(
+                                    color: AppPalette.inkPrimary,
+                                    fontWeight: FontWeight.w600)),
                             subtitle: Text(
                                 _lastBackupText(
                                     context, state.lastDriveBackupAt),

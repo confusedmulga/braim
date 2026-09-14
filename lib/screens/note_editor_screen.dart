@@ -11,11 +11,14 @@ import 'package:flutter_quill/flutter_quill.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/note.dart';
+import 'note_open.dart';
 import '../services/journal_format.dart';
 import '../services/note_markdown.dart';
+import '../services/note_pdf.dart';
 import '../services/notification_service.dart';
 import '../services/wiki_links.dart';
 import '../state/app_state.dart';
@@ -230,6 +233,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
               children: [
                 _menuTile(sheetCtx, Icons.ios_share_rounded, context.t.share,
                     _shareMarkdown),
+                _menuTile(sheetCtx, Icons.picture_as_pdf_outlined,
+                    context.t.exportAsPdf, _exportPdf),
                 _menuTile(sheetCtx, Icons.copy_all_rounded, context.t.copyNote,
                     _copyNote),
                 if (_hasChecklist())
@@ -295,22 +300,42 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     );
   }
 
+  String _fileBase() => _note.title.trim().isEmpty
+      ? 'note'
+      : _note.title
+          .trim()
+          .replaceAll(RegExp(r'[^\w\s-]'), '')
+          .replaceAll(RegExp(r'\s+'), '-');
+
   /// Writes the note to a temporary `.md` file and opens the share sheet.
   Future<void> _shareMarkdown() async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final md = noteToMarkdown(_note);
       final dir = await getTemporaryDirectory();
-      final base = _note.title.trim().isEmpty
-          ? 'note'
-          : _note.title
-              .trim()
-              .replaceAll(RegExp(r'[^\w\s-]'), '')
-              .replaceAll(RegExp(r'\s+'), '-');
-      final file = File('${dir.path}/$base.md');
+      final file = File('${dir.path}/${_fileBase()}.md');
       await file.writeAsString(md);
       await SharePlus.instance
           .share(ShareParams(files: [XFile(file.path)]));
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
+      }
+    }
+  }
+
+  /// Renders the note (via its Markdown form) to a PDF and shares it.
+  Future<void> _exportPdf() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes = await NotePdf.fromMarkdown(noteToMarkdown(_note),
+          title: _note.title.trim());
+      await Printing.sharePdf(bytes: bytes, filename: '${_fileBase()}.pdf');
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.exportFailed)));
+      }
+    }
   }
 
   /// True once this note has been written to the library, so an emptied note
@@ -569,8 +594,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     }
     final target = state.noteById(ref.id);
     if (target != null) {
-      await Navigator.of(context)
-          .push(cupertinoRoute(NoteEditorScreen(note: target, isNew: false)));
+      await Navigator.of(context).push(cupertinoRoute(noteScreen(target)));
     }
   }
 
@@ -654,7 +678,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
           );
 
     return PopScope(
-      canPop: false,
+      // While viewing a saved note, let the back gesture pop directly so
+      // Android's predictive-back peek can play; intercept only while editing,
+      // where _close() collects and persists the note before popping.
+      canPop: _readOnly,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _close();
       },
@@ -1267,7 +1294,10 @@ class _StaticBody extends StatelessWidget {
         final itemStyle = checked
             ? style.copyWith(
                 decoration: TextDecoration.lineThrough,
-                color: AppPalette.inkSecondary)
+                color: AppPalette.inkSecondary,
+                // Tie the strike line to the text colour, else it can render in
+                // the ambient (white) ink and look like it's crossing out air.
+                decorationColor: AppPalette.inkSecondary)
             : style;
         final row = Row(
           crossAxisAlignment: CrossAxisAlignment.start,

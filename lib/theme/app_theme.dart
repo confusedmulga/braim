@@ -206,6 +206,16 @@ ThemeData buildTheme(bool dark) {
 
   return base.copyWith(
     canvasColor: Colors.transparent,
+    // Android 14+ predictive back: routes using the default page transition
+    // (folds/spaces, markdown notes) show the OS peek of the screen underneath
+    // as you swipe from the edge. Falls back to the zoom transition on devices
+    // without predictive back, and iOS keeps its native swipe.
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      },
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,

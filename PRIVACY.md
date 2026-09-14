@@ -68,6 +68,12 @@ initiated by your action:
   **unavatar.io** to fetch the author's public profile picture from their
   handle. No login or API key is used; the requests carry only the post URL or
   public handle.
+- **For a YouTube link,** the App additionally requests the video's public
+  **watch page** on `youtube.com` to read its title, description and, when the
+  video offers them, captions, and fetches the video **thumbnail** from
+  `ytimg.com`, so the saved spark shows these without opening the video. No
+  login or API key is used; the requests carry only the public video URL. The
+  transcript is best-effort and often unavailable.
 
 These requests go directly from your device to those services. We do not proxy,
 log, or store this traffic, and none of it is sent to us.
@@ -84,8 +90,8 @@ purpose and never transmitted to us:
   timer. These are generated on your device; no push service is used.
 - **Do Not Disturb access** (optional) — if you use the focus timer's Do Not
   Disturb option, to silence interruptions during a session.
-- **Network/Internet** — to fetch link and tweet previews, and to perform Google
-  Drive backup if you enable it.
+- **Network/Internet** — to fetch link, tweet and YouTube video previews, and to
+  perform Google Drive backup if you enable it.
 - **Share intent** — to let you save shared content (links, text, tweets,
   images) into Braim from other apps.
 
@@ -94,8 +100,9 @@ purpose and never transmitted to us:
 Braim does not integrate any third-party analytics, advertising, or
 crash-reporting SDKs. Outbound network activity is limited to:
 
-1. Fetching link and tweet previews from the linked site, Twitter/X oEmbed, and
-   unavatar.io, as described above, and only when you save a card.
+1. Fetching link, tweet and YouTube previews from the linked site, Twitter/X
+   oEmbed, unavatar.io, and YouTube (its watch page and thumbnail host), as
+   described above, and only when you save a card.
 2. Uploading and managing your backups in your own Google Drive, via Google
    Sign-In and the Google Drive API, and only if you enable Google Drive backup.
 

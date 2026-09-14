@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -10,6 +11,8 @@ import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../models/note_block.dart';
 import '../services/note_markdown.dart';
+import '../services/note_pdf.dart';
+import '../services/wiki_links.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_button.dart';
@@ -18,6 +21,8 @@ import '../widgets/glass.dart';
 import '../widgets/markdown_view.dart';
 import '../widgets/move_to_space_sheet.dart';
 import '../widgets/quick_actions_menu.dart';
+import 'card_detail_screen.dart';
+import 'note_open.dart';
 
 /// A GitHub-flavored Markdown node. Reading renders the raw markdown like a
 /// committed README; editing swaps to a monospace source editor (with a live
@@ -76,6 +81,34 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// Follows a `[[wiki-link]]` tapped in the rendered Markdown: opens the
+  /// resolved note or card, or creates the note when the title is new — the
+  /// same behaviour as the rich editor's links.
+  Future<void> _openWikiLink(String title) async {
+    final state = context.read<AppState>();
+    final ref = state.resolveLink(title);
+    if (ref == null) {
+      final created = await state.createLinkedNote(title);
+      if (!mounted) return;
+      await Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => noteScreen(created, isNew: true)));
+      return;
+    }
+    if (ref.kind == LinkKind.card) {
+      final card = state.cardById(ref.id);
+      if (card != null && mounted) {
+        await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => CardDetailScreen(card: card)));
+      }
+      return;
+    }
+    final note = state.noteById(ref.id);
+    if (note != null && mounted) {
+      await Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => noteScreen(note)));
+    }
+  }
+
   Future<void> _done() async {
     await _save();
     if (!mounted) return;
@@ -110,6 +143,8 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
               children: [
                 _tile(sheetCtx, Icons.ios_share_rounded, context.t.share,
                     _shareMarkdown),
+                _tile(sheetCtx, Icons.picture_as_pdf_outlined,
+                    context.t.exportAsPdf, _exportPdf),
                 _tile(sheetCtx, Icons.drive_file_move_outline,
                     context.t.moveToFolder, _move),
                 _tile(
@@ -150,6 +185,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   }
 
   Future<void> _shareMarkdown() async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final md = _ctrl.text.trim().isEmpty ? _note.markdownSource : _ctrl.text;
       final dir = await getTemporaryDirectory();
@@ -162,7 +198,31 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
       final file = File('${dir.path}/$base.md');
       await file.writeAsString(md);
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
+      }
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final src = _ctrl.text.trim().isEmpty ? _note.markdownSource : _ctrl.text;
+      final title =
+          _note.title.trim().isEmpty ? markdownTitle(src) : _note.title.trim();
+      final bytes = await NotePdf.fromMarkdown(src, title: title);
+      final base = title.isEmpty
+          ? 'note'
+          : title
+              .replaceAll(RegExp(r'[^\w\s-]'), '')
+              .replaceAll(RegExp(r'\s+'), '-');
+      await Printing.sharePdf(bytes: bytes, filename: '$base.pdf');
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.exportFailed)));
+      }
+    }
   }
 
   Future<void> _move() async {
@@ -243,7 +303,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
                         fontStyle: FontStyle.italic,
                         color: AppPalette.inkSecondary)),
               )
-            : MarkdownView(src),
+            : MarkdownView(src, onWikiTap: _openWikiLink),
       );
       actions = [
         FrostedCircleButton(
@@ -261,7 +321,9 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     }
 
     return PopScope(
-      canPop: false,
+      // Let the back gesture pop directly while viewing (so Android's
+      // predictive-back peek can play); only intercept mid-edit to save first.
+      canPop: !_editing,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _leave();
       },

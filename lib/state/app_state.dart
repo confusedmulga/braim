@@ -14,6 +14,7 @@ import '../services/backup_service.dart';
 import '../services/book_text_ops.dart';
 import '../services/drive_backup_service.dart';
 import '../services/link_preview_service.dart';
+import '../services/youtube_service.dart';
 import '../services/note_markdown.dart';
 import '../services/notification_service.dart';
 import '../services/seed_data.dart';
@@ -137,6 +138,30 @@ class AppState extends ChangeNotifier {
 
   static NoteSort _sortFromName(String s) => NoteSort.values
       .firstWhere((e) => e.name == s, orElse: () => NoteSort.recent);
+
+  /// The tag the Home feed is filtered to, or null for everything. A transient
+  /// view filter (not persisted) set from the sort sheet or the side pane.
+  String? _activeTag;
+  String? get activeTag => _activeTag;
+
+  void setActiveTag(String? tag) {
+    if (_activeTag == tag) return;
+    _activeTag = tag;
+    _rev++; // invalidate the memoized feed so it re-filters
+    notifyListeners();
+  }
+
+  /// Every tag in use across the live (non-archived, non-deleted) feed notes,
+  /// de-duplicated and sorted alphabetically. Drives the tag pickers.
+  List<String> get allTags {
+    final set = <String>{};
+    for (final n in _notes) {
+      if (_isFeedNote(n)) set.addAll(n.tags);
+    }
+    final list = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return list;
+  }
 
   /// User-chosen journal month covers, keyed 'yyyy-MM'.
   final Map<String, String> _journalMonthCovers = {};
@@ -273,11 +298,75 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
+  // ---- On-device automatic backup -----------------------------------------
+
+  bool _localAutoBackup = false;
+  String _localAutoBackupFreq = 'weekly'; // 'daily' | 'weekly' | 'monthly'
+
+  /// The [_rev] captured at the last local auto-backup, so a scheduled backup
+  /// is skipped when nothing has changed since (in-memory, like Drive's).
+  int _revAtLocalBackup = -1;
+
+  bool get localAutoBackup => _localAutoBackup;
+  String get localAutoBackupFreq => _localAutoBackupFreq;
+
+  Future<void> setLocalAutoBackup(bool value) async {
+    if (_localAutoBackup == value) return;
+    _localAutoBackup = value;
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> setLocalAutoBackupFreq(String value) async {
+    if (_localAutoBackupFreq == value) return;
+    _localAutoBackupFreq = value;
+    await _persist();
+    notifyListeners();
+  }
+
+  Duration get _localAutoBackupInterval => switch (_localAutoBackupFreq) {
+        'daily' => const Duration(days: 1),
+        'monthly' => const Duration(days: 30),
+        _ => const Duration(days: 7),
+      };
+
+  /// Best-effort scheduled on-device backup, run when the app goes to the
+  /// background: only if enabled, there's something to lose, the chosen interval
+  /// has elapsed since the last backup, and something changed since the last one.
+  /// The .zip lands in the app's Backups folder and is never auto-pruned.
+  Future<void> maybeLocalAutoBackup() async {
+    if (!_localAutoBackup) return;
+    if (_notes.isEmpty && _cards.isEmpty && _spaces.isEmpty) return;
+    if (_rev == _revAtLocalBackup) return; // nothing changed since last backup
+    final last = _lastBackupAt;
+    if (last != null &&
+        DateTime.now().difference(last) < _localAutoBackupInterval) {
+      return;
+    }
+    try {
+      await flushNow();
+      await BackupService.instance.exportToBackupsDir();
+      _lastBackupAt = DateTime.now();
+      _backupReminderDismissedAt = null;
+      await _persist();
+      _revAtLocalBackup = _rev;
+      notifyListeners();
+    } catch (_) {
+      // Silent: a failed background backup retries on the next pause.
+    }
+  }
+
   // ---- Google Drive backup ------------------------------------------------
 
   bool _driveAutoBackup = false;
   DateTime? _lastDriveBackupAt;
   String? _driveAccountEmail;
+  // Display-only profile for the connected account (name + avatar). Persisted
+  // (so the Settings row is populated immediately on launch) and refreshed each
+  // launch via a silent auth; both fall back gracefully to the email when
+  // unavailable.
+  String? _driveAccountName;
+  String? _driveAccountPhotoUrl;
 
   /// The [_rev] captured at the last Drive backup, so a background backup is
   /// skipped when nothing has changed since.
@@ -289,15 +378,42 @@ class AppState extends ChangeNotifier {
   /// Whether a Google account is currently connected for Drive backup.
   bool get driveConnected => _driveAccountEmail != null;
   String? get driveAccountEmail => _driveAccountEmail;
+  String? get driveAccountName => _driveAccountName;
+  String? get driveAccountPhotoUrl => _driveAccountPhotoUrl;
+
+  /// Silently refreshes the connected account's name/avatar (called on startup
+  /// once the persisted email says an account is connected).
+  Future<void> refreshDriveAccount() async {
+    if (_driveAccountEmail == null) return;
+    final info = await DriveBackupService.instance.currentAccount();
+    if (info == null) return;
+    // Only take non-null fields: a silent lightweight auth can return a minimal
+    // profile, and we must never wipe good persisted values back to null.
+    var changed = false;
+    if (info.name != null && info.name != _driveAccountName) {
+      _driveAccountName = info.name;
+      changed = true;
+    }
+    if (info.photoUrl != null && info.photoUrl != _driveAccountPhotoUrl) {
+      _driveAccountPhotoUrl = info.photoUrl;
+      changed = true;
+    }
+    if (changed) {
+      await _persist();
+      notifyListeners();
+    }
+  }
 
   bool get driveAutoBackup => _driveAutoBackup;
   DateTime? get lastDriveBackupAt => _lastDriveBackupAt;
 
   /// Connects a Google account (interactive). Returns false if cancelled.
   Future<bool> connectDrive() async {
-    final email = await DriveBackupService.instance.connect();
-    if (email == null) return false;
-    _driveAccountEmail = email;
+    final info = await DriveBackupService.instance.connect();
+    if (info == null) return false;
+    _driveAccountEmail = info.email;
+    _driveAccountName = info.name;
+    _driveAccountPhotoUrl = info.photoUrl;
     _driveAutoBackup = true; // sensible default once a user opts in
     await _persist();
     return true;
@@ -310,6 +426,8 @@ class AppState extends ChangeNotifier {
       // Even if the platform sign-out hiccups, forget the account locally.
     }
     _driveAccountEmail = null;
+    _driveAccountName = null;
+    _driveAccountPhotoUrl = null;
     _driveAutoBackup = false;
     await _persist();
   }
@@ -352,15 +470,16 @@ class AppState extends ChangeNotifier {
     await init(restored: true);
   }
 
-  /// Best-effort silent backup when the app goes to the background: only if
-  /// auto-backup is on, an account is connected, something changed since the
-  /// last upload, and the last one wasn't too recent.
+  /// Best-effort silent daily backup when the app goes to the background: only
+  /// if auto-backup is on, an account is connected, something changed since the
+  /// last upload, and the last one was over a day ago (so it settles into a
+  /// roughly daily rhythm, keeping the newest 5 copies via [backupToDrive]).
   Future<void> maybeAutoBackup() async {
     if (!_driveAutoBackup || _driveAccountEmail == null) return;
     if (_rev == _revAtDriveBackup) return; // nothing changed since last upload
     final last = _lastDriveBackupAt;
     if (last != null &&
-        DateTime.now().difference(last) < const Duration(hours: 3)) {
+        DateTime.now().difference(last) < const Duration(hours: 20)) {
       return;
     }
     try {
@@ -458,6 +577,10 @@ class AppState extends ChangeNotifier {
           .then((_) => _dbStore.ensureSearchIndex(snapshot))
           .catchError((_) {});
     }
+
+    // Restore the connected account's name/avatar for the Settings display
+    // (silent — never prompts; no-op when not connected).
+    unawaited(refreshDriveAccount());
   }
 
   /// The app came back to the foreground. Only the share popup (a separate
@@ -510,9 +633,13 @@ class AppState extends ChangeNotifier {
     _tutorialSeen = data.tutorialSeen;
     _lastBackupAt = data.lastBackupAt;
     _backupReminderDismissedAt = data.backupReminderDismissedAt;
+    _localAutoBackup = data.localAutoBackup;
+    _localAutoBackupFreq = data.localAutoBackupFreq;
     _driveAutoBackup = data.driveAutoBackup;
     _lastDriveBackupAt = data.lastDriveBackupAt;
     _driveAccountEmail = data.driveAccountEmail;
+    _driveAccountName = data.driveAccountName;
+    _driveAccountPhotoUrl = data.driveAccountPhotoUrl;
     _sortMode = _sortFromName(data.sortMode);
     _feedWallpaper = data.feedWallpaper;
     // Migrate the old single background into both themes when the new
@@ -596,6 +723,14 @@ class AppState extends ChangeNotifier {
       n.spaceId != kCryptSpaceId &&
       n.journalDate == null &&
       n.bookId == null;
+
+  /// Ids of folds the user has flagged to keep out of the Home and Sparks feeds
+  /// (their notes/sparks then show only inside the fold). Recomputed per feed
+  /// rebuild, which the [_rev] cache already gates to actual changes.
+  Set<String> _hiddenFoldIds() => _spaces
+      .where((s) => s.hiddenFromFeed && s.deletedAt == null)
+      .map((s) => s.id)
+      .toSet();
 
   // ---- Journal -------------------------------------------------------------
 
@@ -776,7 +911,14 @@ class AppState extends ChangeNotifier {
 
   List<Note> get notes {
     if (_notesRev != _rev || _notesCache == null) {
-      _notesCache = _notes.where(_isFeedNote).toList()
+      final hidden = _hiddenFoldIds();
+      final tag = _activeTag;
+      _notesCache = _notes
+          .where((n) =>
+              _isFeedNote(n) &&
+              !hidden.contains(n.spaceId) &&
+              (tag == null || n.tags.contains(tag)))
+          .toList()
         ..sort((a, b) {
           if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
           return _compareNotes(a, b);
@@ -816,7 +958,7 @@ class AppState extends ChangeNotifier {
   List<Note> notesForSpace(String spaceId) => _notes
       .where((n) => n.spaceId == spaceId && !n.archived && n.deletedAt == null)
       .toList()
-    ..sort(_byCreatedDesc);
+    ..sort(_compareNotes);
 
   int noteCountForSpace(String spaceId) => _notes
       .where((n) => n.spaceId == spaceId && !n.archived && n.deletedAt == null)
@@ -840,7 +982,10 @@ class AppState extends ChangeNotifier {
 
   List<TweetCard> get cards {
     if (_cardsRev != _rev || _cardsCache == null) {
-      _cardsCache = _cards.where(_isFeedCard).toList()
+      final hidden = _hiddenFoldIds();
+      _cardsCache = _cards
+          .where((c) => _isFeedCard(c) && !hidden.contains(c.spaceId))
+          .toList()
         ..sort((a, b) {
           if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
           return _compareCards(a, b);
@@ -854,7 +999,7 @@ class AppState extends ChangeNotifier {
       .where((c) =>
           c.spaceId == spaceId && !c.archived && c.deletedAt == null)
       .toList()
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+    ..sort(_compareCards));
 
   /// Notes + cards that live in a space.
   int itemCountForSpace(String spaceId) =>
@@ -2124,6 +2269,48 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
+  /// Scrapes a YouTube spark's description + transcript (best-effort) and stores
+  /// them on the card, so a later open shows the stored copy without refetching.
+  /// [force] (the Retry button) refetches regardless of the attempt cap.
+  Future<void> fetchYouTubeDetails(String id, {bool force = false}) async {
+    final idx = _cards.indexWhere((c) => c.id == id);
+    if (idx < 0) return;
+    final card = _cards[idx];
+    final vid = YouTubeService.videoId(card.url);
+    if (vid == null) return;
+    if (card.videoFetched && !force) return;
+    // Stop auto-scraping a persistently-blocked video: after a few empty tries
+    // it costs a full (slow) scrape on every open for nothing. Retry ignores it.
+    if (!force && card.videoFetchAttempts >= TweetCard.maxVideoAutoFetchAttempts) {
+      return;
+    }
+    // A YouTube spark always gets a thumbnail from its id, even if the scrape
+    // below comes back empty.
+    if (card.imageUrl.isEmpty) card.imageUrl = YouTubeService.thumbnailUrl(vid);
+    final data = await YouTubeService.fetch(vid);
+    // Lock the spark as "fetched" once the scrape actually returned the page
+    // (an empty transcript alone still counts — auto-captions sit behind
+    // YouTube's poToken and genuinely can't be gotten). A wholly-empty result
+    // is a block/rate-limit: leave it unfetched but count the attempt so the
+    // automatic retries are bounded.
+    final gotPage = data.description.isNotEmpty || data.title.isNotEmpty;
+    if (!gotPage) card.videoFetchAttempts++;
+    card
+      ..videoDescription = data.description
+      ..videoTranscript = data.transcript
+      ..videoFetched = gotPage
+      ..updatedAt = DateTime.now();
+    // Use the video's own title/channel to identify the spark (unless the user
+    // already gave it a title).
+    if (card.noteTitle.trim().isEmpty && data.title.isNotEmpty) {
+      card.noteTitle = data.title;
+    }
+    if (card.authorName.trim().isEmpty && data.author.isNotEmpty) {
+      card.authorName = data.author;
+    }
+    await _persist();
+  }
+
   Future<void> updateCard(TweetCard card) async {
     final idx = _cards.indexWhere((c) => c.id == card.id);
     if (idx >= 0) _cards[idx] = card;
@@ -3271,9 +3458,13 @@ class AppState extends ChangeNotifier {
         tutorialSeen: _tutorialSeen,
         lastBackupAt: _lastBackupAt,
         backupReminderDismissedAt: _backupReminderDismissedAt,
+        localAutoBackup: _localAutoBackup,
+        localAutoBackupFreq: _localAutoBackupFreq,
         driveAutoBackup: _driveAutoBackup,
         lastDriveBackupAt: _lastDriveBackupAt,
         driveAccountEmail: _driveAccountEmail,
+        driveAccountName: _driveAccountName,
+        driveAccountPhotoUrl: _driveAccountPhotoUrl,
         sortMode: _sortMode.name,
         feedWallpaper: _feedWallpaper,
         feedBackgroundLight: _feedBackgroundLight,

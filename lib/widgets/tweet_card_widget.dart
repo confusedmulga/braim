@@ -79,7 +79,7 @@ class TweetCardWidget extends StatelessWidget {
             ),
           ),
         ],
-        if (card.imageUrl.isNotEmpty) ...[
+        if (card.coverImageUrl.isNotEmpty) ...[
           const SizedBox(height: 12),
           _media(height: 170),
         ],
@@ -131,12 +131,12 @@ class TweetCardWidget extends StatelessWidget {
                 ],
               ),
             ),
-            if (card.imageUrl.isNotEmpty) ...[
+            if (card.coverImageUrl.isNotEmpty) ...[
               const SizedBox(width: 10),
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: Image.network(
-                  card.imageUrl,
+                  card.coverImageUrl,
                   width: 56,
                   height: 56,
                   fit: BoxFit.cover,
@@ -177,7 +177,7 @@ class TweetCardWidget extends StatelessWidget {
             ),
           ),
         ],
-        if (card.imageUrl.isNotEmpty) ...[
+        if (card.coverImageUrl.isNotEmpty) ...[
           const SizedBox(height: 8),
           _media(height: 96),
         ],
@@ -242,7 +242,7 @@ class TweetCardWidget extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Image.network(
-        card.imageUrl,
+        card.coverImageUrl,
         fit: BoxFit.cover,
         width: double.infinity,
         height: height,
@@ -382,12 +382,12 @@ class CompactCardTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (card.imageUrl.isNotEmpty)
+              if (card.coverImageUrl.isNotEmpty)
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(16.5)),
                   child: Image.network(
-                    card.imageUrl,
+                    card.coverImageUrl,
                     height: 86,
                     width: double.infinity,
                     fit: BoxFit.cover,

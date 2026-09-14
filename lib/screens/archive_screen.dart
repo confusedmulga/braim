@@ -13,7 +13,7 @@ import '../widgets/note_card.dart';
 import '../widgets/space_tile.dart';
 import '../widgets/tweet_card_widget.dart';
 import 'card_detail_screen.dart';
-import 'note_editor_screen.dart';
+import 'note_open.dart';
 import 'space_detail_screen.dart';
 
 /// Archived notes, cards and folders. Tap opens; long-press restores.
@@ -47,8 +47,7 @@ class ArchiveScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(6),
                   child: GlassMorph(
                     key: ValueKey(n.id),
-                    openBuilder: (_) =>
-                        NoteEditorScreen(note: n, isNew: false),
+                    openBuilder: (_) => noteScreen(n),
                     closedBuilder: (context, open) => NoteCard(
                       note: n,
                       space: state.spaceById(n.spaceId),

@@ -62,6 +62,15 @@ class _SpacesScreenState extends State<SpacesScreen> {
         space.colorValue = result.colorValue;
         await context.read<AppState>().updateSpace(space);
       }
+    } else if (action == 'toggleFeed' && mounted) {
+      space.hiddenFromFeed = !space.hiddenFromFeed;
+      await context.read<AppState>().updateSpace(space);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(space.hiddenFromFeed
+                ? context.t.hideFromFeed
+                : context.t.showInFeed)));
+      }
     } else if (action == 'archive' && mounted) {
       await context.read<AppState>().setSpaceArchived(space.id, true);
       if (mounted) {
@@ -387,6 +396,19 @@ class _SpaceActionsSheet extends StatelessWidget {
                     Icon(Icons.edit_rounded, color: AppPalette.textPrimary),
                 title: Text(context.t.editNamed(space.name)),
                 onTap: () => Navigator.pop(context, 'edit'),
+              ),
+              ListTile(
+                leading: Icon(
+                    space.hiddenFromFeed
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: AppPalette.inkPrimary),
+                title: Text(space.hiddenFromFeed
+                    ? context.t.showInFeed
+                    : context.t.hideFromFeed),
+                subtitle: Text(context.t.hideFromFeedSubtitle,
+                    style: TextStyle(color: AppPalette.textSecondary)),
+                onTap: () => Navigator.pop(context, 'toggleFeed'),
               ),
               ListTile(
                 leading: Icon(Icons.archive_outlined,

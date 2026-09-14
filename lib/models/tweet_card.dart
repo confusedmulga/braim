@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../services/youtube_service.dart';
 import 'note_block.dart';
 
 const _uuid = Uuid();
@@ -18,6 +19,10 @@ class TweetCard {
     this.authorHandle = '',
     this.siteName = '',
     this.articleText = '',
+    this.videoDescription = '',
+    this.videoTranscript = '',
+    this.videoFetched = false,
+    this.videoFetchAttempts = 0,
     this.fetched = false,
     this.enrichAttempts = 0,
     this.spaceId,
@@ -54,6 +59,29 @@ class TweetCard {
   /// link was saved, so the card reads offline without a browser.
   String articleText;
 
+  /// For a YouTube spark: the video's full description and caption transcript,
+  /// scraped so the card shows both without opening the video. [videoFetched]
+  /// records a successful scrape (so an open never refetches once we have it);
+  /// [videoFetchAttempts] caps the automatic retries when the scrape keeps
+  /// coming back empty (blocked/rate-limited), so a permanently-blocked video
+  /// doesn't pay the full scrape cost on every open. The Retry button ignores
+  /// the cap.
+  String videoDescription;
+  String videoTranscript;
+  bool videoFetched;
+  int videoFetchAttempts;
+
+  /// Automatic YouTube scrape attempts allowed before we wait for a manual
+  /// Retry (see [videoFetchAttempts]).
+  static const maxVideoAutoFetchAttempts = 3;
+
+  /// Whether an open should still try to scrape this YouTube spark: only when
+  /// it's a YouTube link we haven't fetched and haven't exhausted auto-retries.
+  bool get shouldAutoFetchYouTube =>
+      !videoFetched &&
+      videoFetchAttempts < maxVideoAutoFetchAttempts &&
+      YouTubeService.videoId(url) != null;
+
   /// Id of the space (folder) this card belongs to, or null.
   String? spaceId;
 
@@ -88,6 +116,15 @@ class TweetCard {
   bool get isTweet =>
       url.contains('twitter.com') || url.contains('x.com');
 
+  /// The image to display for this card: the fetched OG/media image, or — for a
+  /// YouTube link with no image yet — a thumbnail derived straight from the
+  /// video id (no network, so it always shows even when scraping is blocked).
+  String get coverImageUrl {
+    if (imageUrl.isNotEmpty) return imageUrl;
+    final vid = YouTubeService.videoId(url);
+    return vid != null ? YouTubeService.thumbnailUrl(vid) : '';
+  }
+
   List<String> get imagePaths => blocks
       .where((b) => b.isImage && b.imagePath.isNotEmpty)
       .map((b) => b.imagePath)
@@ -103,6 +140,10 @@ class TweetCard {
         'authorHandle': authorHandle,
         'siteName': siteName,
         'articleText': articleText,
+        if (videoDescription.isNotEmpty) 'videoDescription': videoDescription,
+        if (videoTranscript.isNotEmpty) 'videoTranscript': videoTranscript,
+        if (videoFetched) 'videoFetched': true,
+        if (videoFetchAttempts > 0) 'videoFetchAttempts': videoFetchAttempts,
         'fetched': fetched,
         'enrichAttempts': enrichAttempts,
         'spaceId': spaceId,
@@ -126,6 +167,10 @@ class TweetCard {
         authorHandle: (json['authorHandle'] as String?) ?? '',
         siteName: (json['siteName'] as String?) ?? '',
         articleText: (json['articleText'] as String?) ?? '',
+        videoDescription: (json['videoDescription'] as String?) ?? '',
+        videoTranscript: (json['videoTranscript'] as String?) ?? '',
+        videoFetched: (json['videoFetched'] as bool?) ?? false,
+        videoFetchAttempts: (json['videoFetchAttempts'] as int?) ?? 0,
         fetched: (json['fetched'] as bool?) ?? false,
         enrichAttempts: (json['enrichAttempts'] as int?) ?? 0,
         spaceId: json['spaceId'] as String?,

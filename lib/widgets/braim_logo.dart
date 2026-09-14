@@ -1,0 +1,137 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/widgets.dart';
+
+/// The Braim brain mark rendered straight from its vector paths, so it stays
+/// crisp at any size and takes whatever [color] we hand it — the same geometry
+/// as the notification and launcher icons (source viewBox 2917 x 2723). Drawn
+/// with a [CustomPainter] to avoid pulling in an SVG package for a single logo.
+class BraimLogo extends StatelessWidget {
+  const BraimLogo({super.key, required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: CustomPaint(painter: _BraimPainter(color)),
+      );
+}
+
+class _BraimPainter extends CustomPainter {
+  _BraimPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paths = _brainPaths;
+    // Fit the mark's own bounds (not the padded viewBox) into the box, centred.
+    var bounds = paths.first.getBounds();
+    for (final p in paths.skip(1)) {
+      bounds = bounds.expandToInclude(p.getBounds());
+    }
+    final maxDim = bounds.width > bounds.height ? bounds.width : bounds.height;
+    if (maxDim <= 0) return;
+    final scale = 0.98 * size.shortestSide / maxDim;
+    final dx = (size.width - bounds.width * scale) / 2 - bounds.left * scale;
+    final dy = (size.height - bounds.height * scale) / 2 - bounds.top * scale;
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    canvas.save();
+    canvas.translate(dx, dy);
+    canvas.scale(scale);
+    for (final p in paths) {
+      canvas.drawPath(p, paint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BraimPainter old) => old.color != color;
+}
+
+/// Parsed once and shared — the paths never change.
+final List<ui.Path> _brainPaths =
+    _brainData.map(_parsePath).toList(growable: false);
+
+/// Minimal SVG-path parser for the subset the mark uses: absolute/relative
+/// move (M/m), line (L/l), cubic (C/c) and close (Z/z).
+ui.Path _parsePath(String d) {
+  final path = ui.Path()..fillType = ui.PathFillType.evenOdd;
+  final tokens = RegExp(r'[MmLlCcZz]|-?\d*\.?\d+')
+      .allMatches(d)
+      .map((m) => m[0]!)
+      .toList(growable: false);
+  var cx = 0.0, cy = 0.0;
+  var i = 0;
+  var cmd = '';
+  double n() => double.parse(tokens[i++]);
+  while (i < tokens.length) {
+    if (tokens[i].length == 1 && 'MmLlCcZz'.contains(tokens[i])) {
+      cmd = tokens[i];
+      i++;
+    }
+    switch (cmd) {
+      case 'M':
+        cx = n();
+        cy = n();
+        path.moveTo(cx, cy);
+        cmd = 'L'; // extra pairs after an M are implicit line-tos
+      case 'm':
+        cx += n();
+        cy += n();
+        path.moveTo(cx, cy);
+        cmd = 'l';
+      case 'L':
+        cx = n();
+        cy = n();
+        path.lineTo(cx, cy);
+      case 'l':
+        cx += n();
+        cy += n();
+        path.lineTo(cx, cy);
+      case 'C':
+        final x1 = n(), y1 = n(), x2 = n(), y2 = n(), x = n(), y = n();
+        path.cubicTo(x1, y1, x2, y2, x, y);
+        cx = x;
+        cy = y;
+      case 'c':
+        final x1 = cx + n(),
+            y1 = cy + n(),
+            x2 = cx + n(),
+            y2 = cy + n(),
+            x = cx + n(),
+            y = cy + n();
+        path.cubicTo(x1, y1, x2, y2, x, y);
+        cx = x;
+        cy = y;
+      case 'Z':
+      case 'z':
+        path.close();
+        cmd = '';
+      default:
+        i++;
+    }
+  }
+  return path;
+}
+
+/// The nine brain strokes (Serif export, viewBox 2917 x 2723).
+const List<String> _brainData = [
+  'M807.335,1059.929c14.052,16.122 12.372,40.62 -3.751,54.672c-16.122,14.052 -40.62,12.372 -54.672,-3.751c-0.295,-0.339 -161.433,-135.911 -88.489,-328.151c68.932,-181.665 234.288,-167.553 280.723,-163.199c21.293,1.996 36.96,20.904 34.964,42.198c-1.996,21.293 -20.904,36.96 -42.198,34.964c-33.016,-3.095 -152.02,-15.633 -201.03,113.532c-55.93,147.4 74.226,249.475 74.453,249.735Z',
+  'M983.471,667.412c-6.604,20.341 -28.481,31.494 -48.822,24.89c-20.341,-6.604 -31.494,-28.481 -24.89,-48.822c5.083,-15.656 4.275,-181.881 189.581,-242.174c201.818,-65.666 292.309,60.75 305.422,81.481c11.433,18.074 6.041,42.03 -12.033,53.463c-18.074,11.433 -42.03,6.041 -53.463,-12.033c-9.188,-14.525 -74.54,-95.224 -215.947,-49.214c-110.051,35.807 -129.769,123.421 -135.229,162.949c-2.113,15.298 -3.45,25.862 -4.619,29.461Z',
+  'M1411.701,532.104c-11.023,18.327 -34.852,24.257 -53.179,13.234c-18.327,-11.023 -24.257,-34.852 -13.234,-53.179c0.422,-0.702 90.834,-206.656 344.995,-194.104c237.006,11.705 311.792,236.139 321.324,346.303c1.844,21.307 -13.958,40.102 -35.266,41.946c-21.307,1.844 -40.102,-13.958 -41.946,-35.266c-7.479,-86.444 -61.96,-266.393 -247.935,-275.578c-203.069,-10.029 -274.422,156.082 -274.76,156.643Z',
+  'M1977.925,689.72c-21.054,3.756 -41.197,-10.288 -44.953,-31.342c-3.756,-21.054 10.288,-41.197 31.342,-44.953c25.51,-4.551 187.6,-48.947 307.012,41c52.028,39.19 97.24,103.413 118.747,208.563c36.884,180.329 -58.209,264.228 -65.316,272.595c-13.845,16.3 -38.32,18.293 -54.62,4.447c-16.3,-13.845 -18.293,-38.32 -4.447,-54.62c5.387,-6.342 76.415,-70.193 48.455,-206.892c-16.598,-81.15 -49.295,-131.945 -89.448,-162.19c-95.688,-72.077 -226.331,-30.254 -246.773,-26.608Z',
+  'M2290.03,1146.551c-19.899,-7.837 -29.692,-30.355 -21.856,-50.254c7.837,-19.899 30.355,-29.692 50.254,-21.856c28.308,11.148 84.792,26.244 129.433,75.762c30.642,33.99 56.473,83.968 62.892,160.79c14.85,177.721 -123.175,269.534 -148.155,290.66c-16.33,13.81 -40.8,11.765 -54.61,-4.565c-13.81,-16.33 -11.765,-40.8 4.565,-54.61c19.562,-16.544 132.598,-85.855 120.969,-225.031c-4.58,-54.81 -21.36,-91.1 -43.223,-115.35c-34.119,-37.846 -78.633,-47.024 -100.269,-55.545Z',
+  'M2297.545,1588.42c-8.272,-19.722 1.025,-42.45 20.747,-50.722c19.722,-8.272 42.45,1.025 50.722,20.747c11.716,27.934 75.767,220.993 -58.083,380.529c-32.817,39.115 -90.35,73.04 -158.593,90.37c-154.951,39.35 -363.585,-3.845 -438.585,-245.331c-15.207,-48.962 -35.133,-113.921 -64.495,-166.056c-16.42,-29.156 -35.239,-54.489 -59.535,-67.049c-123.586,-63.89 -186.851,72.55 -190.69,79.077c-10.842,18.435 -34.611,24.6 -53.046,13.758c-18.435,-10.842 -24.6,-34.611 -13.758,-53.046c5.812,-9.882 105.96,-205.371 293.084,-108.634c36.297,18.764 66.942,54.306 91.472,97.864c32.06,56.927 54.376,127.638 70.98,181.099c59.078,190.218 223.443,224.198 345.497,193.202c50.476,-12.819 94.024,-36.135 118.297,-65.067c105.789,-126.091 55.245,-278.664 45.985,-300.742Z',
+  'M1060.392,1287.866c5.827,-20.578 27.265,-32.553 47.842,-26.726c20.578,5.827 32.553,27.265 26.726,47.842c-6.317,22.308 -3.858,22.543 -68.175,281.688c-20.517,82.667 -21.713,152.368 4.829,204.488c6.095,11.968 36.261,51.219 94.467,41.836c21.114,-3.403 41.019,10.975 44.423,32.09c3.403,21.114 -10.975,41.019 -32.09,44.423c-109.6,17.666 -164.386,-60.645 -175.861,-83.18c-33.551,-65.884 -36.921,-153.829 -10.986,-258.325c64.879,-261.409 62.453,-261.633 68.825,-284.136Z',
+  'M525.725,1547.557c-3.889,21.03 -24.121,34.946 -45.151,31.057c-21.03,-3.889 -34.946,-24.121 -31.057,-45.151c3.967,-21.45 28.663,-162.924 174.983,-184.07c202.51,-29.266 209.116,185.8 211.83,202.832c3.365,21.12 -11.051,40.999 -32.171,44.364c-21.12,3.365 -40.999,-11.051 -44.364,-32.171c-0.819,-5.14 -1.043,-34.982 -11.201,-67.46c-7.185,-22.973 -19.373,-48.465 -44.423,-62.29c-16.949,-9.354 -39.334,-12.799 -68.586,-8.571c-94.356,13.636 -107.302,107.629 -109.861,121.461Z',
+  'M1402.897,2003.648c8.401,-19.668 31.189,-28.814 50.857,-20.413c19.668,8.401 28.814,31.189 20.413,50.857c-36.791,86.129 -94.293,253.815 -297.033,279.582c-169.596,21.555 -272.348,-42.323 -370.452,-205.829c-11.003,-18.339 -5.048,-42.161 13.291,-53.165c18.339,-11.003 42.161,-5.048 53.165,13.291c78.525,130.876 158.474,186.074 294.225,168.821c164.716,-20.935 205.644,-163.169 235.534,-233.144Z',
+];

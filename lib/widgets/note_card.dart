@@ -123,7 +123,7 @@ class NoteCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (thumb == null && space != null) ...[
-                    _spaceChip(space!),
+                    _spaceChip(space!, onColor: colored, cardInk: ink),
                     const SizedBox(height: 8),
                   ],
                   if (note.title.trim().isNotEmpty)
@@ -144,6 +144,7 @@ class NoteCard extends StatelessWidget {
                     NotePreview(
                       note: note,
                       maxLines: thumb != null ? 4 : 7,
+                      onColor: colored,
                       style: TextStyle(
                         fontFamily: activeBodyFont,
                         fontSize: 18,
@@ -189,8 +190,12 @@ class NoteCard extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: AppPalette.scheme.secondaryContainer
-                                  .withValues(alpha: 0.55),
+                              // On a colour swatch the theme chip goes dark-on-
+                              // dark, so tint it from the card's own dark ink.
+                              color: colored
+                                  ? ink.withValues(alpha: 0.12)
+                                  : AppPalette.scheme.secondaryContainer
+                                      .withValues(alpha: 0.55),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text('#$tag',
@@ -275,13 +280,27 @@ class NoteCard extends StatelessWidget {
     );
   }
 
-  Widget _spaceChip(Space s) {
-    final tint = NoteColors.resolveStrong(s.colorValue);
-    final fg = tint != null ? NoteColors.onSwatch : AppPalette.inkSecondary;
+  Widget _spaceChip(Space s, {required bool onColor, required Color cardInk}) {
+    // On a colour-swatch card (a light-toned tile) the fold chip must borrow the
+    // card's own dark ink: a theme-tinted chip goes light-on-light and the fold
+    // name vanishes in dark mode. Uncoloured cards keep the fold's own colour.
+    final tint = onColor ? null : NoteColors.resolveStrong(s.colorValue);
+    final Color bg;
+    final Color fg;
+    if (onColor) {
+      bg = cardInk.withValues(alpha: 0.12);
+      fg = cardInk;
+    } else if (tint != null) {
+      bg = tint;
+      fg = NoteColors.onSwatch;
+    } else {
+      bg = Colors.black.withValues(alpha: 0.06);
+      fg = AppPalette.inkSecondary;
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: tint ?? Colors.black.withValues(alpha: 0.06),
+        color: bg,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(

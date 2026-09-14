@@ -24,18 +24,34 @@
   "reminderChange": "Change reminder",
   "reminderClear": "Clear reminder",
   "notifPermNeeded": "Turn on notifications to get reminders.",
+  "testNotification": "Test notifications",
+  "testNotificationSubtitle": "Send one now and one in 10 seconds to check they reach you",
+  "notifBlocked": "Notifications are off for Braim. Turn them on in system settings.",
+  "notifTestSent": "Sent one now and scheduled one for 10 seconds. If nothing appears, notifications are blocked in system settings.",
+  "notifExactOff": "Sent, but exact alarms are off — scheduled reminders can arrive late. Allow \"Alarms & reminders\" for Braim in system settings.",
   "delete": "Delete",
   "restore": "Restore",
   "open": "Open",
   "copy": "Copy",
+  "copied": "Copied to clipboard",
+  "hideFromFeed": "Hide from feeds",
+  "showInFeed": "Show in feeds",
+  "hideFromFeedSubtitle": "Keep this fold's notes and sparks out of Home and Sparks; they show only inside the fold",
   "skip": "Skip",
   "next": "Next",
   "getStarted": "Get started",
   "empty": "Empty",
-
   "newNote": "New node",
   "newMarkdown": "New markdown",
   "importFile": "Import file",
+  "exportAsPdf": "Export as PDF",
+  "exportFailed": "Couldn't export the PDF",
+  "shareFailed": "Couldn't share the note",
+  "youtubeDescription": "Description",
+  "youtubeTranscript": "Transcript",
+  "youtubeFetching": "Fetching video details…",
+  "youtubeUnavailable": "No description or transcript available",
+  "retry": "Retry",
   "markdownHint": "Write or paste Markdown…",
   "preview": "Preview",
   "saveALink": "Save a link",
@@ -45,7 +61,6 @@
   "sectionYears": "YEARS",
   "noEntriesForDay": "Nothing written this day",
   "noEntriesThisMonth": "Nothing written this month",
-  "noEntriesThisMonth": "Nothing written this month",
   "tapPencilToWrite": "Tap the pencil to write an entry.",
   "untitledEntry": "Untitled entry",
   "jumpToDate": "Jump to a date",
@@ -54,38 +69,37 @@
   "searchThisFolder": "Search this fold",
   "pasteTweetOrUrl": "Paste a tweet or any URL.",
   "urlHint": "https://x.com/…",
-
   "viewOpen": "Open",
   "viewBlocks": "Blocks",
-
   "noNotesYet": "No nodes yet",
   "tapPencilToAdd": "Tap the pencil to add one.",
   "noCardsYet": "No sparks yet",
   "shareOrPasteLink": "Share a link to Braim, or tap + to paste one.",
   "noMatches": "No matches",
-
   "itemsCount": "{count, plural, =1{1 item} other{{count} items}}",
   "@itemsCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "photosCount": "{count, plural, =1{1 photo} other{{count} photos}}",
   "@photosCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "emptyNote": "Empty node",
   "linkFallback": "Link",
-
   "sectionCortex": "CORTEX",
   "sectionNotes": "NODES",
   "sectionCards": "SPARKS",
   "sectionFolders": "FOLDS",
   "sectionArchived": "ARCHIVED",
   "sectionYourCortex": "YOUR CORTEX",
-
   "pin": "Pin",
   "unpin": "Unpin",
   "move": "Move to fold",
@@ -95,10 +109,18 @@
   "deleteTitle": "Delete?",
   "deleteItemsConfirm": "{count, plural, =1{This will move to Recently deleted, where it stays for 30 days.} other{These {count} items will move to Recently deleted, where they stay for 30 days.}}",
   "@deleteItemsConfirm": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "@selectedCount": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "archive": "Archive",
   "unarchive": "Unarchive",
@@ -108,7 +130,9 @@
   "pinLimitReached": "Pin limit reached (max {max})",
   "@pinLimitReached": {
     "placeholders": {
-      "max": {"type": "int"}
+      "max": {
+        "type": "int"
+      }
     }
   },
   "archived": "Archived",
@@ -117,10 +141,11 @@
   "movedToName": "Moved to \"{name}\"",
   "@movedToName": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
-
   "noFolder": "No fold",
   "crypt": "Crypt",
   "cryptLockedSecret": "Locked, secret",
@@ -128,7 +153,6 @@
   "noFoldersYet": "No folds yet",
   "unlockCrypt": "Unlock Crypt",
   "unlockFailed": "Unlock failed",
-
   "newSpace": "New fold",
   "editSpace": "Edit fold",
   "spaceName": "Fold name",
@@ -137,7 +161,9 @@
   "editNamed": "Edit \"{name}\"",
   "@editNamed": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "archiveFolder": "Archive fold",
@@ -147,7 +173,9 @@
   "addToName": "Add to {name}",
   "@addToName": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "addRemoveHint": "Tap an item to add or remove it from this fold.",
@@ -155,7 +183,6 @@
   "addExisting": "Add existing",
   "nothingInFolder": "Nothing in this fold yet",
   "useButtonsToAdd": "Use the + buttons to add a node or existing items.",
-
   "title": "Title",
   "writeSomething": "Write something…",
   "tapLineToFormat": "Tap a line to format text",
@@ -185,13 +212,11 @@
   "subHeading": "Sub",
   "body": "Body",
   "tapLineHint": "Tap a line to format text",
-
   "addATitle": "Add a title",
   "refreshPreview": "Refresh preview",
   "deleteCard": "Delete spark",
   "linkCopied": "Link copied",
   "couldNotOpenLink": "Could not open link",
-
   "archiveTitle": "Archive",
   "nothingArchived": "Nothing archived",
   "archiveHint": "Long-press a node, spark or fold to archive it.",
@@ -199,7 +224,6 @@
   "noteUnarchived": "Node unarchived",
   "cardUnarchived": "Spark unarchived",
   "folderUnarchived": "Fold unarchived",
-
   "recentlyDeleted": "Recently deleted",
   "nothingHere": "Nothing here",
   "deletedKept30": "Deleted items are kept for 30 days.",
@@ -207,7 +231,6 @@
   "deletePermanently": "Delete permanently",
   "emptyTrashTitle": "Empty Recently deleted?",
   "emptyTrashBody": "All nodes, sparks and folds here are permanently deleted.",
-
   "settings": "Settings",
   "appearance": "Appearance",
   "feedBackgroundSection": "Feed background",
@@ -230,6 +253,8 @@
   "sortOldest": "Oldest first",
   "sortAz": "Alphabetical (A–Z)",
   "sortZa": "Alphabetical (Z–A)",
+  "filterByTag": "Filter by tag",
+  "tagAll": "All tags",
   "checklist": "Checklist",
   "noteColor": "Colour",
   "backupReminderTitle": "Keep your nodes safe",
@@ -240,7 +265,9 @@
   "lastBackupAgo": "{count, plural, =0{Backed up today} =1{Backed up yesterday} other{Backed up {count} days ago}}",
   "@lastBackupAgo": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "backupSection": "Backup",
@@ -252,7 +279,11 @@
   "linksSection": "Links",
   "mentionedIn": "Mentioned in {count, plural, =1{1 place} other{{count} places}}",
   "@mentionedIn": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "untitledNote": "Untitled node",
   "linkToNote": "Link to a node",
@@ -261,7 +292,11 @@
   "searchOrCreateNote": "Search or type a new title",
   "createNoteNamed": "Create \"{name}\"",
   "@createNoteNamed": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "noNotesToLink": "No nodes to link yet",
   "tapNoteThenLink": "Tap in the node first, then add a link",
@@ -271,14 +306,22 @@
   "journalReminderTime": "Reminder time",
   "journalYearEntries": "{count, plural, =0{No entries yet} =1{1 entry this year} other{{count} entries this year}}",
   "@journalYearEntries": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "heatmapLess": "Less",
   "heatmapMore": "More",
   "versionHistory": "Version history",
   "versionsSaved": "{count, plural, =1{1 saved} other{{count} saved}}",
   "@versionsSaved": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "saveVersion": "Save version",
   "versionSavedToast": "Version saved",
@@ -291,11 +334,19 @@
   "versionJustNow": "Just now",
   "versionToday": "Today, {time}",
   "@versionToday": {
-    "placeholders": { "time": { "type": "String" } }
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "versionYesterday": "Yesterday, {time}",
   "@versionYesterday": {
-    "placeholders": { "time": { "type": "String" } }
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "restoreVersion": "Restore this version",
   "restoreVersionBody": "Your current text is saved as a version first, so you can undo this.",
@@ -336,14 +387,20 @@
   "heatmapDaysDone": "{done} of {total} days done",
   "@heatmapDaysDone": {
     "placeholders": {
-      "done": {"type": "int"},
-      "total": {"type": "int"}
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "heatmapDaysLeft": "{days} days left",
   "@heatmapDaysLeft": {
     "placeholders": {
-      "days": {"type": "int"}
+      "days": {
+        "type": "int"
+      }
     }
   },
   "consistency": "Consistency",
@@ -364,16 +421,31 @@
   "overdue": "Overdue",
   "daysLeft": "{count, plural, =0{Due today} =1{1 day left} other{{count} days left}}",
   "@daysLeft": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "onThisDay": "On this day",
   "onThisDayYearsAgo": "{years, plural, =1{1 year ago} other{{years} years ago}}",
   "@onThisDayYearsAgo": {
-    "placeholders": { "years": { "type": "int" } }
+    "placeholders": {
+      "years": {
+        "type": "int"
+      }
+    }
   },
   "saveToDevice": "Save to device or Drive",
   "saveToDeviceSubtitle": "Write the .zip to Files, Drive, an SD card…",
   "backupSavedToDevice": "Backup saved",
+  "autoBackupTitle": "Automatic backup",
+  "autoBackupSubtitle": "Keep a .zip copy on this device on a schedule",
+  "autoBackupFrequency": "How often",
+  "autoBackupDaily": "Daily",
+  "autoBackupWeekly": "Weekly",
+  "autoBackupMonthly": "Monthly",
+  "autoBackupNote": "Backups are saved to the app's folder and are never deleted automatically. Clear out older copies yourself from time to time, since the app will not remove them for you.",
   "loadSampleData": "Load sample data",
   "loadSampleDataSubtitle": "Add demo nodes, sparks and a short book",
   "sampleDataTitle": "Load sample data?",
@@ -383,13 +455,17 @@
   "backupFailed": "Backup failed: {error}",
   "@backupFailed": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "restoreFailed": "Restore failed: {error}",
   "@restoreFailed": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "backupRestored": "Backup restored",
@@ -404,7 +480,6 @@
   "clearAllDataBody": "This permanently deletes every node, fold and spark on this device.",
   "aboutSection": "About",
   "aboutLine": "A notes app · v1.0",
-
   "savedToCards": "Saved to Sparks",
   "savedToNotes": "Saved to Nodes",
   "saveToBraim": "Save to Braim",
@@ -413,21 +488,20 @@
   "savedToName": "Saved to {name}",
   "@savedToName": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "createAndSave": "Create & save",
   "folderName": "Fold name",
-
   "readerSection": "Reader",
   "themeLabel": "Theme",
   "wallpaper": "Background",
-
   "moreOptions": "More",
   "chooseTheme": "Colour & background",
   "createNote": "Node",
   "editAction": "Edit",
-
   "accountSection": "Account",
   "signInWithGoogle": "Sign in with Google",
   "signInSubtitle": "Your nodes sync automatically and stay available everywhere.",
@@ -458,7 +532,11 @@
   "chooseFont": "Font",
   "pageLabel": "Page {n}",
   "@pageLabel": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "confirmDeleteBook": "Delete this book and all its pages? This can't be undone.",
   "bookDescription": "Book description",
@@ -466,17 +544,29 @@
   "editDescription": "Edit description",
   "byAuthor": "by {name}",
   "@byAuthor": {
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "readBook": "Read",
   "contentsSection": "Contents",
   "wordsCount": "{n, plural, =1{1 word} other{{n} words}}",
   "@wordsCount": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "chaptersCount": "{n, plural, =1{1 chapter} other{{n} chapters}}",
   "@chaptersCount": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "statusDraft": "Draft",
   "statusRevised": "Revised",
@@ -489,7 +579,14 @@
   "exportEpub": "ePub",
   "pageNOfM": "Page {n} of {m}",
   "@pageNOfM": {
-    "placeholders": { "n": { "type": "int" }, "m": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "m": {
+        "type": "int"
+      }
+    }
   },
   "dragToReorder": "Hold and drag to reorder",
   "reorder": "Reorder",
@@ -538,15 +635,27 @@
   "replaceAll": "Replace all",
   "matchesFound": "{n, plural, =0{No matches} =1{1 match} other{{n} matches}}",
   "@matchesFound": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "replaceAllConfirm": "{n, plural, =1{Replace 1 occurrence across the book?} other{Replace {n} occurrences across the book?}}",
   "@replaceAllConfirm": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "replacedCount": "{n, plural, =0{Nothing replaced} =1{1 replacement made} other{{n} replacements made}}",
   "@replacedCount": {
-    "placeholders": { "n": { "type": "int" } }
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
   },
   "searchChapters": "Search chapters",
   "noChaptersMatch": "No chapters match",
@@ -556,7 +665,11 @@
   "noBookmarks": "No bookmarks yet. Tap the bookmark icon while reading.",
   "bookmarkAt": "At {pct}%",
   "@bookmarkAt": {
-    "placeholders": { "pct": { "type": "int" } }
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
   },
   "holdForCalendar": "Hold the week for the calendar",
   "dailyDay": "Your daily day",
@@ -614,9 +727,21 @@
   "moveTaskTitle": "Move to reflex",
   "dayComplete": "All done for today!",
   "streakDays": "{count, plural, =1{1-day streak} other{{count}-day streak}}",
-  "@streakDays": { "placeholders": { "count": { "type": "int" } } },
+  "@streakDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "streakBest": "best {count}",
-  "@streakBest": { "placeholders": { "count": { "type": "int" } } },
+  "@streakBest": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "restDay": "Rest day",
   "todaysProgress": "Today's progress",
   "progressTotal": "Total",
@@ -670,8 +795,12 @@
   "historyCompletedOf": "{done} of {total} completed",
   "@historyCompletedOf": {
     "placeholders": {
-      "done": {"type": "int"},
-      "total": {"type": "int"}
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "rearrangeJournal": "Rearrange",
@@ -683,7 +812,13 @@
   "composeReflex": "New reflex",
   "composeEntry": "New journal entry",
   "reflexesProjects": "{count, plural, =0{No projects} =1{1 project} other{{count} projects}}",
-  "@reflexesProjects": { "placeholders": { "count": { "type": "int" } } },
+  "@reflexesProjects": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "newThread": "New thread",
   "taskComplete": "Complete",
   "taskUndo": "Undo",
@@ -703,7 +838,13 @@
   "noEndTime": "None",
   "apply": "Apply",
   "allTimesUpdated": "{count, plural, =0{No tasks to update} =1{1 task moved to the new time} other{{count} tasks moved to the new time}}",
-  "@allTimesUpdated": { "placeholders": { "count": { "type": "int" } } },
+  "@allTimesUpdated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "notifyAtStart": "Notify me at the start time",
   "daysSection": "Days",
   "daysHint": "Pick the days this runs on (none = every day).",
@@ -718,43 +859,53 @@
   "descriptionHint": "Add a description…",
   "editTask": "Edit task",
   "inTime": "In {rel}",
-  "@inTime": { "placeholders": { "rel": { "type": "String" } } },
+  "@inTime": {
+    "placeholders": {
+      "rel": {
+        "type": "String"
+      }
+    }
+  },
   "timePassed": "Passed",
   "removeTaskConfirm": "Remove this task?",
   "wallpaperGreen": "Green blooms",
   "wallpaperRed": "Red blooms",
   "wallpaperBlue": "Blue blooms",
   "wallpaperBlack": "Black blooms",
-
   "tutWelcomeTitle": "Welcome to Braim",
-  "tutWelcomeBody": "Your notes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add and crop photos or set the text size. Long-press any note for quick actions.",
+  "tutWelcomeBody": "A node is a note. Your nodes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add photos, crop them and set the text size. You can also bring in files. Share a .md or .txt file to Braim, or open one, and it becomes a node. A Markdown node opens in a clean reader that renders headings, tables, links and code the way GitHub does. Press and hold any node for quick actions.",
   "tutCardsTitle": "Sparks",
-  "tutCardsBody": "Share a link from any app to Braim and it saves as a spark, no app switching. Add your own note under any spark, and duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.",
+  "tutCardsBody": "A spark is a saved link. Share a link from any app to Braim and it lands here with no app switching. Braim reads the title, thumbnail and description once and stores them in the spark, so it does not fetch them again. Write your own note under any spark. Duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.",
   "tutCortexTitle": "Cortex",
-  "tutCortexBody": "Folders for your notes and sparks. Make one with the plus button, give it a cover photo, and file things from the long-press menu.",
+  "tutCortexBody": "Cortex holds your folders, called folds. A fold groups related nodes and sparks together. Make one with the plus button and give it a cover photo if you like. To file an item, press and hold it and pick the fold. Open a fold to see only what it holds. You can also hide a fold from Home to keep it apart.",
   "tutReflexesTitle": "Reflexes",
-  "tutReflexesBody": "Build habits and projects as Reflexes. Add daily tasks or one-time ones, tick them off, and watch your streak grow. Tap the heatmap to open the full day-by-day history.",
+  "tutReflexesBody": "Reflexes hold your habits, goals and projects. Each one is an impulse. An impulse contains threads, which are the tasks you tick off. A daily impulse resets its threads every morning and the bar shows today's progress. A milestone impulse keeps each thread ticked for good and the bar fills toward the finish. Give a thread a time and it sends you a reminder. Tap the heatmap to open the full day by day history.",
   "tutBooksTitle": "Books",
-  "tutBooksBody": "Write long pieces as Books made of chapters. Read them in a clean, scrollable reader with themes, adjustable font size, bookmarks and highlights.",
+  "tutBooksBody": "Write long pieces as books made of chapters. Read them in a clean scrolling reader with themes, adjustable font size, bookmarks and highlights.",
   "tutJournalTitle": "Journal",
-  "tutJournalBody": "Keep a daily diary from the Journal tab. Entries stay tied to their day and never show up in Home or search.",
+  "tutJournalBody": "Keep a daily diary from the Journal tab. Each entry stays tied to its day. Journal entries never show up on Home or in search.",
   "tutCryptTitle": "Crypt",
-  "tutCryptBody": "A folder that only opens with your fingerprint or screen lock, and its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and are readable in backups. Do not keep passwords or bank details in it.",
+  "tutCryptBody": "Crypt is a fold that opens only with your fingerprint or screen lock. Its contents stay out of every feed and out of search. It hides items rather than encrypting them, so keep passwords and bank details in a proper password manager.",
   "tutTipsTitle": "Good to know",
-  "tutTipsBody": "Search finds notes, sparks and folders in one place. Pin up to 10 favourites per feed. Archive hides things without deleting, and deleted items wait 30 days in Recently deleted. Back up everything and switch to dark mode from Settings.",
+  "tutTipsBody": "Search covers nodes, sparks and folds in one place, and it reads your tags too. Pin up to 10 favourites in each feed. Sort a feed or filter it by tag from the sort button, and press and hold the search button inside a fold to sort it the same way. Archive hides items without deleting them. Deleted items wait 30 days in Recently deleted. Set backups, dark mode and reminders in Settings.",
   "guideTitle": "How Braim works",
   "guideSettingsLabel": "Guide",
-
   "driveSection": "Google Drive",
   "driveSetupTitle": "Drive backup not set up",
   "driveSetupBody": "Add a Google OAuth client ID to enable automatic Google Drive backup. See docs/google_drive_setup.md in the project.",
   "driveConnect": "Connect Google Drive",
-  "driveConnectSubtitle": "Sign in to back up automatically to Drive",
+  "driveConnectSubtitle": "Sign in to enable daily automatic backup to a private app folder on your Drive",
   "driveConnectedAs": "Connected as {email}",
-  "@driveConnectedAs": { "placeholders": { "email": { "type": "String" } } },
+  "@driveConnectedAs": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
   "driveBackupNow": "Back up to Drive now",
-  "driveAutoTitle": "Automatic backup",
-  "driveAutoSubtitle": "Back up to Drive when you leave the app",
+  "driveAutoTitle": "Daily automatic backup",
+  "driveAutoSubtitle": "Backs up to Drive about once a day, keeping the 5 most recent copies in a private app folder",
   "driveRestoreTitle": "Restore from Drive",
   "driveRestoreSubtitle": "Replace everything with a Drive backup",
   "driveDisconnect": "Disconnect",
@@ -762,9 +913,21 @@
   "driveNoBackups": "No backups on Drive yet",
   "driveConnected": "Google Drive connected",
   "driveConnectFailed": "Could not connect: {error}",
-  "@driveConnectFailed": { "placeholders": { "error": { "type": "String" } } },
+  "@driveConnectFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "driveBackingUp": "Backing up to Drive…",
   "driveBackedUp": "Backed up to Drive",
   "driveBackupFailed": "Drive backup failed: {error}",
-  "@driveBackupFailed": { "placeholders": { "error": { "type": "String" } } }
+  "@driveBackupFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

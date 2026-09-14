@@ -16,9 +16,11 @@ import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/item_actions_sheet.dart';
 import '../widgets/note_card.dart';
+import '../widgets/sort_button.dart';
 import '../widgets/tweet_card_widget.dart';
 import 'card_detail_screen.dart';
 import 'note_editor_screen.dart';
+import 'note_open.dart';
 
 class SpaceDetailScreen extends StatefulWidget {
   const SpaceDetailScreen({super.key, required this.spaceId});
@@ -124,8 +126,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
                   padding: const EdgeInsets.all(6),
                   child: GlassMorph(
                     key: ValueKey(n.id),
-                    openBuilder: (_) =>
-                        NoteEditorScreen(note: n, isNew: false),
+                    openBuilder: (_) => noteScreen(n),
                     closedBuilder: (context, open) => NoteCard(
                       note: n,
                       space: space,
@@ -249,6 +250,8 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       tooltip: context.t.searchThisFolder,
       icon: _searching ? Icons.close_rounded : Icons.search_rounded,
       onTap: _toggleSearch,
+      // Press and hold to sort this folder — the same options as the Home feed.
+      onLongPress: _searching ? null : () => showSortSheet(context),
     );
 
     final fab = Column(
@@ -275,18 +278,27 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       ],
     );
 
-    // Without a cover: the plain titled screen with the standard chrome.
+    // Without a cover: the plain titled screen with the standard chrome. The
+    // feed scrolls *under* the pinned back/title/search row and fades out into
+    // it, so the ragged tops of the two columns tuck cleanly under the header
+    // instead of butting against it.
     if (!hasCover) {
+      final topInset = MediaQuery.of(context).padding.top;
+      final chromeHeight = topInset + 16 + FrostedCircleButton.size;
       return FrostedScaffold(
         title: space.name,
         actions: [searchButton],
         floatingActionButton: fab,
+        bodyUnderChrome: true,
         body: isEmpty
-            ? _emptyBody(context)
+            ? Padding(
+                padding: EdgeInsets.only(top: chromeHeight),
+                child: _emptyBody(context),
+              )
             : TopFade(
-                height: 12,
+                height: chromeHeight,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 120),
+                  padding: EdgeInsets.fromLTRB(14, chromeHeight + 4, 14, 120),
                   children: sections,
                 ),
               ),
@@ -380,6 +392,11 @@ class _CoverHeader extends StatelessWidget {
       stretch: true,
       automaticallyImplyLeading: false,
       foregroundColor: Colors.white,
+      // The collapsed bar is as tall as the floating back/search bubbles plus an
+      // 8px gap top and bottom (SafeArea + 8 above the 50px bubble, matched
+      // below), so the dark strip closes symmetrically around them instead of
+      // ending mid-button.
+      toolbarHeight: FrostedCircleButton.size + 16,
       // Dark bar so that once the photo scrolls away on full collapse, the
       // white title and back arrow stay legible (over both themes).
       backgroundColor: const Color(0xF21A1B22),
@@ -392,7 +409,7 @@ class _CoverHeader extends StatelessWidget {
         // two buttons instead of sliding up behind the back arrow.
         centerTitle: true,
         titlePadding:
-            const EdgeInsetsDirectional.only(start: 64, end: 64, bottom: 16),
+            const EdgeInsetsDirectional.only(start: 64, end: 64, bottom: 20),
         title: Text(
           name,
           maxLines: 1,

@@ -59,6 +59,7 @@ class FrostedCircleButton extends StatelessWidget {
     this.icon,
     required this.tooltip,
     required this.onTap,
+    this.onLongPress,
     this.child,
     this.iconSize = 22,
   });
@@ -69,6 +70,10 @@ class FrostedCircleButton extends StatelessWidget {
   final IconData? icon;
   final String tooltip;
   final VoidCallback onTap;
+
+  /// Optional press-and-hold action (e.g. the fold search bubble opens the sort
+  /// options on a long-press).
+  final VoidCallback? onLongPress;
   final Widget? child;
   final double iconSize;
 
@@ -84,6 +89,7 @@ class FrostedCircleButton extends StatelessWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onTap,
+            onLongPress: onLongPress,
             child: SizedBox(
               width: size,
               height: size,

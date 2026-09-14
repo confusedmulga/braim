@@ -81,6 +81,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifPermNeeded => 'Turn on notifications to get reminders.';
 
   @override
+  String get testNotification => 'Test notifications';
+
+  @override
+  String get testNotificationSubtitle =>
+      'Send one now and one in 10 seconds to check they reach you';
+
+  @override
+  String get notifBlocked =>
+      'Notifications are off for Braim. Turn them on in system settings.';
+
+  @override
+  String get notifTestSent =>
+      'Sent one now and scheduled one for 10 seconds. If nothing appears, notifications are blocked in system settings.';
+
+  @override
+  String get notifExactOff =>
+      'Sent, but exact alarms are off — scheduled reminders can arrive late. Allow \"Alarms & reminders\" for Braim in system settings.';
+
+  @override
   String get delete => 'Delete';
 
   @override
@@ -91,6 +110,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get copy => 'Copy';
+
+  @override
+  String get copied => 'Copied to clipboard';
+
+  @override
+  String get hideFromFeed => 'Hide from feeds';
+
+  @override
+  String get showInFeed => 'Show in feeds';
+
+  @override
+  String get hideFromFeedSubtitle =>
+      'Keep this fold\'s notes and sparks out of Home and Sparks; they show only inside the fold';
 
   @override
   String get skip => 'Skip';
@@ -112,6 +144,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get importFile => 'Import file';
+
+  @override
+  String get exportAsPdf => 'Export as PDF';
+
+  @override
+  String get exportFailed => 'Couldn\'t export the PDF';
+
+  @override
+  String get shareFailed => 'Couldn\'t share the note';
+
+  @override
+  String get youtubeDescription => 'Description';
+
+  @override
+  String get youtubeTranscript => 'Transcript';
+
+  @override
+  String get youtubeFetching => 'Fetching video details…';
+
+  @override
+  String get youtubeUnavailable => 'No description or transcript available';
+
+  @override
+  String get retry => 'Retry';
 
   @override
   String get markdownHint => 'Write or paste Markdown…';
@@ -594,6 +650,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortZa => 'Alphabetical (Z–A)';
 
   @override
+  String get filterByTag => 'Filter by tag';
+
+  @override
+  String get tagAll => 'All tags';
+
+  @override
   String get checklist => 'Checklist';
 
   @override
@@ -972,6 +1034,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupSavedToDevice => 'Backup saved';
+
+  @override
+  String get autoBackupTitle => 'Automatic backup';
+
+  @override
+  String get autoBackupSubtitle =>
+      'Keep a .zip copy on this device on a schedule';
+
+  @override
+  String get autoBackupFrequency => 'How often';
+
+  @override
+  String get autoBackupDaily => 'Daily';
+
+  @override
+  String get autoBackupWeekly => 'Weekly';
+
+  @override
+  String get autoBackupMonthly => 'Monthly';
+
+  @override
+  String get autoBackupNote =>
+      'Backups are saved to the app\'s folder and are never deleted automatically. Clear out older copies yourself from time to time, since the app will not remove them for you.';
 
   @override
   String get loadSampleData => 'Load sample data';
@@ -1967,56 +2052,56 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tutWelcomeBody =>
-      'Your notes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add and crop photos or set the text size. Long-press any note for quick actions.';
+      'A node is a note. Your nodes live on Home. Tap the pencil to write one and it saves as you type. The editor gives you bold, italic, highlight, headings, lists and checklists, and you can add photos, crop them and set the text size. You can also bring in files. Share a .md or .txt file to Braim, or open one, and it becomes a node. A Markdown node opens in a clean reader that renders headings, tables, links and code the way GitHub does. Press and hold any node for quick actions.';
 
   @override
   String get tutCardsTitle => 'Sparks';
 
   @override
   String get tutCardsBody =>
-      'Share a link from any app to Braim and it saves as a spark, no app switching. Add your own note under any spark, and duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.';
+      'A spark is a saved link. Share a link from any app to Braim and it lands here with no app switching. Braim reads the title, thumbnail and description once and stores them in the spark, so it does not fetch them again. Write your own note under any spark. Duplicates merge on their own. Use the toggle to switch the feed between Open and Blocks views.';
 
   @override
   String get tutCortexTitle => 'Cortex';
 
   @override
   String get tutCortexBody =>
-      'Folders for your notes and sparks. Make one with the plus button, give it a cover photo, and file things from the long-press menu.';
+      'Cortex holds your folders, called folds. A fold groups related nodes and sparks together. Make one with the plus button and give it a cover photo if you like. To file an item, press and hold it and pick the fold. Open a fold to see only what it holds. You can also hide a fold from Home to keep it apart.';
 
   @override
   String get tutReflexesTitle => 'Reflexes';
 
   @override
   String get tutReflexesBody =>
-      'Build habits and projects as Reflexes. Add daily tasks or one-time ones, tick them off, and watch your streak grow. Tap the heatmap to open the full day-by-day history.';
+      'Reflexes hold your habits, goals and projects. Each one is an impulse. An impulse contains threads, which are the tasks you tick off. A daily impulse resets its threads every morning and the bar shows today\'s progress. A milestone impulse keeps each thread ticked for good and the bar fills toward the finish. Give a thread a time and it sends you a reminder. Tap the heatmap to open the full day by day history.';
 
   @override
   String get tutBooksTitle => 'Books';
 
   @override
   String get tutBooksBody =>
-      'Write long pieces as Books made of chapters. Read them in a clean, scrollable reader with themes, adjustable font size, bookmarks and highlights.';
+      'Write long pieces as books made of chapters. Read them in a clean scrolling reader with themes, adjustable font size, bookmarks and highlights.';
 
   @override
   String get tutJournalTitle => 'Journal';
 
   @override
   String get tutJournalBody =>
-      'Keep a daily diary from the Journal tab. Entries stay tied to their day and never show up in Home or search.';
+      'Keep a daily diary from the Journal tab. Each entry stays tied to its day. Journal entries never show up on Home or in search.';
 
   @override
   String get tutCryptTitle => 'Crypt';
 
   @override
   String get tutCryptBody =>
-      'A folder that only opens with your fingerprint or screen lock, and its contents never appear in feeds or search.\n\nHeads up: Crypt locks the door, but items are stored unencrypted on this device and are readable in backups. Do not keep passwords or bank details in it.';
+      'Crypt is a fold that opens only with your fingerprint or screen lock. Its contents stay out of every feed and out of search. It hides items rather than encrypting them, so keep passwords and bank details in a proper password manager.';
 
   @override
   String get tutTipsTitle => 'Good to know';
 
   @override
   String get tutTipsBody =>
-      'Search finds notes, sparks and folders in one place. Pin up to 10 favourites per feed. Archive hides things without deleting, and deleted items wait 30 days in Recently deleted. Back up everything and switch to dark mode from Settings.';
+      'Search covers nodes, sparks and folds in one place, and it reads your tags too. Pin up to 10 favourites in each feed. Sort a feed or filter it by tag from the sort button, and press and hold the search button inside a fold to sort it the same way. Archive hides items without deleting them. Deleted items wait 30 days in Recently deleted. Set backups, dark mode and reminders in Settings.';
 
   @override
   String get guideTitle => 'How Braim works';
@@ -2039,7 +2124,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get driveConnectSubtitle =>
-      'Sign in to back up automatically to Drive';
+      'Sign in to enable daily automatic backup to a private app folder on your Drive';
 
   @override
   String driveConnectedAs(String email) {
@@ -2050,10 +2135,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get driveBackupNow => 'Back up to Drive now';
 
   @override
-  String get driveAutoTitle => 'Automatic backup';
+  String get driveAutoTitle => 'Daily automatic backup';
 
   @override
-  String get driveAutoSubtitle => 'Back up to Drive when you leave the app';
+  String get driveAutoSubtitle =>
+      'Backs up to Drive about once a day, keeping the 5 most recent copies in a private app folder';
 
   @override
   String get driveRestoreTitle => 'Restore from Drive';

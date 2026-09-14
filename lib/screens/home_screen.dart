@@ -191,6 +191,28 @@ class _HomeScreenState extends State<HomeScreen> {
         const SliverToBoxAdapter(
           child: FeedGreeting(picker: pickHomeGreeting),
         ),
+        if (state.activeTag != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: InputChip(
+                  avatar: Icon(Icons.label_rounded,
+                      size: 16, color: AppPalette.scheme.onSecondaryContainer),
+                  label: Text('#${state.activeTag}'),
+                  backgroundColor: AppPalette.scheme.secondaryContainer,
+                  labelStyle: TextStyle(
+                      color: AppPalette.scheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w600),
+                  deleteIcon: Icon(Icons.close_rounded,
+                      size: 18, color: AppPalette.scheme.onSecondaryContainer),
+                  onDeleted: () => state.setActiveTag(null),
+                  onPressed: () => state.setActiveTag(null),
+                ),
+              ),
+            ),
+          ),
         if (showBackupBanner)
           SliverToBoxAdapter(
             child: Padding(
