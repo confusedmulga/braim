@@ -705,6 +705,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get restoreSubtitle => 'Pick a .zip backup file';
 
   @override
+  String get restoreFromDeviceTitle => 'Restore from a device backup';
+
+  @override
+  String get restoreFromDeviceSubtitle =>
+      'Pick one of the automatic copies kept on this device';
+
+  @override
+  String get deviceBackupsFolderLabel => 'Folder';
+
+  @override
+  String get devicePickTitle => 'Choose a device backup';
+
+  @override
+  String get deviceNoBackups => 'No device backups yet';
+
+  @override
   String get load => 'Load';
 
   @override
@@ -1056,7 +1072,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get autoBackupNote =>
-      'Backups are saved to the app\'s folder and are never deleted automatically. Clear out older copies yourself from time to time, since the app will not remove them for you.';
+      'These copies stay in the app\'s own storage, so they survive a bad save but not an uninstall or a lost phone. Use Back up from time to time to keep a copy somewhere safer. The five most recent are kept and older ones are removed for you.';
 
   @override
   String get loadSampleData => 'Load sample data';

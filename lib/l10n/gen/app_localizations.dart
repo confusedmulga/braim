@@ -1366,6 +1366,36 @@ abstract class AppLocalizations {
   /// **'Pick a .zip backup file'**
   String get restoreSubtitle;
 
+  /// No description provided for @restoreFromDeviceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from a device backup'**
+  String get restoreFromDeviceTitle;
+
+  /// No description provided for @restoreFromDeviceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick one of the automatic copies kept on this device'**
+  String get restoreFromDeviceSubtitle;
+
+  /// No description provided for @deviceBackupsFolderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder'**
+  String get deviceBackupsFolderLabel;
+
+  /// No description provided for @devicePickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a device backup'**
+  String get devicePickTitle;
+
+  /// No description provided for @deviceNoBackups.
+  ///
+  /// In en, this message translates to:
+  /// **'No device backups yet'**
+  String get deviceNoBackups;
+
   /// No description provided for @load.
   ///
   /// In en, this message translates to:
@@ -1951,7 +1981,7 @@ abstract class AppLocalizations {
   /// No description provided for @autoBackupNote.
   ///
   /// In en, this message translates to:
-  /// **'Backups are saved to the app\'s folder and are never deleted automatically. Clear out older copies yourself from time to time, since the app will not remove them for you.'**
+  /// **'These copies stay in the app\'s own storage, so they survive a bad save but not an uninstall or a lost phone. Use Back up from time to time to keep a copy somewhere safer. The five most recent are kept and older ones are removed for you.'**
   String get autoBackupNote;
 
   /// No description provided for @loadSampleData.

@@ -24,30 +24,14 @@ String _lastBackupText(BuildContext context, DateTime? last) {
 
 /// The connected Google account's avatar — the profile photo, falling back to a
 /// generic account icon while it loads or when none is available.
-Widget _driveAvatar(String? photoUrl) {
-  final fallback = Icon(Icons.account_circle_rounded,
-      color: AppPalette.inkPrimary, size: 40);
-  if (photoUrl == null || photoUrl.isEmpty) return fallback;
-  return CircleAvatar(
-    radius: 20,
-    backgroundColor: AppPalette.chipFill,
-    foregroundImage: NetworkImage(photoUrl),
-    // Shown if the image fails to load; the photo paints over it otherwise.
-    child: Icon(Icons.account_circle_rounded,
-        color: AppPalette.inkSecondary, size: 40),
-  );
-}
-
-/// "2026-09-02 14:03 · 4.2 MB" for a Drive backup row.
-String _driveFileSubtitle(DriveBackupFile f) {
+/// "2026-09-02 14:03 · 4.2 MB" for a backup row, from a date and byte size.
+String _backupMetaLine(DateTime? modified, int? size) {
   final parts = <String>[];
-  final m = f.modifiedTime;
-  if (m != null) {
+  if (modified != null) {
     String two(int n) => n.toString().padLeft(2, '0');
-    parts.add('${m.year}-${two(m.month)}-${two(m.day)} '
-        '${two(m.hour)}:${two(m.minute)}');
+    parts.add('${modified.year}-${two(modified.month)}-${two(modified.day)} '
+        '${two(modified.hour)}:${two(modified.minute)}');
   }
-  final size = f.sizeBytes;
   if (size != null) {
     final mb = size / (1024 * 1024);
     parts.add(mb >= 1
@@ -56,6 +40,10 @@ String _driveFileSubtitle(DriveBackupFile f) {
   }
   return parts.join(' · ');
 }
+
+/// "2026-09-02 14:03 · 4.2 MB" for a Drive backup row.
+String _driveFileSubtitle(DriveBackupFile f) =>
+    _backupMetaLine(f.modifiedTime, f.sizeBytes);
 
 /// Settings is a standard opaque screen, so it takes part in Android's
 /// predictive-back peek (swipe from the edge reveals the feed underneath) like
@@ -91,6 +79,69 @@ class SettingsScreen extends StatelessWidget {
       );
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(t.restoreFailed(e.toString()))));
+    }
+  }
+
+  /// Restores from one of the on-device auto-backup zips, chosen from a list of
+  /// the Backups folder — the on-device counterpart of [_restoreFromDrive].
+  Future<void> _restoreFromDevice(BuildContext context) async {
+    final t = context.t;
+    final messenger = ScaffoldMessenger.of(context);
+    final appState = context.read<AppState>();
+    final nav = Navigator.of(context);
+    List<DeviceBackupFile> files;
+    try {
+      files = await appState.listDeviceBackups();
+    } catch (e) {
+      messenger
+          .showSnackBar(SnackBar(content: Text(t.restoreFailed(e.toString()))));
+      return;
+    }
+    if (!context.mounted) return;
+    if (files.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(t.deviceNoBackups)));
+      return;
+    }
+    final picked = await showModalBottomSheet<DeviceBackupFile>(
+      context: context,
+      backgroundColor: AppPalette.sheet,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(t.devicePickTitle,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppPalette.inkPrimary)),
+            ),
+            for (final f in files)
+              ListTile(
+                leading: Icon(Icons.folder_zip_outlined,
+                    color: AppPalette.inkPrimary),
+                title: Text(f.name,
+                    style: TextStyle(color: AppPalette.inkPrimary)),
+                subtitle: Text(_backupMetaLine(f.modifiedTime, f.sizeBytes),
+                    style: const TextStyle(color: Color(0xFF5E5F69))),
+                onTap: () => Navigator.pop(ctx, f),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !context.mounted) return;
+    final ok = await _confirmRestore(context);
+    if (ok != true) return;
+    try {
+      await appState.restoreFromDeviceFile(picked.path);
+      nav.pop(); // leave settings, back to the reloaded feed
+      messenger.showSnackBar(SnackBar(content: Text(t.backupRestored)));
+    } catch (e) {
+      messenger
+          .showSnackBar(SnackBar(content: Text(t.restoreFailed(e.toString()))));
     }
   }
 
@@ -806,6 +857,10 @@ class SettingsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      _DeviceBackupRestoreTile(
+                        onRestore: () => _restoreFromDevice(context),
+                      ),
                       const SizedBox(height: 24),
                       _SectionLabel(context.t.driveSection),
                       if (!state.driveConfigured)
@@ -849,7 +904,8 @@ class SettingsScreen extends StatelessWidget {
                           color: AppPalette.surfaceGlass,
                           padding: EdgeInsets.zero,
                           child: ListTile(
-                            leading: _driveAvatar(state.driveAccountPhotoUrl),
+                            leading: Icon(Icons.account_circle_rounded,
+                                color: AppPalette.inkPrimary, size: 40),
                             // The connected account is identified by email (the
                             // name/photo need a profile scope that broke Drive
                             // authorization, so they're deliberately not shown).
@@ -1097,6 +1153,63 @@ Widget _bgModeRow(
       ),
     ],
   );
+}
+
+/// A Settings row that restores from the on-device auto-backups and shows the
+/// folder they live in. The folder path is resolved once (async) and shown as a
+/// subtitle so the operator can locate the files.
+class _DeviceBackupRestoreTile extends StatefulWidget {
+  const _DeviceBackupRestoreTile({required this.onRestore});
+
+  final Future<void> Function() onRestore;
+
+  @override
+  State<_DeviceBackupRestoreTile> createState() =>
+      _DeviceBackupRestoreTileState();
+}
+
+class _DeviceBackupRestoreTileState extends State<_DeviceBackupRestoreTile> {
+  String? _path;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPath();
+  }
+
+  Future<void> _loadPath() async {
+    try {
+      final p = await context.read<AppState>().deviceBackupsPath();
+      if (mounted) setState(() => _path = p);
+    } catch (_) {
+      // Leave the path unshown; the restore action still works without it.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final path = _path;
+    final subtitle = path == null
+        ? context.t.restoreFromDeviceSubtitle
+        : '${context.t.restoreFromDeviceSubtitle}\n'
+            '${context.t.deviceBackupsFolderLabel}: $path';
+    return GlassPanel(
+      borderRadius: 20,
+      blur: 0,
+      color: AppPalette.surfaceGlass,
+      padding: EdgeInsets.zero,
+      onTap: widget.onRestore,
+      child: ListTile(
+        isThreeLine: path != null,
+        leading:
+            Icon(Icons.restore_page_outlined, color: AppPalette.inkPrimary),
+        title: Text(context.t.restoreFromDeviceTitle,
+            style: TextStyle(color: AppPalette.inkPrimary)),
+        subtitle:
+            Text(subtitle, style: const TextStyle(color: Color(0xFF5E5F69))),
+      ),
+    );
+  }
 }
 
 class _SectionLabel extends StatelessWidget {

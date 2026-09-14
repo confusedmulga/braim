@@ -76,8 +76,9 @@ before they are saved; back out of the cropper to keep the original.
 Notes come in two kinds. The **rich note** described above uses the handwriting
 face and a formatting toolbar. A **Markdown document** instead renders
 GitHub-flavored Markdown for reading and switches to a monospace source editor,
-with a live preview, for writing. Any note may be shared out as a `.md` file, and
-a `.md` or `.txt` file shared into Braim is saved as a note.
+with a live preview, for writing. Any note may be shared out as a `.md` file or
+exported to **PDF** through the share sheet, and a `.md` or `.txt` file shared
+into Braim is saved as a note.
 
 Press the pencil button to open a new rich note. Hold it for a short menu: a new
 **Markdown document**, **import** a `.md` or `.txt` file, or a plain new note.
@@ -88,11 +89,14 @@ Saves tweets and links. Share a tweet to Braim from the Android share sheet, or
 press the action button and paste a URL. The item becomes a card carrying a
 best-effort preview. Tweets are fetched through Twitter/X oEmbed with no API
 key, with the author avatar supplied by unavatar. Other links are read through
-their Open Graph tags. Opening a card shows the fetched preview and the source
-link, with a copy control, pinned at the top, and an editable note body beneath.
-A saved article may be opened in **reader mode**, which extracts the article
-text for clean reading. A card remains in Cards and, if assigned, also appears
-in its folder.
+their Open Graph tags. A saved **YouTube** link is scraped, with no API key, for
+the video's title, channel, description, and caption transcript, shown in
+collapsible Description and Transcript panels on the card. Opening a card shows
+the fetched preview and the source link, with a copy control, pinned at the top,
+and an editable note body beneath. A saved article may be opened in **reader
+mode**, which extracts the article text for clean reading. A card also exports to
+**PDF** through the share sheet. A card remains in Cards and, if assigned, also
+appears in its folder.
 
 ### 2-3. NARRATIVE (Books)
 
@@ -123,7 +127,10 @@ bar behind a soft fade. Hold any note or card to move it into a folder. Press
 the action button to create a folder.
 
 Each folder has a "Hide from feeds" switch. Turn it on to keep that folder's
-notes and cards out of Home and Sparks; they still show inside the folder itself.
+notes and cards out of Home and Sparks; they still show inside the folder itself
+and remain findable through search. Only the two feed listings leave them out.
+Their tags also drop out of the tag filter, so the filter never lands on an empty
+feed.
 
 ---
 
@@ -192,7 +199,11 @@ selectable from the bundled font set.
 - **Automatic on device.** A switch keeps a zip copy on a schedule of daily,
   weekly, or monthly. It runs when the application is sent to the background and
   is skipped when nothing has changed. Copies land in the application's own
-  folder and are never pruned, so clear out older ones yourself.
+  private storage; the five most recent are kept and older ones are removed
+  automatically, the same retention as the Drive copies. This storage guards
+  against a bad write, but Android clears it if Braim is uninstalled and it is
+  lost with the device, so it does not replace a copy kept elsewhere (an export
+  or the Drive backup).
 - **Google Drive.** An optional automated backup uploads the same zip into
   Google Drive's private application-data folder (the `drive.appdata` scope). It
   is invisible in the operator's Drive and holds only Braim's own files. Once
@@ -217,10 +228,10 @@ operates on the device.
 
 On sign-in:
 
-- **Scope.** Braim requests two permissions only: `drive.appdata` (its own
-  private Drive folder) and the non-sensitive profile scope, used solely to show
-  the operator's name and photo in Settings. Braim cannot see, read, or touch
-  any other file in the operator's Drive.
+- **Scope.** Braim requests one permission only: `drive.appdata` (its own
+  private Drive folder). The connected account is identified by its email address
+  alone; no profile scope is requested, so no name or photo is fetched or shown.
+  Braim cannot see, read, or touch any other file in the operator's Drive.
 - **Destination.** Backups go to Drive's hidden application-data folder — not a
   folder the operator picks, and invisible in the Drive interface. Only Braim
   can see it. It never clutters the operator's Drive.
@@ -237,6 +248,15 @@ On sign-in:
 No password is handled by Braim, no server operated by the developer is
 contacted, and nothing leaves the device except the backup zip, which goes to
 the operator's own Drive.
+
+### 3-10. REMINDERS AND NOTIFICATIONS
+
+A note may carry a dated reminder, reflex threads may raise a daily prompt, and
+the journal has an optional nightly nudge, all delivered as device notifications.
+Settings carries a **Test notifications** control that sends one notification
+immediately and a second ten seconds later, then reports which of them the
+operating system delivered, so notification permission and Do Not Disturb can be
+checked without waiting for a real reminder.
 
 ---
 
@@ -285,10 +305,10 @@ lib/
   l10n/          localized strings (app_en.arb) and generated bindings
   models/        Note, NoteBlock, Space, TweetCard, Book, Impulse, Annotation
   services/      SQLite store and one-time JSON importer (services/db), JSON
-                 storage and export, note to/from Markdown, image picker, link
-                 preview, article extractor, book export (PDF/Markdown/ePub),
-                 Drive backup, notifications, Do Not Disturb, focus media, seed
-                 data, wiki links
+                 storage and export, note to/from Markdown, note/card PDF export,
+                 image picker, link preview, article extractor, YouTube scraper,
+                 book export (PDF/Markdown/ePub), Drive backup, notifications,
+                 Do Not Disturb, focus media, seed data, wiki links
   state/         AppState (ChangeNotifier) and the Pomodoro controller
   theme/         palette, note colours, and ThemeData
   widgets/       navigation island, top bar, search, note/card/folder tiles,
@@ -351,5 +371,6 @@ may be replaced with a manual luminance sampler later.
 ## LICENSE NOTE
 
 Bundled fonts (Lora, Caveat, Space Grotesk, EB Garamond, Merriweather, Inter,
-Nunito) are distributed under the SIL Open Font License. Each license file
-travels with its font under `assets/fonts/`.
+Nunito, JetBrains Mono) are distributed under the SIL Open Font License. Each
+license file travels with its font under `assets/fonts/`. JetBrains Mono is used
+only for code in exported PDFs.

@@ -109,6 +109,7 @@ flutter:
     - assets/fonts/OFL-Caveat.txt
     - assets/fonts/OFL-EBGaramond.txt
     - assets/fonts/OFL-Merriweather.txt
+    - assets/fonts/OFL-JetBrainsMono.txt
 
   # Lora (OFL) — the app's voice: chrome, greetings and note headings.
   fonts:
@@ -163,6 +164,12 @@ flutter:
     - family: Nunito
       fonts:
         - asset: assets/fonts/Nunito-Regular.ttf
+    # JetBrains Mono (OFL) — monospace, embedded in exported PDFs so code with
+    # non-Latin letters (accents, Cyrillic, Greek) renders instead of boxes.
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
 
   # To add assets to your application, add an assets section, like this:
   # assets:

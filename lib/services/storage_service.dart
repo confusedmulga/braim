@@ -277,11 +277,10 @@ class AppData {
     this.backupReminderDismissedAt,
     this.localAutoBackup = false,
     this.localAutoBackupFreq = 'weekly',
+    this.lastLocalAutoBackupAt,
     this.driveAutoBackup = false,
     this.lastDriveBackupAt,
     this.driveAccountEmail,
-    this.driveAccountName,
-    this.driveAccountPhotoUrl,
     this.sortMode = 'recent',
     this.feedWallpaper = 0,
     this.feedBackgroundPath = '',
@@ -335,11 +334,10 @@ class AppData {
             backupReminderDismissedAt?.toIso8601String(),
         'localAutoBackup': localAutoBackup,
         'localAutoBackupFreq': localAutoBackupFreq,
+        'lastLocalAutoBackupAt': lastLocalAutoBackupAt?.toIso8601String(),
         'driveAutoBackup': driveAutoBackup,
         'lastDriveBackupAt': lastDriveBackupAt?.toIso8601String(),
         'driveAccountEmail': driveAccountEmail,
-        'driveAccountName': driveAccountName,
-        'driveAccountPhotoUrl': driveAccountPhotoUrl,
         'sortMode': sortMode,
         'feedWallpaper': feedWallpaper,
         'feedBackgroundPath': feedBackgroundPath,
@@ -405,12 +403,12 @@ class AppData {
       localAutoBackup: (json['localAutoBackup'] as bool?) ?? false,
       localAutoBackupFreq:
           (json['localAutoBackupFreq'] as String?) ?? 'weekly',
+      lastLocalAutoBackupAt:
+          DateTime.tryParse(json['lastLocalAutoBackupAt'] as String? ?? ''),
       driveAutoBackup: (json['driveAutoBackup'] as bool?) ?? false,
       lastDriveBackupAt:
           DateTime.tryParse(json['lastDriveBackupAt'] as String? ?? ''),
       driveAccountEmail: json['driveAccountEmail'] as String?,
-      driveAccountName: json['driveAccountName'] as String?,
-      driveAccountPhotoUrl: json['driveAccountPhotoUrl'] as String?,
       sortMode: (json['sortMode'] as String?) ?? 'recent',
       feedWallpaper: (json['feedWallpaper'] as num?)?.toInt() ?? 0,
       feedBackgroundPath: (json['feedBackgroundPath'] as String?) ?? '',
@@ -478,6 +476,11 @@ class AppData {
   /// 'monthly'.
   String localAutoBackupFreq;
 
+  /// When the last on-device automatic backup ran (null = never). Kept apart
+  /// from [lastBackupAt] so a manual export or a Drive upload doesn't reset the
+  /// local schedule — otherwise the weekly/monthly interval would never elapse.
+  DateTime? lastLocalAutoBackupAt;
+
   /// Whether automatic Google Drive backup is enabled.
   bool driveAutoBackup;
 
@@ -485,13 +488,9 @@ class AppData {
   DateTime? lastDriveBackupAt;
 
   /// The connected Google account email for Drive backup (null = not connected).
+  /// The account is identified by email alone: the display name and avatar need
+  /// a profile scope that broke Drive authorization, so they are never fetched.
   String? driveAccountEmail;
-
-  /// The connected account's display name and profile photo URL, persisted so
-  /// the Settings row shows them immediately on launch without waiting for a
-  /// silent re-auth (which on Android can return a minimal profile).
-  String? driveAccountName;
-  String? driveAccountPhotoUrl;
 
   /// Feed sort order name (see NoteSort).
   String sortMode;
