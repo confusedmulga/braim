@@ -486,6 +486,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get highlight => 'Highlight';
 
   @override
+  String get hyperlink => 'Link';
+
+  @override
+  String get selectTextToLink => 'Select some text first to add a link';
+
+  @override
+  String get addLink => 'Add link';
+
+  @override
+  String get editLink => 'Edit link';
+
+  @override
+  String get linkUrlHint => 'https://example.com';
+
+  @override
+  String get removeLink => 'Remove link';
+
+  @override
   String get quote => 'Quote';
 
   @override
@@ -697,6 +715,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backupSubtitle => 'Share to Google Drive, Files, …';
+
+  @override
+  String get infoCreated => 'Created';
+
+  @override
+  String get infoModified => 'Last modified';
+
+  @override
+  String get infoCharacters => 'Characters';
 
   @override
   String get restoreFromBackup => 'Restore from backup';
@@ -2018,9 +2045,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get repeatOnceHint =>
       'A one-time task. Tick it off and it stays, done, until you delete it.';
-
-  @override
-  String get addLink => 'Add link';
 
   @override
   String get linkLabelHint => 'Label (e.g. Google Meet)';

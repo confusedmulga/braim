@@ -32,11 +32,11 @@ class NotificationService {
   static const int _focusOngoingId = 900001;
   static const String focusPayload = 'focus';
 
-  /// Accent tinting the small icon's badge and app name in the notification.
-  /// The app's Material seed colour (AppPalette.seed) — the same periwinkle the
-  /// whole UI's colour scheme is built from, so the badge reads as part of the
-  /// app rather than a stray green/blue.
-  static const _accent = Color(0xFF6C8CFF);
+  // The logo notifications set no accent colour: Android then themes the small
+  // icon badge to the system light/dark theme on its own — dark brain on a light
+  // badge in light mode, light brain on a dark badge in dark mode — which also
+  // re-themes scheduled notifications at display time. (The focus timer keeps an
+  // explicit phase colour; that is a deliberate green/blue indicator.)
 
   /// Called when a notification (or one of its action buttons) is tapped, with
   /// the payload and the action id. Wired up by the app so the focus
@@ -135,7 +135,6 @@ class NotificationService {
             importance: Importance.high,
             priority: Priority.high,
             icon: 'ic_stat_braim',
-            color: _accent,
           ),
         ),
         androidScheduleMode: await _scheduleMode(),
@@ -174,7 +173,6 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         icon: 'ic_stat_braim',
-        color: _accent,
       ),
     );
     var shown = false;
@@ -237,7 +235,6 @@ class NotificationService {
             importance: Importance.defaultImportance,
             priority: Priority.defaultPriority,
             icon: 'ic_stat_braim',
-            color: _accent,
           ),
         ),
         androidScheduleMode: await _scheduleMode(),
@@ -275,7 +272,6 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         icon: 'ic_stat_braim',
-        color: _accent,
       ),
     );
     final safeTitle = title.isEmpty ? 'Daily day' : title;

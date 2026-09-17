@@ -27,6 +27,15 @@ import 'frosted_glass.dart';
 const String kHighlightBg = '#FFE082';
 const String kHighlightInk = '#202124';
 
+/// Adds an https scheme when the user typed a bare host, so "example.com"
+/// becomes a working link. A URL that already carries a scheme is left as-is.
+String _normalizeLinkUrl(String raw) {
+  final u = raw.trim();
+  if (u.isEmpty) return u;
+  if (RegExp(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://').hasMatch(u)) return u;
+  return 'https://$u';
+}
+
 /// A reusable rich-text + image block editor. It edits the [blocks] list in
 /// place; call [NoteBodyEditorState.sync] before persisting. The [activeController]
 /// notifier is shared with a [NoteFormatBar] so the toolbar targets the focused
@@ -86,9 +95,10 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   int _mentionCaret = 0; // plain-text offset of the caret (end of the query)
   String _mentionQuery = '';
 
-  /// A line that is nothing but a URL, as left behind by a paste.
-  /// Case-insensitive: keyboards auto-capitalize a typed "Https://…".
-  static final _urlLine = RegExp(r'^https?://\S+$', caseSensitive: false);
+  /// Any http(s) URL embedded in the text (not just a whole-line one), so a
+  /// link pasted mid-sentence is caught too. Trailing punctuation is trimmed
+  /// when a match is applied. Case-insensitive: keyboards auto-capitalize.
+  static final _urlInText = RegExp(r'https?://[^\s]+', caseSensitive: false);
 
   List<NoteBlock> get _blocks => widget.blocks;
 
@@ -525,66 +535,64 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     }
   }
 
-  // ---- Pasted-link cards ---------------------------------------------------
+  // ---- Inline hyperlinks ---------------------------------------------------
 
   void _scheduleLinkScan(String blockId, {required bool allowCursorLine}) {
     _linkScanTimer?.cancel();
     _linkScanTimer = Timer(const Duration(milliseconds: 350), () {
-      if (mounted) {
-        _scanForPastedLink(blockId, allowCursorLine: allowCursorLine);
-      }
+      if (mounted) _linkifyUrls(blockId, allowCursorLine: allowCursorLine);
     });
   }
 
-  /// Finds a line that is exactly a URL and turns it into a link block,
-  /// splitting the text block around it. Unless [allowCursorLine] (paste),
-  /// the line the cursor is on is left alone so a URL mid-typing survives.
-  void _scanForPastedLink(String blockId, {required bool allowCursorLine}) {
-    final idx = _blocks.indexWhere((b) => b.id == blockId);
+  /// Turns every http(s) URL in the block into an inline, tappable, sky-blue
+  /// hyperlink (Quill's `link` attribute) rather than a preview card. Runs on a
+  /// paste (any URL) and when a line is finished — skipping a URL still under
+  /// the caret so one being typed isn't linked mid-word. Formatting keeps the
+  /// text length so the caret never moves, and already-linked URLs are skipped
+  /// (which also stops this re-firing forever on its own change events).
+  void _linkifyUrls(String blockId, {required bool allowCursorLine}) {
     final c = _quillCtrls[blockId];
-    if (idx < 0 || c == null) return;
+    if (c == null) return;
     final plain = c.document.toPlainText();
     final cursor = c.selection.baseOffset;
-    var lineStart = 0;
-    for (final line in plain.split('\n')) {
-      final lineEnd = lineStart + line.length;
-      final url = line.trim();
-      final cursorHere = cursor >= lineStart && cursor <= lineEnd;
-      if (url.length > 11 &&
-          _urlLine.hasMatch(url) &&
-          (allowCursorLine || !cursorHere)) {
-        _convertUrlLine(idx, _blocks[idx], c, lineStart, line.length, url);
-        return;
+    final delta = c.document.toDelta();
+    final sel = c.selection;
+    const trailing = '.,;:!?)]}>"\'';
+    var applied = false;
+    for (final m in _urlInText.allMatches(plain)) {
+      var end = m.end;
+      while (end > m.start && trailing.contains(plain[end - 1])) {
+        end--;
       }
-      lineStart = lineEnd + 1;
+      final start = m.start;
+      if (end - start < 8) continue; // "http://x" is the shortest worth linking
+      if (!allowCursorLine && cursor > start && cursor < end) continue;
+      if (_rangeIsLinked(delta, start, end)) continue;
+      c.formatText(start, end - start,
+          LinkAttribute(_normalizeLinkUrl(plain.substring(start, end))));
+      applied = true;
+    }
+    // A pure attribute change shouldn't move the caret, but restore it anyway.
+    if (applied && c.selection != sel) {
+      c.updateSelection(sel, ChangeSource.local);
     }
   }
 
-  void _convertUrlLine(int idx, NoteBlock block, QuillController c, int start,
-      int lineLen, String url) {
-    final full = c.document.toDelta();
-    final docLen = c.document.length;
-    final before = start > 0 ? full.slice(0, start) : Delta();
-    final afterStart = start + lineLen + 1;
-    final after = afterStart < docLen ? full.slice(afterStart) : Delta();
-
-    final linkBlock = NoteBlock(type: NoteBlockType.link, url: url);
-    setState(() {
-      block.text = jsonEncode(_normalized(before).toJson());
-      _disposeBlockEditors(block.id);
-      _ensure(block);
-
-      _blocks.insert(idx + 1, linkBlock);
-      if (_hasContent(after)) {
-        final tail = NoteBlock(
-            type: NoteBlockType.text,
-            text: jsonEncode(_normalized(after).toJson()));
-        _blocks.insert(idx + 2, tail);
-        _ensure(tail);
+  /// Whether [start,end) is already fully covered by a non-empty `link`, so
+  /// [_linkifyUrls] leaves it alone (and thus doesn't loop on its own change).
+  bool _rangeIsLinked(Delta delta, int start, int end) {
+    var pos = 0;
+    for (final op in delta.toList()) {
+      final data = op.data;
+      final len = data is String ? data.length : 1;
+      if (pos < end && pos + len > start) {
+        final link = op.attributes?['link'];
+        if (data is! String || link is! String || link.isEmpty) return false;
       }
-      _ensureTrailingText();
-    });
-    _fetchLinkPreview(linkBlock);
+      pos += len;
+      if (pos >= end) break;
+    }
+    return true;
   }
 
   /// Quill documents must end with a newline insert.
@@ -594,18 +602,6 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     final last = ops.last.data;
     if (last is String && last.endsWith('\n')) return d;
     return d..insert('\n');
-  }
-
-  bool _hasContent(Delta d) {
-    for (final op in d.toList()) {
-      final data = op.data;
-      if (data is String) {
-        if (data.replaceAll('\n', '').trim().isNotEmpty) return true;
-      } else if (data != null) {
-        return true;
-      }
-    }
-    return false;
   }
 
   bool _isTextBlockEmpty(NoteBlock b) {
@@ -858,9 +854,134 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
           // an empty first line jump up to the title (Google Keep style).
           // ignore: experimental_member_use
           onKeyPressed: (event, node) => _onBlockKey(block, event),
+          // A tap on an inline hyperlink opens it (Quill's default only opens on
+          // long-press while editing); a tap elsewhere still places the caret.
+          onTapUp: (details, getPosition) =>
+              _openLinkAtTap(block.id, details, getPosition),
+          // Long-press menu: the full address plus Open / Copy / Edit / Remove.
+          linkActionPickerDelegate: (ctx, link, node) =>
+              _linkMenu(block.id, ctx, link, node),
         ),
       ),
     );
+  }
+
+  /// Opens the hyperlink under a tap, if any. Returns true to consume the tap
+  /// (so the caret doesn't move onto the link); false lets the editor handle it.
+  bool _openLinkAtTap(String blockId, TapUpDetails details,
+      TextPosition Function(Offset offset) getPosition) {
+    final c = _quillCtrls[blockId];
+    if (c == null) return false;
+    final link = _linkAtOffset(c, getPosition(details.globalPosition).offset);
+    if (link == null || link.isEmpty) return false;
+    _openLink(link);
+    return true;
+  }
+
+  /// The `link` attribute covering document [offset] in [c], or null.
+  String? _linkAtOffset(QuillController c, int offset) {
+    var pos = 0;
+    for (final op in c.document.toDelta().toList()) {
+      final data = op.data;
+      final len = data is String ? data.length : 1;
+      if (offset >= pos && offset < pos + len) {
+        final link = op.attributes?['link'];
+        return link is String ? link : null;
+      }
+      pos += len;
+    }
+    return null;
+  }
+
+  /// The long-press menu for an inline hyperlink: the full address at the top,
+  /// then Open / Copy / Edit / Remove. Open and Edit are handled here (returning
+  /// [LinkMenuAction.none]); Copy and Remove are handed back to Quill.
+  Future<LinkMenuAction> _linkMenu(
+      String blockId, BuildContext context, String link, Node node) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppPalette.sheet,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The pasted address, so the user can read where it points.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.link_rounded,
+                      size: 18, color: AppPalette.inkSecondary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(link,
+                        style: TextStyle(
+                            fontSize: 13.5, height: 1.3, color: kLinkColor)),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: AppPalette.cardOutline),
+            _linkMenuItem(ctx, Icons.open_in_new_rounded, context.t.open, 'open'),
+            _linkMenuItem(ctx, Icons.copy_rounded, context.t.copy, 'copy'),
+            _linkMenuItem(ctx, Icons.edit_outlined, context.t.editLink, 'edit'),
+            _linkMenuItem(
+                ctx, Icons.link_off_rounded, context.t.removeLink, 'remove',
+                danger: true),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    switch (choice) {
+      case 'open':
+        await _openLink(link);
+        return LinkMenuAction.none;
+      case 'copy':
+        return LinkMenuAction.copy;
+      case 'remove':
+        return LinkMenuAction.remove;
+      case 'edit':
+        await _editLinkNode(blockId, node, link);
+        return LinkMenuAction.none;
+      default:
+        return LinkMenuAction.none;
+    }
+  }
+
+  Widget _linkMenuItem(
+      BuildContext sheetCtx, IconData icon, String label, String value,
+      {bool danger = false}) {
+    final color = danger ? const Color(0xFFE0567B) : AppPalette.inkPrimary;
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(label,
+          style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      onTap: () => Navigator.pop(sheetCtx, value),
+    );
+  }
+
+  /// Swaps the URL on an existing link run (from the long-press "Edit"): asks for
+  /// a new address, then re-applies it across the whole link's range (or clears
+  /// it when the field is emptied).
+  Future<void> _editLinkNode(String blockId, Node node, String oldLink) async {
+    if (!mounted) return;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _LinkDialog(initial: oldLink),
+    );
+    if (result == null) return;
+    final c = _quillCtrls[blockId];
+    if (c == null) return;
+    final range = getLinkRange(node);
+    final len = range.end - range.start;
+    if (len <= 0) return;
+    if (result.trim().isEmpty) {
+      c.formatText(range.start, len, Attribute.clone(Attribute.link, null));
+    } else {
+      c.formatText(range.start, len, LinkAttribute(_normalizeLinkUrl(result)));
+    }
   }
 }
 
@@ -940,6 +1061,13 @@ DefaultStyles _quillStyles(bool onLight,
         const VerticalSpacing(10, 0), const VerticalSpacing(0, 0), null),
     h2: DefaultTextBlockStyle(heading(h2Size, FontWeight.w600), hs,
         const VerticalSpacing(8, 0), const VerticalSpacing(0, 0), null),
+    // Inline hyperlinks read as sky-blue underlined text in the editor, matching
+    // the read view; a tap opens them (see onTapUp above).
+    link: TextStyle(
+      color: kLinkColor,
+      decoration: TextDecoration.underline,
+      decorationColor: kLinkColor,
+    ),
     placeHolder: DefaultTextBlockStyle(
       TextStyle(
           fontSize: bodySize,
@@ -1142,6 +1270,32 @@ class _NoteFormatBarState extends State<NoteFormatBar> {
       widget.activeController;
   bool get onLight => widget.onLight;
 
+  /// The "H" button: turn the selected word(s) into a tappable hyperlink, edit
+  /// an existing one, or remove it — like Ctrl+K in a word processor. Needs a
+  /// selection (there's nothing to link at a bare caret). The dialog owns its
+  /// own text controller ([_LinkDialog]) so it's disposed with the route rather
+  /// than mid-exit-animation.
+  Future<void> _editLink(BuildContext context, QuillController c) async {
+    if (c.selection.isCollapsed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t.selectTextToLink)),
+      );
+      return;
+    }
+    final existing =
+        c.getSelectionStyle().attributes[Attribute.link.key]?.value as String?;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _LinkDialog(initial: existing ?? ''),
+    );
+    if (result == null) return; // cancelled
+    if (result.trim().isEmpty) {
+      c.formatSelection(Attribute.clone(Attribute.link, null));
+    } else {
+      c.formatSelection(LinkAttribute(_normalizeLinkUrl(result)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final primary = onLight ? _islandPrimary : AppPalette.textPrimary;
@@ -1175,6 +1329,7 @@ class _NoteFormatBarState extends State<NoteFormatBar> {
             final underline = attrs.containsKey(Attribute.underline.key);
             final strike = attrs.containsKey(Attribute.strikeThrough.key);
             final highlight = attrs.containsKey(Attribute.background.key);
+            final hasLink = attrs.containsKey(Attribute.link.key);
             final quote = attrs.containsKey(Attribute.blockQuote.key);
             final listVal = attrs[Attribute.list.key]?.value;
             final indentRaw = attrs[Attribute.indent.key]?.value;
@@ -1321,6 +1476,16 @@ class _NoteFormatBarState extends State<NoteFormatBar> {
                             Attribute.clone(Attribute.color, kHighlightInk));
                       }
                     },
+                  ),
+                  // Hyperlink: select word(s), tap "H", enter a URL — Word-style.
+                  _TextToggle(
+                    label: 'H',
+                    tooltip: context.t.hyperlink,
+                    active: hasLink,
+                    primary: primary,
+                    secondary: secondary,
+                    activeFill: activeFill,
+                    onTap: () => _editLink(context, c),
                   ),
                   _vsep(sepColor),
                   _IconToggle(
@@ -1531,6 +1696,127 @@ class _IconToggle extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: Icon(icon, size: 20, color: active ? primary : secondary),
+        ),
+      ),
+    );
+    if (tooltip != null) {
+      w = Tooltip(
+        message: tooltip!,
+        child: Semantics(
+            button: true, selected: active, label: tooltip, child: w),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: w,
+    );
+  }
+}
+
+/// The "Add/Edit link" dialog for the "H" button. A StatefulWidget so it owns
+/// its [TextEditingController] and disposes it with the route (disposing one
+/// straight after `await showDialog` can crash while the dialog animates out).
+/// Pops null (cancelled), '' (remove the link), or the entered URL.
+class _LinkDialog extends StatefulWidget {
+  const _LinkDialog({required this.initial});
+  final String initial;
+
+  @override
+  State<_LinkDialog> createState() => _LinkDialogState();
+}
+
+class _LinkDialogState extends State<_LinkDialog> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasExisting = widget.initial.trim().isNotEmpty;
+    return AlertDialog(
+      backgroundColor: AppPalette.sheet,
+      title: Text(hasExisting ? context.t.editLink : context.t.addLink,
+          style: TextStyle(color: AppPalette.inkPrimary)),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        autocorrect: false,
+        style: TextStyle(color: AppPalette.inkPrimary),
+        decoration: InputDecoration(
+          hintText: context.t.linkUrlHint,
+          hintStyle: TextStyle(color: AppPalette.inkSecondary),
+        ),
+        onSubmitted: (v) => Navigator.pop(context, v),
+      ),
+      actions: [
+        if (hasExisting)
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: Text(context.t.removeLink,
+                style: const TextStyle(color: Color(0xFFE0567B))),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.t.cancel,
+              style: TextStyle(color: AppPalette.inkSecondary)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _ctrl.text),
+          child: Text(context.t.save,
+              style: TextStyle(color: AppPalette.scheme.primary)),
+        ),
+      ],
+    );
+  }
+}
+
+/// A toolbar toggle that shows a letter instead of an icon (the "H" hyperlink
+/// button). Matches [_IconToggle]'s sizing and active/inactive styling.
+class _TextToggle extends StatelessWidget {
+  const _TextToggle({
+    required this.label,
+    required this.active,
+    required this.onTap,
+    required this.primary,
+    required this.secondary,
+    required this.activeFill,
+    this.tooltip,
+  });
+  final String label;
+  final String? tooltip;
+  final bool active;
+  final VoidCallback onTap;
+  final Color primary;
+  final Color secondary;
+  final Color activeFill;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget w = Material(
+      color: active ? activeFill : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: active ? primary : secondary,
+              ),
+            ),
+          ),
         ),
       ),
     );
