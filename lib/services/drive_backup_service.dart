@@ -94,14 +94,23 @@ class DriveBackupService {
       // identified by email alone (which the sign-in always provides).
       final headers = await account.authorizationClient
           .authorizationHeaders(const [_scope], promptIfNecessary: true);
-      if (headers == null) return null; // scope not granted
+      if (headers == null) {
+        // The account was picked but the Drive-scope grant never came back. On
+        // Android this almost always means the OAuth *Android* client (this
+        // app's package name + signing SHA-1) isn't registered in the Cloud
+        // project, so the authorization can't complete. Surface it rather than
+        // failing silently. See docs/google_drive_setup.md.
+        throw StateError(
+            'Google Drive permission was not granted. The Android OAuth client '
+            '(package + signing SHA-1) may not be registered for this build — '
+            'see docs/google_drive_setup.md.');
+      }
       return (email: account.email, name: null, photoUrl: null);
     } on GoogleSignInException catch (e) {
-      // A cancelled picker/consent is a quiet no-op, not an error.
-      if (e.code == GoogleSignInExceptionCode.canceled ||
-          e.code == GoogleSignInExceptionCode.interrupted) {
-        return null;
-      }
+      // Only a user-cancelled picker is a quiet no-op. Everything else — an
+      // interrupted or failed authorization, a client-config error — is
+      // surfaced so the reason is visible instead of "nothing happens".
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
       rethrow;
     }
   }

@@ -33,6 +33,7 @@ import '../widgets/glass_morph.dart';
 import '../widgets/move_to_space_sheet.dart';
 import '../widgets/note_background.dart';
 import '../widgets/note_body_editor.dart';
+import '../widgets/note_info.dart';
 import '../widgets/note_link_picker.dart';
 import '../widgets/note_links_section.dart';
 import '../widgets/note_tags_editor.dart';
@@ -231,6 +232,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                noteInfoBlock(
+                  context,
+                  created: _note.createdAt,
+                  modified: _note.updatedAt,
+                  charCount: _note.charCount,
+                ),
+                Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: AppPalette.cardOutline),
+                const SizedBox(height: 4),
                 _menuTile(sheetCtx, Icons.ios_share_rounded, context.t.share,
                     _shareMarkdown),
                 _menuTile(sheetCtx, Icons.picture_as_pdf_outlined,

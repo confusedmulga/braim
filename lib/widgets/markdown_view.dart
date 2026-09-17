@@ -220,6 +220,15 @@ class MarkdownView extends StatelessWidget {
         sideColor: codeBorder,
         textColor: AppPalette.inkSecondary,
       ),
+      // Wide tables would otherwise overflow and clip off-screen. Wrap each in a
+      // horizontal scroll view so the full table can be swiped sideways; columns
+      // size to their content (markdown_widget's IntrinsicColumnWidth default).
+      TableConfig(
+        wrapper: (table) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: table,
+        ),
+      ),
     ]);
   }
 

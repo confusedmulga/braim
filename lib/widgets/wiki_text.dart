@@ -159,10 +159,10 @@ class _RichBodyTextState extends State<RichBodyText> {
         color: const Color(0xFF202124),
       );
     }
-    // An inline hyperlink reads as one: accent-coloured and underlined.
+    // An inline hyperlink reads as one: sky-blue and underlined.
     if (run.link != null) {
       s = s.copyWith(
-        color: AppPalette.scheme.primary,
+        color: kLinkColor,
         decoration: TextDecoration.combine([
           if (s.decoration != null) s.decoration!,
           TextDecoration.underline,

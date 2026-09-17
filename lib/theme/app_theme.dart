@@ -127,6 +127,11 @@ class AppPalette {
 const String kNoteBodyFont = 'Caveat';
 const String kNoteHeadingFont = 'Lora';
 
+/// Sky blue for inline hyperlinks (a pasted URL, or text linked with the "H"
+/// button). Chosen bright enough to read on the dark app cards yet dark enough
+/// on the white note sheet, so one value works in both places.
+const Color kLinkColor = Color(0xFF2F9BF5);
+
 /// The active body face for nodes & sparks — user-selectable in Settings, set by
 /// AppState on load/change. Titles/chrome stay on [kNoteHeadingFont].
 String activeBodyFont = kNoteBodyFont;

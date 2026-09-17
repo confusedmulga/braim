@@ -952,6 +952,42 @@ abstract class AppLocalizations {
   /// **'Highlight'**
   String get highlight;
 
+  /// No description provided for @hyperlink.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get hyperlink;
+
+  /// No description provided for @selectTextToLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Select some text first to add a link'**
+  String get selectTextToLink;
+
+  /// No description provided for @addLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Add link'**
+  String get addLink;
+
+  /// No description provided for @editLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit link'**
+  String get editLink;
+
+  /// No description provided for @linkUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://example.com'**
+  String get linkUrlHint;
+
+  /// No description provided for @removeLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove link'**
+  String get removeLink;
+
   /// No description provided for @quote.
   ///
   /// In en, this message translates to:
@@ -1353,6 +1389,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share to Google Drive, Files, …'**
   String get backupSubtitle;
+
+  /// No description provided for @infoCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get infoCreated;
+
+  /// No description provided for @infoModified.
+  ///
+  /// In en, this message translates to:
+  /// **'Last modified'**
+  String get infoModified;
+
+  /// No description provided for @infoCharacters.
+  ///
+  /// In en, this message translates to:
+  /// **'Characters'**
+  String get infoCharacters;
 
   /// No description provided for @restoreFromBackup.
   ///
@@ -3663,12 +3717,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A one-time task. Tick it off and it stays, done, until you delete it.'**
   String get repeatOnceHint;
-
-  /// No description provided for @addLink.
-  ///
-  /// In en, this message translates to:
-  /// **'Add link'**
-  String get addLink;
 
   /// No description provided for @linkLabelHint.
   ///

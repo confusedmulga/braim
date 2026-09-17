@@ -20,6 +20,7 @@ import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/markdown_view.dart';
 import '../widgets/move_to_space_sheet.dart';
+import '../widgets/note_info.dart';
 import '../widgets/quick_actions_menu.dart';
 import 'card_detail_screen.dart';
 import 'note_open.dart';
@@ -141,6 +142,19 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                noteInfoBlock(
+                  context,
+                  created: _note.createdAt,
+                  modified: _note.updatedAt,
+                  charCount: _note.markdownSource.length,
+                ),
+                Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: AppPalette.cardOutline),
+                const SizedBox(height: 4),
                 _tile(sheetCtx, Icons.ios_share_rounded, context.t.share,
                     _shareMarkdown),
                 _tile(sheetCtx, Icons.picture_as_pdf_outlined,

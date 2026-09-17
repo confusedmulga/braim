@@ -50,6 +50,10 @@ app.*.map.json
 # Build artifacts anywhere
 **/build/
 
+# Kotlin compiler session files (build cache, not source)
+.kotlin/
+**/.kotlin/
+
 # Release signing secrets — keep local, back them up privately.
 android/key.properties
 android/key.properties.ready
