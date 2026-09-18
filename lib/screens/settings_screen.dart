@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
@@ -438,14 +439,30 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    // The gesture-nav inset, so the list can scroll under the pill (with enough
+    // bottom padding that the last row still clears it) the way the feed does.
+    final navInset = MediaQuery.viewPaddingOf(context).bottom;
 
-    return Scaffold(
-      // A standard opaque screen surface, so the predictive-back peek reveals
-      // the feed cleanly behind it as you swipe.
-      backgroundColor: AppPalette.sheet,
-      body: Container(
-          color: AppPalette.sheet,
-          child: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: (AppPalette.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark)
+          .copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
+      // A plain solid surface, painted full-bleed so it also fills behind the
+      // gesture-nav pill. The list drops its bottom SafeArea inset so its content
+      // scrolls *under* the pill the way the feed does, instead of stopping above
+      // it and leaving an empty band there.
+      body: Stack(
+        children: [
+          Positioned.fill(child: ColoredBox(color: AppPalette.sheet)),
+          SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 Padding(
@@ -465,7 +482,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.all(18),
+                    padding: EdgeInsets.fromLTRB(18, 18, 18, navInset + 28),
                     children: [
                       _SectionLabel(context.t.appearance),
                       GlassPanel(
@@ -1093,7 +1110,9 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
           ),
-        ),
+        ],
+      ),
+      ),
     );
   }
 
