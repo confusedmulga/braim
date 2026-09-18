@@ -38,10 +38,14 @@ Future<void> main() async {
   await NotificationService.instance.init();
   // If a focus session was killed with DND still on, turn it back off.
   await DndService.instance.restoreIfLeftOn();
+  // Draw behind the status bar and the gesture-nav pill, and turn off the
+  // system's auto contrast scrim so no white/black band paints behind the pill.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarContrastEnforced: false,
   ));
   runApp(const BraimApp());
 }
