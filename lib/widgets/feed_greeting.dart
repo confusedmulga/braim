@@ -161,7 +161,41 @@ const List<String> kCardsGreetings = [
   'Cool people hoard links too. This is fine.',
 ];
 
-const String kCortexGreeting = 'Where the chaos finally gets a cortex.';
+/// Rotating greetings for the Cortex (folders/folds) tab — the place where
+/// notes, sparks and links get organized into folds.
+const List<String> kCortexGreetings = [
+  'Where the chaos finally gets a cortex.',
+  'Everything you own, technically organized.',
+  "The folds remember. You mostly don't.",
+  'Structure, imposed after the fact.',
+  'Some folds have a system. Others are just a mood.',
+  'This is where chaos goes to pretend it has order.',
+  'Filed away, not necessarily found again.',
+  'A folder for everything, and everything eventually in the wrong folder.',
+  'Your brain, but with labels.',
+  "The folds don't judge your naming conventions. Much.",
+  "Everything's in here somewhere. Good luck.",
+  'Order, loosely defined.',
+  'Some folds are archives. Some are just where things went to hide.',
+  'You built this system. You also forgot half of it.',
+  'Not mess. Just... unindexed potential.',
+  'A filing cabinet that occasionally reflects reality.',
+  "Folds within folds within a decision you don't remember making.",
+  'This is organization. Allegedly.',
+  'Everything sorted, nothing forgotten. Mostly true.',
+  'Where notes, sparks, and links pretend to get along.',
+  "The folds hold it together so you don't have to.",
+  'A structure that made sense at 1 AM.',
+  'Cortex: because "everything, everywhere" needed a folder system.',
+  "Some folds are load-bearing. Don't touch those.",
+  "This is what a second brain's filing cabinet looks like.",
+  'Organized enough to feel in control. Barely.',
+  "The folds know where everything is. You're just visiting.",
+  'A little architecture for a lot of thoughts.',
+  'Some folds are curated. Some are just where things landed.',
+  "Everything has a place. Whether it's the right one is unclear.",
+  "The system works. Don't ask too many questions.",
+];
 
 /// Shown on Home only while the library is still empty (a brand-new user): a
 /// gentle nudge to write the very first note. Never shown once a note exists.
@@ -209,6 +243,9 @@ String pickJournalGreeting({Random? random}) =>
 
 String pickCardsGreeting({Random? random}) =>
     _cachedGreeting('cards', kCardsGreetings, random);
+
+String pickCortexGreeting({Random? random}) =>
+    _cachedGreeting('cortex', kCortexGreetings, random);
 
 /// The big display text that opens every feed (in place of the old title
 /// header). The line is chosen once per mount, so it changes per app open,
