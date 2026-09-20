@@ -14,18 +14,6 @@ On-device data is held in a local SQLite database (`braim.db`). The earlier
 single-file store, `keepy_data.json`, is retained as the backup and export
 format and as a one-time import source, and is never deleted.
 
-## ADVISORY CONVENTIONS
-
-Three advisories appear throughout this handbook. Observe them.
-
-> **WARNING.** Failure to comply may result in loss of notes or exposure of
-> private data.
->
-> **CAUTION.** Failure to comply may result in a function not operating as
-> intended.
->
-> **NOTE.** Supplementary information provided to aid operation.
-
 ---
 
 ## SECTION I. GENERAL DESCRIPTION
