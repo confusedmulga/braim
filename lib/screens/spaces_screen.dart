@@ -98,7 +98,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
       controller: widget.controller,
       slivers: [
         const SliverToBoxAdapter(
-          child: FeedGreeting(text: kCortexGreeting),
+          child: FeedGreeting(picker: pickCortexGreeting),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 150),
