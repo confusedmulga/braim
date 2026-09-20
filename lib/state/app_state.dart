@@ -13,7 +13,6 @@ import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../services/backup_service.dart';
 import '../services/book_text_ops.dart';
-import '../services/drive_backup_service.dart';
 import '../services/link_preview_service.dart';
 import '../services/youtube_service.dart';
 import '../services/note_markdown.dart';
@@ -105,10 +104,8 @@ class AppState extends ChangeNotifier {
 
   // ---- Account (local-only build) -----------------------------------------
   //
-  // Firebase sync was removed, so the library lives entirely on-device. The
-  // account getters stay null for now (article bylines fall back to a plain
-  // name); they'll be fed by the connected Google account once automated
-  // Google Drive backup lands.
+  // The library lives entirely on-device; there is no account or cloud sync.
+  // These getters stay null (article bylines fall back to a plain name).
 
   String? get accountEmail => null;
   String? get accountName => null;
@@ -308,13 +305,13 @@ class AppState extends ChangeNotifier {
   String _localAutoBackupFreq = 'weekly'; // 'daily' | 'weekly' | 'monthly'
 
   /// When the last on-device auto-backup ran. Persisted and kept separate from
-  /// [_lastBackupAt] so a manual export or a Drive upload (both of which refresh
-  /// [_lastBackupAt]) never resets the local schedule — otherwise the weekly or
-  /// monthly interval would never elapse while Drive backup is also on.
+  /// [_lastBackupAt] so a manual export (which refreshes [_lastBackupAt]) never
+  /// resets the local schedule — otherwise the weekly or monthly interval would
+  /// never elapse.
   DateTime? _lastLocalAutoBackupAt;
 
   /// The [_rev] captured at the last local auto-backup, so a scheduled backup
-  /// is skipped when nothing has changed since (in-memory, like Drive's).
+  /// is skipped when nothing has changed since.
   int _revAtLocalBackup = -1;
 
   bool get localAutoBackup => _localAutoBackup;
@@ -343,9 +340,9 @@ class AppState extends ChangeNotifier {
   /// Whether the scheduled on-device backup is due now: enabled, there's
   /// something to lose, something changed since the last one, and the chosen
   /// interval has elapsed. Measured from the last *local* backup, not the shared
-  /// [_lastBackupAt] — a Drive upload or a manual export refreshes that stamp,
-  /// which would otherwise keep the weekly/monthly interval from ever elapsing.
-  /// The actual run is coordinated by [maybeBackupOnPause].
+  /// [_lastBackupAt] — a manual export refreshes that stamp, which would
+  /// otherwise keep the weekly/monthly interval from ever elapsing. The actual
+  /// run is coordinated by [maybeBackupOnPause].
   bool _localAutoBackupDue() {
     if (!_localAutoBackup) return false;
     if (_notes.isEmpty && _cards.isEmpty && _spaces.isEmpty) return false;
@@ -353,78 +350,6 @@ class AppState extends ChangeNotifier {
     final last = _lastLocalAutoBackupAt;
     return last == null ||
         DateTime.now().difference(last) >= _localAutoBackupInterval;
-  }
-
-  // ---- Google Drive backup ------------------------------------------------
-
-  bool _driveAutoBackup = false;
-  DateTime? _lastDriveBackupAt;
-  // The connected account is identified by email alone. Its display name and
-  // avatar need a profile scope that broke Drive authorization, so they are
-  // never fetched or shown — and no startup re-auth is done to (fail to) load
-  // them, which used to fire a pointless Google sign-in call on every launch.
-  String? _driveAccountEmail;
-
-  /// The [_rev] captured at the last Drive backup, so a background backup is
-  /// skipped when nothing has changed since.
-  int _revAtDriveBackup = -1;
-
-  /// Whether a Web client ID is compiled in — i.e. Drive backup is usable.
-  bool get driveConfigured => DriveBackupService.instance.isConfigured;
-
-  /// Whether a Google account is currently connected for Drive backup.
-  bool get driveConnected => _driveAccountEmail != null;
-  String? get driveAccountEmail => _driveAccountEmail;
-
-  bool get driveAutoBackup => _driveAutoBackup;
-  DateTime? get lastDriveBackupAt => _lastDriveBackupAt;
-
-  /// Connects a Google account (interactive). Returns false if cancelled.
-  Future<bool> connectDrive() async {
-    final info = await DriveBackupService.instance.connect();
-    if (info == null) return false;
-    _driveAccountEmail = info.email;
-    _driveAutoBackup = true; // sensible default once a user opts in
-    await _persist();
-    return true;
-  }
-
-  Future<void> disconnectDrive() async {
-    try {
-      await DriveBackupService.instance.disconnect();
-    } catch (_) {
-      // Even if the platform sign-out hiccups, forget the account locally.
-    }
-    _driveAccountEmail = null;
-    _driveAutoBackup = false;
-    await _persist();
-  }
-
-  Future<void> setDriveAutoBackup(bool value) async {
-    if (_driveAutoBackup == value) return;
-    _driveAutoBackup = value;
-    await _persist();
-  }
-
-  /// Zips the library and uploads it to the app's private Drive folder, then
-  /// prunes to the newest few. Throws on failure (the caller surfaces it).
-  Future<void> backupToDrive() async {
-    await flushNow();
-    final file = await BackupService.instance.exportToTempFile();
-    final filename = file.path.split(RegExp(r'[\\/]')).last;
-    await DriveBackupService.instance.uploadBackup(file, filename: filename);
-    try {
-      await file.delete();
-    } catch (_) {}
-    try {
-      await DriveBackupService.instance.pruneOldBackups(keep: 5);
-    } catch (_) {}
-    final now = DateTime.now();
-    _lastBackupAt = now;
-    _lastDriveBackupAt = now;
-    _backupReminderDismissedAt = null;
-    await _persist();
-    _revAtDriveBackup = _rev;
   }
 
   /// The on-device auto-backup zips, newest first, and the folder they live in.
@@ -440,86 +365,39 @@ class AppState extends ChangeNotifier {
     await init(restored: true);
   }
 
-  Future<List<DriveBackupFile>> listDriveBackups() =>
-      DriveBackupService.instance.listBackups();
-
-  /// Replaces the whole library with a chosen Drive backup.
-  Future<void> restoreFromDrive(String fileId) async {
-    await flushNow();
-    final bytes = await DriveBackupService.instance.downloadBackup(fileId);
-    await BackupService.instance.restoreFromZipBytes(bytes);
-    await init(restored: true);
-  }
-
-  /// Whether the silent Drive backup is due now: auto-backup on, an account
-  /// connected, something changed since the last upload, and the last one over
-  /// ~a day ago (so it settles into a roughly daily rhythm). The actual run is
-  /// coordinated by [maybeBackupOnPause].
-  bool _driveAutoBackupDue() {
-    if (!_driveAutoBackup || _driveAccountEmail == null) return false;
-    if (_rev == _revAtDriveBackup) return false; // nothing changed since upload
-    final last = _lastDriveBackupAt;
-    return last == null ||
-        DateTime.now().difference(last) >= const Duration(hours: 20);
-  }
-
-  /// Runs whichever scheduled background backups are due when the app pauses.
-  /// When both the Drive and on-device schedules fire on the same pause the
-  /// library is zipped once and the single zip feeds both, rather than building
-  /// it twice (each zip carries the whole image library). A failure in one path
-  /// never blocks the other; both retry on the next pause.
+  /// Runs the scheduled on-device backup when it's due on app pause (each zip
+  /// carries the whole image library, so it's built only when actually due). A
+  /// failure is swallowed and retried on the next pause.
   Future<void> maybeBackupOnPause() async {
-    final driveDue = _driveAutoBackupDue();
-    final localDue = _localAutoBackupDue();
-    if (!driveDue && !localDue) return;
+    if (!_localAutoBackupDue()) return;
 
     await flushNow();
     final File zip;
     try {
       zip = await BackupService.instance.exportToTempFile();
     } catch (_) {
-      return; // couldn't build the zip; both paths retry next pause
+      return; // couldn't build the zip; retries next pause
     }
-    var driveOk = false;
-    var localOk = false;
     final now = DateTime.now();
-
-    if (driveDue) {
-      try {
-        final filename = zip.path.split(RegExp(r'[\\/]')).last;
-        await DriveBackupService.instance.uploadBackup(zip, filename: filename);
-        try {
-          await DriveBackupService.instance.pruneOldBackups(keep: 5);
-        } catch (_) {}
-        _lastDriveBackupAt = now;
-        driveOk = true;
-      } catch (_) {
-        // Drive failed; the on-device copy below may still succeed.
-      }
+    var localOk = false;
+    try {
+      await BackupService.instance.placeInBackupsDir(zip);
+      _lastLocalAutoBackupAt = now;
+      localOk = true;
+    } catch (_) {
+      // On-device copy failed; retries on the next pause.
     }
-
-    if (localDue) {
-      try {
-        await BackupService.instance.placeInBackupsDir(zip);
-        _lastLocalAutoBackupAt = now;
-        localOk = true;
-      } catch (_) {
-        // On-device copy failed; retries on the next pause.
-      }
-    }
-
     try {
       await zip.delete();
     } catch (_) {}
 
-    if (driveOk || localOk) {
-      _lastBackupAt = now; // any backup counts against the stale-backup nudge
+    if (localOk) {
+      _lastBackupAt = now; // counts against the stale-backup nudge
       _backupReminderDismissedAt = null;
       await _persist();
       // Capture the rev *after* the persist bump, so "nothing changed since"
       // stays accurate for the next pause.
-      if (driveOk) _revAtDriveBackup = _rev;
-      if (localOk) _revAtLocalBackup = _rev;
+      _revAtLocalBackup = _rev;
       notifyListeners();
     }
   }
@@ -667,9 +545,6 @@ class AppState extends ChangeNotifier {
     _localAutoBackup = data.localAutoBackup;
     _localAutoBackupFreq = data.localAutoBackupFreq;
     _lastLocalAutoBackupAt = data.lastLocalAutoBackupAt;
-    _driveAutoBackup = data.driveAutoBackup;
-    _lastDriveBackupAt = data.lastDriveBackupAt;
-    _driveAccountEmail = data.driveAccountEmail;
     _sortMode = _sortFromName(data.sortMode);
     _feedWallpaper = data.feedWallpaper;
     // Migrate the old single background into both themes when the new
@@ -3511,9 +3386,6 @@ class AppState extends ChangeNotifier {
         localAutoBackup: _localAutoBackup,
         localAutoBackupFreq: _localAutoBackupFreq,
         lastLocalAutoBackupAt: _lastLocalAutoBackupAt,
-        driveAutoBackup: _driveAutoBackup,
-        lastDriveBackupAt: _lastDriveBackupAt,
-        driveAccountEmail: _driveAccountEmail,
         sortMode: _sortMode.name,
         feedWallpaper: _feedWallpaper,
         feedBackgroundLight: _feedBackgroundLight,

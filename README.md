@@ -179,25 +179,19 @@ selectable from the bundled font set.
 
 ### 3-7. BACKUP AND RESTORE
 
-- **On device.** Export a single zip of all data and images. The system save
-  sheet writes it to Files, Drive, an SD card, or any target, so one action
-  covers both a local and a cloud copy. Restore replaces the current contents
-  from a chosen zip. A reminder banner appears on Home when data has not been
-  backed up recently.
+- **Manual.** Export a single zip of all data and images two ways: **Save to
+  device** writes it through the system save dialog (Files, an SD card, other
+  local providers), and **Send a copy** hands it to the OS share sheet, which
+  offers Google Drive, email and any other app — the reliable route for an
+  off-device copy. Restore replaces the current contents from a chosen zip. A
+  reminder banner appears on Home when data has not been backed up recently.
 - **Automatic on device.** A switch keeps a zip copy on a schedule of daily,
   weekly, or monthly. It runs when the application is sent to the background and
   is skipped when nothing has changed. Copies land in the application's own
   private storage; the five most recent are kept and older ones are removed
-  automatically, the same retention as the Drive copies. This storage guards
-  against a bad write, but Android clears it if Braim is uninstalled and it is
-  lost with the device, so it does not replace a copy kept elsewhere (an export
-  or the Drive backup).
-- **Google Drive.** An optional automated backup uploads the same zip into
-  Google Drive's private application-data folder (the `drive.appdata` scope). It
-  is invisible in the operator's Drive and holds only Braim's own files. Once
-  connected, Braim also backs up silently when the application is sent to the
-  background, throttled and skipped when nothing has changed, and keeps the five
-  most recent backups. No Firebase is involved. See Section IV, 4-4 for setup.
+  automatically. This storage guards against a bad write, but Android clears it
+  if Braim is uninstalled and it is lost with the device, so it does not replace
+  a copy kept elsewhere (an export).
 
 > **CAUTION.** Losing the device without a backup loses the data. Braim keeps no
 > server copy.
@@ -208,36 +202,7 @@ On Android, images, text, and links shared to Braim from other applications are
 accepted through the intent filters in `AndroidManifest.xml`. Shared links become
 cards; shared images and text become a note.
 
-### 3-9. SIGNING IN WITH GOOGLE
-
-Signing in with a Google account has one purpose: automatic backup to that
-account's Google Drive. It is optional and changes nothing else about how Braim
-operates on the device.
-
-On sign-in:
-
-- **Scope.** Braim requests one permission only: `drive.appdata` (its own
-  private Drive folder). The connected account is identified by its email address
-  alone; no profile scope is requested, so no name or photo is fetched or shown.
-  Braim cannot see, read, or touch any other file in the operator's Drive.
-- **Destination.** Backups go to Drive's hidden application-data folder — not a
-  folder the operator picks, and invisible in the Drive interface. Only Braim
-  can see it. It never clutters the operator's Drive.
-- **Routine.** Daily automatic backup switches on. Braim uploads a zip of the
-  whole library (notes, cards, books, journal, reflexes) silently when the app
-  is sent to the background — about once a day, and only when something has
-  changed since the last upload.
-- **Retention.** The five most recent backups are kept; older copies are removed
-  automatically.
-- **Manual control.** "Back up now" and "Restore" (from any of the five copies)
-  live in Settings. Auto-backup can be switched off, and the account
-  disconnected, at any time.
-
-No password is handled by Braim, no server operated by the developer is
-contacted, and nothing leaves the device except the backup zip, which goes to
-the operator's own Drive.
-
-### 3-10. REMINDERS AND NOTIFICATIONS
+### 3-9. REMINDERS AND NOTIFICATIONS
 
 A note may carry a dated reminder, reflex threads may raise a daily prompt, and
 the journal has an optional nightly nudge, all delivered as device notifications.
@@ -268,22 +233,6 @@ flutter run                 # with an emulator or device attached
 flutter build apk --debug   # produce an installable debug APK
 ```
 
-### 4-4. Optional: enable Google Drive backup
-
-Drive backup is off until a Google **Web application** OAuth client ID is
-supplied. The client ID is a public identifier and carries no secret. Provide it
-at build or run time:
-
-```bash
-flutter run --dart-define=BRAIM_GDRIVE_CLIENT_ID=YOUR_WEB_CLIENT_ID
-```
-
-Full one-time setup (Cloud project, Drive API, consent screen, signing
-fingerprints) is given in [docs/google_drive_setup.md](docs/google_drive_setup.md).
-
-> **NOTE.** Until a client ID is present, Settings shows "Drive backup not set
-> up" and the rest of the application is unaffected.
-
 ---
 
 ## SECTION V. CONSTRUCTION
@@ -295,7 +244,7 @@ lib/
   services/      SQLite store and one-time JSON importer (services/db), JSON
                  storage and export, note to/from Markdown, note/card PDF export,
                  image picker, link preview, article extractor, YouTube scraper,
-                 book export (PDF/Markdown/ePub), Drive backup, notifications,
+                 book export (PDF/Markdown/ePub), notifications,
                  Do Not Disturb, focus media, seed data, wiki links
   state/         AppState (ChangeNotifier) and the Pomodoro controller
   theme/         palette, note colours, and ThemeData

@@ -1384,12 +1384,6 @@ abstract class AppLocalizations {
   /// **'Back up (data + images)'**
   String get backupTitle;
 
-  /// No description provided for @backupSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Share to Google Drive, Files, …'**
-  String get backupSubtitle;
-
   /// No description provided for @infoCreated.
   ///
   /// In en, this message translates to:
@@ -1981,14 +1975,20 @@ abstract class AppLocalizations {
   /// No description provided for @saveToDevice.
   ///
   /// In en, this message translates to:
-  /// **'Save to device or Drive'**
+  /// **'Save to device'**
   String get saveToDevice;
 
-  /// No description provided for @saveToDeviceSubtitle.
+  /// No description provided for @sendBackupTitle.
   ///
   /// In en, this message translates to:
-  /// **'Write the .zip to Files, Drive, an SD card…'**
-  String get saveToDeviceSubtitle;
+  /// **'Send a copy'**
+  String get sendBackupTitle;
+
+  /// No description provided for @sendBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share to Drive, email, or another app'**
+  String get sendBackupSubtitle;
 
   /// No description provided for @backupSavedToDevice.
   ///
@@ -3903,120 +3903,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guide'**
   String get guideSettingsLabel;
-
-  /// No description provided for @driveSection.
-  ///
-  /// In en, this message translates to:
-  /// **'Google Drive'**
-  String get driveSection;
-
-  /// No description provided for @driveSetupTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Drive backup not set up'**
-  String get driveSetupTitle;
-
-  /// No description provided for @driveSetupBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Add a Google OAuth client ID to enable automatic Google Drive backup. See docs/google_drive_setup.md in the project.'**
-  String get driveSetupBody;
-
-  /// No description provided for @driveConnect.
-  ///
-  /// In en, this message translates to:
-  /// **'Connect Google Drive'**
-  String get driveConnect;
-
-  /// No description provided for @driveConnectSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign in to enable daily automatic backup to a private app folder on your Drive'**
-  String get driveConnectSubtitle;
-
-  /// No description provided for @driveConnectedAs.
-  ///
-  /// In en, this message translates to:
-  /// **'Connected as {email}'**
-  String driveConnectedAs(String email);
-
-  /// No description provided for @driveBackupNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Back up to Drive now'**
-  String get driveBackupNow;
-
-  /// No description provided for @driveAutoTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Daily automatic backup'**
-  String get driveAutoTitle;
-
-  /// No description provided for @driveAutoSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Backs up to Drive about once a day, keeping the 5 most recent copies in a private app folder'**
-  String get driveAutoSubtitle;
-
-  /// No description provided for @driveRestoreTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Restore from Drive'**
-  String get driveRestoreTitle;
-
-  /// No description provided for @driveRestoreSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Replace everything with a Drive backup'**
-  String get driveRestoreSubtitle;
-
-  /// No description provided for @driveDisconnect.
-  ///
-  /// In en, this message translates to:
-  /// **'Disconnect'**
-  String get driveDisconnect;
-
-  /// No description provided for @drivePickTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose a backup to restore'**
-  String get drivePickTitle;
-
-  /// No description provided for @driveNoBackups.
-  ///
-  /// In en, this message translates to:
-  /// **'No backups on Drive yet'**
-  String get driveNoBackups;
-
-  /// No description provided for @driveConnected.
-  ///
-  /// In en, this message translates to:
-  /// **'Google Drive connected'**
-  String get driveConnected;
-
-  /// No description provided for @driveConnectFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not connect: {error}'**
-  String driveConnectFailed(String error);
-
-  /// No description provided for @driveBackingUp.
-  ///
-  /// In en, this message translates to:
-  /// **'Backing up to Drive…'**
-  String get driveBackingUp;
-
-  /// No description provided for @driveBackedUp.
-  ///
-  /// In en, this message translates to:
-  /// **'Backed up to Drive'**
-  String get driveBackedUp;
-
-  /// No description provided for @driveBackupFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Drive backup failed: {error}'**
-  String driveBackupFailed(String error);
 }
 
 class _AppLocalizationsDelegate

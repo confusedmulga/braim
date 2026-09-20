@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../services/backup_service.dart';
-import '../services/drive_backup_service.dart';
 import '../services/image_service.dart';
 import '../services/notification_service.dart';
 import '../state/app_state.dart';
@@ -41,10 +41,6 @@ String _backupMetaLine(DateTime? modified, int? size) {
   }
   return parts.join(' · ');
 }
-
-/// "2026-09-02 14:03 · 4.2 MB" for a Drive backup row.
-String _driveFileSubtitle(DriveBackupFile f) =>
-    _backupMetaLine(f.modifiedTime, f.sizeBytes);
 
 /// Settings is a standard opaque screen, so it takes part in Android's
 /// predictive-back peek (swipe from the edge reveals the feed underneath) like
@@ -84,7 +80,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// Restores from one of the on-device auto-backup zips, chosen from a list of
-  /// the Backups folder — the on-device counterpart of [_restoreFromDrive].
+  /// the Backups folder.
   Future<void> _restoreFromDevice(BuildContext context) async {
     final t = context.t;
     final messenger = ScaffoldMessenger.of(context);
@@ -146,134 +142,10 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  // ---- Google Drive backup ------------------------------------------------
-
-  /// Explains that a Web client ID must be compiled in before Drive backup can
-  /// be used (shown when [AppState.driveConfigured] is false).
-  Future<void> _showDriveSetup(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(context.t.driveSetupTitle),
-        content: Text(context.t.driveSetupBody),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(context.t.done)),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _connectDrive(BuildContext context) async {
-    final t = context.t;
-    final messenger = ScaffoldMessenger.of(context);
-    final appState = context.read<AppState>();
-    try {
-      final ok = await appState.connectDrive();
-      if (!ok) return; // user cancelled the picker / consent
-      messenger.showSnackBar(SnackBar(content: Text(t.driveConnected)));
-    } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(t.driveConnectFailed(e.toString()))));
-    }
-  }
-
-  Future<void> _disconnectDrive(BuildContext context) =>
-      context.read<AppState>().disconnectDrive();
-
-  Future<void> _driveBackupNow(BuildContext context) async {
-    final t = context.t;
-    final messenger = ScaffoldMessenger.of(context);
-    final appState = context.read<AppState>();
-    final nav = Navigator.of(context, rootNavigator: true);
-    var dialogOpen = true;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(context.t.driveBackingUp),
-        content: const ClipRRect(
-          borderRadius: BorderRadius.all(Radius.circular(6)),
-          child: LinearProgressIndicator(minHeight: 6),
-        ),
-      ),
-    ).then((_) => dialogOpen = false);
-    try {
-      await appState.backupToDrive();
-      if (dialogOpen) nav.pop();
-      messenger.showSnackBar(SnackBar(content: Text(t.driveBackedUp)));
-    } catch (e) {
-      if (dialogOpen) nav.pop();
-      messenger.showSnackBar(
-          SnackBar(content: Text(t.driveBackupFailed(e.toString()))));
-    }
-  }
-
-  Future<void> _restoreFromDrive(BuildContext context) async {
-    final t = context.t;
-    final messenger = ScaffoldMessenger.of(context);
-    final appState = context.read<AppState>();
-    final nav = Navigator.of(context);
-    List<DriveBackupFile> files;
-    try {
-      files = await appState.listDriveBackups();
-    } catch (e) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(t.driveBackupFailed(e.toString()))));
-      return;
-    }
-    if (!context.mounted) return;
-    if (files.isEmpty) {
-      messenger.showSnackBar(SnackBar(content: Text(t.driveNoBackups)));
-      return;
-    }
-    final picked = await showModalBottomSheet<DriveBackupFile>(
-      context: context,
-      backgroundColor: AppPalette.sheet,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(t.drivePickTitle,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      color: AppPalette.inkPrimary)),
-            ),
-            for (final f in files)
-              ListTile(
-                leading: Icon(Icons.cloud_download_outlined,
-                    color: AppPalette.inkPrimary),
-                title: Text(f.name,
-                    style: TextStyle(color: AppPalette.inkPrimary)),
-                subtitle: Text(_driveFileSubtitle(f),
-                    style: const TextStyle(color: Color(0xFF5E5F69))),
-                onTap: () => Navigator.pop(ctx, f),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (picked == null || !context.mounted) return;
-    final ok = await _confirmRestore(context);
-    if (ok != true) return;
-    try {
-      await appState.restoreFromDrive(picked.id);
-      nav.pop(); // leave settings, back to the (reloaded) feed
-      messenger.showSnackBar(SnackBar(content: Text(t.backupRestored)));
-    } catch (e) {
-      messenger
-          .showSnackBar(SnackBar(content: Text(t.restoreFailed(e.toString()))));
-    }
-  }
-
-  /// Writes the backup zip somewhere the user picks — the Android save sheet
-  /// lists Drive, Files, an SD card and more, so this covers both cloud and
-  /// local storage without leaving the app.
+  /// Writes the backup zip to a location the user picks in the Android save
+  /// dialog — Files, an SD card, and other local document providers. For a copy
+  /// to Drive, email or another app, use [_shareBackup] (the save dialog rarely
+  /// offers Drive as a write target).
   Future<void> _saveToDevice(BuildContext context) async {
     final t = context.t;
     final messenger = ScaffoldMessenger.of(context);
@@ -311,6 +183,45 @@ class SettingsScreen extends StatelessWidget {
       if (saved == null) return; // user backed out of the save sheet
       await appState.markBackedUp();
       messenger.showSnackBar(SnackBar(content: Text(t.backupSavedToDevice)));
+    } catch (e) {
+      if (dialogOpen) nav.pop();
+      messenger
+          .showSnackBar(SnackBar(content: Text(t.backupFailed(e.toString()))));
+    }
+  }
+
+  /// Exports the backup zip and hands it to the OS share sheet, so the user can
+  /// send it to Google Drive, email, or any other app — the reliable route for
+  /// an off-device copy, since the save dialog rarely lists Drive as a target.
+  Future<void> _shareBackup(BuildContext context) async {
+    final t = context.t;
+    final messenger = ScaffoldMessenger.of(context);
+    final appState = context.read<AppState>();
+    final nav = Navigator.of(context, rootNavigator: true);
+    var dialogOpen = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(context.t.preparingBackup),
+        content: const ClipRRect(
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          child: LinearProgressIndicator(minHeight: 6),
+        ),
+      ),
+    ).then((_) => dialogOpen = false);
+    try {
+      await appState.flushNow();
+      final file = await BackupService.instance.exportToTempFile();
+      if (dialogOpen) nav.pop();
+      final result = await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], title: t.backupTitle),
+      );
+      // Android often can't report which app was chosen (status: unavailable),
+      // so anything short of an explicit dismiss counts as backed up.
+      if (result.status != ShareResultStatus.dismissed) {
+        await appState.markBackedUp();
+      }
     } catch (e) {
       if (dialogOpen) nav.pop();
       messenger
@@ -743,9 +654,8 @@ class SettingsScreen extends StatelessWidget {
                         blur: 0,
                         color: AppPalette.surfaceGlass,
                         padding: EdgeInsets.zero,
-                        // One manual backup: the Android save sheet writes the
-                        // .zip to Files, Drive, an SD card and more (this used to
-                        // be split into a separate "share" and "save" row).
+                        // Save to a local target (Files, an SD card) through the
+                        // system save dialog.
                         onTap: () => _saveToDevice(context),
                         child: ListTile(
                           leading: Icon(Icons.backup_outlined,
@@ -756,6 +666,25 @@ class SettingsScreen extends StatelessWidget {
                           subtitle: Text(
                               _lastBackupText(context, state.lastBackupAt),
                               style: TextStyle(color: Color(0xFF5E5F69))),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      GlassPanel(
+                        borderRadius: 20,
+                        blur: 0,
+                        color: AppPalette.surfaceGlass,
+                        padding: EdgeInsets.zero,
+                        // Send a copy off-device (Drive, email, another app)
+                        // through the OS share sheet — the reliable Drive route.
+                        onTap: () => _shareBackup(context),
+                        child: ListTile(
+                          leading: Icon(Icons.share_outlined,
+                              color: AppPalette.inkPrimary),
+                          title: Text(context.t.sendBackupTitle,
+                              style: TextStyle(color: AppPalette.inkPrimary)),
+                          subtitle: Text(context.t.sendBackupSubtitle,
+                              style:
+                                  const TextStyle(color: Color(0xFF5E5F69))),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -878,132 +807,6 @@ class SettingsScreen extends StatelessWidget {
                       _DeviceBackupRestoreTile(
                         onRestore: () => _restoreFromDevice(context),
                       ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.driveSection),
-                      if (!state.driveConfigured)
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          onTap: () => _showDriveSetup(context),
-                          child: ListTile(
-                            leading: Icon(Icons.cloud_off_outlined,
-                                color: AppPalette.inkSecondary),
-                            title: Text(context.t.driveSetupTitle,
-                                style: TextStyle(color: AppPalette.inkPrimary)),
-                            subtitle: Text(context.t.driveSetupBody,
-                                style:
-                                    const TextStyle(color: Color(0xFF5E5F69))),
-                          ),
-                        )
-                      else if (!state.driveConnected)
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          onTap: () => _connectDrive(context),
-                          child: ListTile(
-                            leading: Icon(Icons.cloud_outlined,
-                                color: AppPalette.inkPrimary),
-                            title: Text(context.t.driveConnect,
-                                style: TextStyle(color: AppPalette.inkPrimary)),
-                            subtitle: Text(context.t.driveConnectSubtitle,
-                                style:
-                                    const TextStyle(color: Color(0xFF5E5F69))),
-                          ),
-                        )
-                      else ...[
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          child: ListTile(
-                            leading: Icon(Icons.account_circle_rounded,
-                                color: AppPalette.inkPrimary, size: 40),
-                            // The connected account is identified by email (the
-                            // name/photo need a profile scope that broke Drive
-                            // authorization, so they're deliberately not shown).
-                            title: Text(state.driveAccountEmail ?? '',
-                                style: TextStyle(
-                                    color: AppPalette.inkPrimary,
-                                    fontWeight: FontWeight.w600)),
-                            subtitle: Text(
-                                _lastBackupText(
-                                    context, state.lastDriveBackupAt),
-                                style:
-                                    const TextStyle(color: Color(0xFF5E5F69))),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          child: SwitchListTile(
-                            secondary: Icon(Icons.sync_rounded,
-                                color: AppPalette.inkPrimary),
-                            title: Text(context.t.driveAutoTitle,
-                                style: TextStyle(color: AppPalette.inkPrimary)),
-                            subtitle: Text(context.t.driveAutoSubtitle,
-                                style:
-                                    const TextStyle(color: Color(0xFF5E5F69))),
-                            value: state.driveAutoBackup,
-                            onChanged: (v) =>
-                                context.read<AppState>().setDriveAutoBackup(v),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          onTap: () => _driveBackupNow(context),
-                          child: ListTile(
-                            leading: Icon(Icons.backup_outlined,
-                                color: AppPalette.inkPrimary),
-                            title: Text(context.t.driveBackupNow,
-                                style: TextStyle(color: AppPalette.inkPrimary)),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          onTap: () => _restoreFromDrive(context),
-                          child: ListTile(
-                            leading: Icon(
-                                Icons.settings_backup_restore_rounded,
-                                color: AppPalette.inkPrimary),
-                            title: Text(context.t.driveRestoreTitle,
-                                style: TextStyle(color: AppPalette.inkPrimary)),
-                            subtitle: Text(context.t.driveRestoreSubtitle,
-                                style:
-                                    const TextStyle(color: Color(0xFF5E5F69))),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          onTap: () => _disconnectDrive(context),
-                          child: ListTile(
-                            leading: const Icon(Icons.logout_rounded,
-                                color: Color(0xFFFF8A9B)),
-                            title: Text(context.t.driveDisconnect,
-                                style:
-                                    const TextStyle(color: Color(0xFFFF8A9B))),
-                          ),
-                        ),
-                      ],
                       const SizedBox(height: 24),
                       _SectionLabel(context.t.storageSection),
                       GlassPanel(

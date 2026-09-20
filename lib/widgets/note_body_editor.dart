@@ -82,7 +82,10 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   final Map<String, ScrollController> _scrollCtrls = {};
   final Map<String, StreamSubscription> _docSubs = {};
   final Set<String> _fetchingLinks = {};
-  Timer? _linkScanTimer;
+  // One debounce timer per block: a scan queued for one block must not cancel a
+  // scan already pending for another (typing a URL in one block then a newline
+  // in a second within the debounce window would otherwise drop the first).
+  final Map<String, Timer> _linkScanTimers = {};
 
   // ---- @@ / @@@ mention autocomplete --------------------------------------
   /// The trigger just before the caret: `@@Query` links a node, `@@@Query`
@@ -116,7 +119,9 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
 
   @override
   void dispose() {
-    _linkScanTimer?.cancel();
+    for (final t in _linkScanTimers.values) {
+      t.cancel();
+    }
     _mentionEntry?.remove();
     _mentionEntry = null;
     for (final s in _docSubs.values) {
@@ -538,8 +543,9 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   // ---- Inline hyperlinks ---------------------------------------------------
 
   void _scheduleLinkScan(String blockId, {required bool allowCursorLine}) {
-    _linkScanTimer?.cancel();
-    _linkScanTimer = Timer(const Duration(milliseconds: 350), () {
+    _linkScanTimers[blockId]?.cancel();
+    _linkScanTimers[blockId] = Timer(const Duration(milliseconds: 350), () {
+      _linkScanTimers.remove(blockId);
       if (mounted) _linkifyUrls(blockId, allowCursorLine: allowCursorLine);
     });
   }
