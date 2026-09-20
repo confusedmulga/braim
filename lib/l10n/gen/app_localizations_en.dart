@@ -714,9 +714,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get backupTitle => 'Back up (data + images)';
 
   @override
-  String get backupSubtitle => 'Share to Google Drive, Files, …';
-
-  @override
   String get infoCreated => 'Created';
 
   @override
@@ -1069,11 +1066,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get saveToDevice => 'Save to device or Drive';
+  String get saveToDevice => 'Save to device';
 
   @override
-  String get saveToDeviceSubtitle =>
-      'Write the .zip to Files, Drive, an SD card…';
+  String get sendBackupTitle => 'Send a copy';
+
+  @override
+  String get sendBackupSubtitle => 'Share to Drive, email, or another app';
 
   @override
   String get backupSavedToDevice => 'Backup saved';
@@ -2148,70 +2147,4 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideSettingsLabel => 'Guide';
-
-  @override
-  String get driveSection => 'Google Drive';
-
-  @override
-  String get driveSetupTitle => 'Drive backup not set up';
-
-  @override
-  String get driveSetupBody =>
-      'Add a Google OAuth client ID to enable automatic Google Drive backup. See docs/google_drive_setup.md in the project.';
-
-  @override
-  String get driveConnect => 'Connect Google Drive';
-
-  @override
-  String get driveConnectSubtitle =>
-      'Sign in to enable daily automatic backup to a private app folder on your Drive';
-
-  @override
-  String driveConnectedAs(String email) {
-    return 'Connected as $email';
-  }
-
-  @override
-  String get driveBackupNow => 'Back up to Drive now';
-
-  @override
-  String get driveAutoTitle => 'Daily automatic backup';
-
-  @override
-  String get driveAutoSubtitle =>
-      'Backs up to Drive about once a day, keeping the 5 most recent copies in a private app folder';
-
-  @override
-  String get driveRestoreTitle => 'Restore from Drive';
-
-  @override
-  String get driveRestoreSubtitle => 'Replace everything with a Drive backup';
-
-  @override
-  String get driveDisconnect => 'Disconnect';
-
-  @override
-  String get drivePickTitle => 'Choose a backup to restore';
-
-  @override
-  String get driveNoBackups => 'No backups on Drive yet';
-
-  @override
-  String get driveConnected => 'Google Drive connected';
-
-  @override
-  String driveConnectFailed(String error) {
-    return 'Could not connect: $error';
-  }
-
-  @override
-  String get driveBackingUp => 'Backing up to Drive…';
-
-  @override
-  String get driveBackedUp => 'Backed up to Drive';
-
-  @override
-  String driveBackupFailed(String error) {
-    return 'Drive backup failed: $error';
-  }
 }

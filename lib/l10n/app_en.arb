@@ -278,7 +278,6 @@
   },
   "backupSection": "Backup",
   "backupTitle": "Back up (data + images)",
-  "backupSubtitle": "Share to Google Drive, Files, …",
   "infoCreated": "Created",
   "infoModified": "Last modified",
   "infoCharacters": "Characters",
@@ -450,8 +449,9 @@
       }
     }
   },
-  "saveToDevice": "Save to device or Drive",
-  "saveToDeviceSubtitle": "Write the .zip to Files, Drive, an SD card…",
+  "saveToDevice": "Save to device",
+  "sendBackupTitle": "Send a copy",
+  "sendBackupSubtitle": "Share to Drive, email, or another app",
   "backupSavedToDevice": "Backup saved",
   "autoBackupTitle": "Automatic backup",
   "autoBackupSubtitle": "Keep a .zip copy on this device on a schedule",
@@ -903,45 +903,5 @@
   "tutTipsTitle": "Good to know",
   "tutTipsBody": "Search covers nodes, sparks and folds in one place, and it reads your tags too. Pin up to 10 favourites in each feed. Sort a feed or filter it by tag from the sort button, and press and hold the search button inside a fold to sort it the same way. Archive hides items without deleting them. Deleted items wait 30 days in Recently deleted. Set backups, dark mode and reminders in Settings.",
   "guideTitle": "How Braim works",
-  "guideSettingsLabel": "Guide",
-  "driveSection": "Google Drive",
-  "driveSetupTitle": "Drive backup not set up",
-  "driveSetupBody": "Add a Google OAuth client ID to enable automatic Google Drive backup. See docs/google_drive_setup.md in the project.",
-  "driveConnect": "Connect Google Drive",
-  "driveConnectSubtitle": "Sign in to enable daily automatic backup to a private app folder on your Drive",
-  "driveConnectedAs": "Connected as {email}",
-  "@driveConnectedAs": {
-    "placeholders": {
-      "email": {
-        "type": "String"
-      }
-    }
-  },
-  "driveBackupNow": "Back up to Drive now",
-  "driveAutoTitle": "Daily automatic backup",
-  "driveAutoSubtitle": "Backs up to Drive about once a day, keeping the 5 most recent copies in a private app folder",
-  "driveRestoreTitle": "Restore from Drive",
-  "driveRestoreSubtitle": "Replace everything with a Drive backup",
-  "driveDisconnect": "Disconnect",
-  "drivePickTitle": "Choose a backup to restore",
-  "driveNoBackups": "No backups on Drive yet",
-  "driveConnected": "Google Drive connected",
-  "driveConnectFailed": "Could not connect: {error}",
-  "@driveConnectFailed": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
-  "driveBackingUp": "Backing up to Drive…",
-  "driveBackedUp": "Backed up to Drive",
-  "driveBackupFailed": "Drive backup failed: {error}",
-  "@driveBackupFailed": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  }
+  "guideSettingsLabel": "Guide"
 }

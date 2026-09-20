@@ -37,6 +37,12 @@ class NotificationService {
   // badge in light mode, light brain on a dark badge in dark mode — which also
   // re-themes scheduled notifications at display time. (The focus timer keeps an
   // explicit phase colour; that is a deliberate green/blue indicator.)
+  //
+  // They also carry a largeIcon (@drawable/ic_notif_large): a self-contained
+  // monochrome brain badge. Some skins draw the app's *colour* launcher icon in
+  // the notification body; setting a largeIcon overrides that with our own mark.
+  // It ships as a fixed bitmap (a largeIcon can't theme like the small icon), so
+  // it's a white disc + dark brain that reads on both light and dark shades.
 
   /// Called when a notification (or one of its action buttons) is tapped, with
   /// the payload and the action id. Wired up by the app so the focus
@@ -135,6 +141,7 @@ class NotificationService {
             importance: Importance.high,
             priority: Priority.high,
             icon: 'ic_stat_braim',
+            largeIcon: DrawableResourceAndroidBitmap('ic_notif_large'),
           ),
         ),
         androidScheduleMode: await _scheduleMode(),
@@ -173,6 +180,7 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         icon: 'ic_stat_braim',
+        largeIcon: DrawableResourceAndroidBitmap('ic_notif_large'),
       ),
     );
     var shown = false;
@@ -235,6 +243,7 @@ class NotificationService {
             importance: Importance.defaultImportance,
             priority: Priority.defaultPriority,
             icon: 'ic_stat_braim',
+            largeIcon: DrawableResourceAndroidBitmap('ic_notif_large'),
           ),
         ),
         androidScheduleMode: await _scheduleMode(),
@@ -272,6 +281,7 @@ class NotificationService {
         importance: Importance.high,
         priority: Priority.high,
         icon: 'ic_stat_braim',
+        largeIcon: DrawableResourceAndroidBitmap('ic_notif_large'),
       ),
     );
     final safeTitle = title.isEmpty ? 'Daily day' : title;

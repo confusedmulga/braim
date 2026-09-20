@@ -124,19 +124,13 @@ class SeedData {
         updatedAt: ago(const Duration(days: 1, hours: 4)),
       ),
 
-      // A note that embeds a link card between text blocks.
       Note(
         title: 'Read later',
         blocks: [
-          text('Bookmarking this to come back to when I have a quiet hour:'),
-          NoteBlock(
-            type: NoteBlockType.link,
-            url: 'https://www.calnewport.com/books/deep-work/',
-            linkTitle: 'Deep Work, Cal Newport',
-            linkSite: 'calnewport.com',
-            linkFetched: true,
-          ),
-          text('The bit about scheduling every minute of the day is worth trying for a week.'),
+          text('Bookmarking this to come back to when I have a quiet hour: '
+              'https://www.calnewport.com/books/deep-work/\n\n'
+              'The bit about scheduling every minute of the day is worth trying '
+              'for a week.'),
         ],
         tags: ['reading'],
         createdAt: ago(const Duration(days: 5)),

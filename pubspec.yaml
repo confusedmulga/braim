@@ -52,8 +52,6 @@ dependencies:
   archive: ^4.0.9
   share_plus: ^12.0.2
   file_picker: ^11.0.2
-  # Retained for the Google Drive connection (automated backup); no Firebase.
-  google_sign_in: ^7.2.0
   pdf: ^3.12.0
   printing: ^5.14.3
   flutter_local_notifications: ^18.0.1

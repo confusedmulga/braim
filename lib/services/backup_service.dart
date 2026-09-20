@@ -141,6 +141,12 @@ class BackupService {
   Future<File> placeInBackupsDir(File tmp, {int keep = 5}) async {
     final dir = await _resolveBackupsDir();
     if (!await dir.exists()) await dir.create(recursive: true);
+    // Sweep any leftover staging files first: if a previous run was killed
+    // between the copy and the rename below, its `.part` survives, and the prune
+    // never collects it (that only matches `braim-backup-*.zip`). Each one is a
+    // full-library-sized orphan, so drop them before writing a new one. These
+    // are always this app's own temporaries.
+    await _sweepStagingFiles(dir);
     final destName = _base(tmp.path);
     final dest = File('${dir.path}/$destName');
     // A hidden ".part" sibling on the destination volume; renamed over the final
@@ -159,6 +165,21 @@ class BackupService {
     }
     await _pruneBackupsDir(dir, keep: keep);
     return dest;
+  }
+
+  /// Deletes leftover staging files (`.braim-backup-*.part`) from a run that
+  /// died mid-write. Only this app's own hidden temporaries match. Best effort.
+  Future<void> _sweepStagingFiles(Directory dir) async {
+    try {
+      for (final f in dir.listSync().whereType<File>()) {
+        final name = _base(f.path);
+        if (name.startsWith('.braim-backup-') && name.endsWith('.part')) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
   }
 
   /// Keeps only the newest [keep] Braim backups in [dir], deleting older ones.

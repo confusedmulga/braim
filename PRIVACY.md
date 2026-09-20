@@ -1,6 +1,6 @@
 # Privacy Policy for Braim
 
-**Last updated:** September 3, 2026
+**Last updated:** September 20, 2026
 
 Braim ("the App") is developed and published by Kalpesh Nichal ("we," "us,"
 "our"). This policy explains what happens to your data when you use Braim.
@@ -9,9 +9,7 @@ Braim ("the App") is developed and published by Kalpesh Nichal ("we," "us,"
 
 Braim is a local-first notes app. It does not require an account, does not use
 analytics or advertising SDKs, and has no backend server that we operate. Your
-content stays on your device unless you explicitly export it, share it, or turn
-on the optional Google Drive backup, in which case your data is uploaded to your
-own Google Drive account and never to us.
+content stays on your device unless you explicitly export or share it.
 
 ## Data We Collect
 
@@ -31,27 +29,13 @@ account with us and no analytics library in the App. Specifically:
   device's native share function, that transfer is between you and the
   destination you pick; we have no visibility into it and no involvement in it.
 
-## Optional Google Drive Backup
+## Automatic On-Device Backup
 
-Braim includes an optional backup feature that is **off by default** and becomes
-active only if you connect a Google account in Settings. When you enable it:
-
-- The App uses **Google Sign-In** to authenticate the Google account you choose,
-  and requests a single restricted permission, the `drive.appdata` scope. This
-  grants access only to a private, app-specific folder in your own Google Drive.
-  It does not grant access to the rest of your Drive, and the folder does not
-  appear in your normal Drive view.
-- Backup archives, which contain your notes, images, and other app data, are
-  uploaded to that private folder in **your own Google Drive account**. The
-  upload goes directly from your device to Google's servers under your account.
-- We operate no server and receive no copy of this data. It is stored under your
-  Google account and is governed by Google's Privacy Policy
-  (https://policies.google.com/privacy).
-- Once enabled, Braim may also back up automatically when you leave the App, and
-  keeps only the most recent backups, deleting older ones automatically.
-- You can disconnect at any time in Settings, which stops further backups, and
-  you can delete uploaded backups from within the App or from your Google
-  account.
+Braim can keep automatic backups, but only on your own device. When enabled in
+Settings, it writes a backup archive to an app folder on your device on a
+schedule you choose, keeping only the most recent copies and deleting older ones
+automatically. These backups never leave your device and are never sent to us or
+to any third party. Braim has no cloud sync and does not sign in to any account.
 
 ## Link and Tweet Previews
 
@@ -90,24 +74,21 @@ purpose and never transmitted to us:
   timer. These are generated on your device; no push service is used.
 - **Do Not Disturb access** (optional) — if you use the focus timer's Do Not
   Disturb option, to silence interruptions during a session.
-- **Network/Internet** — to fetch link, tweet and YouTube video previews, and to
-  perform Google Drive backup if you enable it.
+- **Network/Internet** — to fetch link, tweet and YouTube video previews when
+  you save a card.
 - **Share intent** — to let you save shared content (links, text, tweets,
   images) into Braim from other apps.
 
 ## Third-Party Services
 
 Braim does not integrate any third-party analytics, advertising, or
-crash-reporting SDKs. Outbound network activity is limited to:
+crash-reporting SDKs. Outbound network activity is limited to fetching link,
+tweet and YouTube previews from the linked site, Twitter/X oEmbed, unavatar.io,
+and YouTube (its watch page and thumbnail host), as described above, and only
+when you save a card.
 
-1. Fetching link, tweet and YouTube previews from the linked site, Twitter/X
-   oEmbed, unavatar.io, and YouTube (its watch page and thumbnail host), as
-   described above, and only when you save a card.
-2. Uploading and managing your backups in your own Google Drive, via Google
-   Sign-In and the Google Drive API, and only if you enable Google Drive backup.
-
-Every one of these is initiated by your own action. None of them send data to a
-server operated by us.
+This is initiated by your own action. None of it sends data to a server operated
+by us.
 
 ## Children's Privacy
 
@@ -119,9 +100,7 @@ specifically and contains no age-restricted content.
 
 Because all app data lives locally on your device, uninstalling the App or
 clearing its storage removes all associated data permanently. We hold no copy
-and cannot recover it for you. If you used Google Drive backup, you can delete
-those backups from within the App (Settings, then Google Drive) or directly from
-your Google account.
+and cannot recover it for you.
 
 ## Changes to This Policy
 

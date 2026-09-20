@@ -16,10 +16,15 @@ class NotePdf {
 
   static const double _body = 11; // pt — the body size the user asked for.
 
-  /// The bundled monospace face for code, loaded once per render in
-  /// [fromMarkdown]. Null until loaded (or if the asset can't be read), in which
-  /// case [_codeFont] falls back to the built-in Courier (Latin only).
+  /// The bundled monospace face for code, loaded lazily the first time a PDF is
+  /// rendered and cached for the process. Null until loaded (or if the asset
+  /// can't be read), in which case [_codeFont] falls back to the built-in
+  /// Courier (Latin only).
   static pw.Font? _monoFont;
+
+  /// The body theme (SpaceGrotesk), cached after the first successful load so
+  /// repeated exports don't re-decode the TTFs each call.
+  static pw.ThemeData? _themeCache;
 
   /// The face for code blocks and inline code.
   static pw.Font _codeFont() => _monoFont ?? pw.Font.courier();
@@ -29,7 +34,7 @@ class NotePdf {
   static Future<Uint8List> fromMarkdown(String source, {String? title}) async {
     final doc = pw.Document(title: title);
     final base = await _theme();
-    _monoFont = await _loadMono();
+    _monoFont ??= await _loadMono();
 
     final nodes = md.Document(
       extensionSet: md.ExtensionSet.gitHubFlavored,
@@ -58,14 +63,16 @@ class NotePdf {
   /// built-in PDF fonts if the assets can't be loaded (e.g. in a unit test).
   /// The family ships no italic, so emphasis reads upright; emoji won't render.
   static Future<pw.ThemeData> _theme() async {
+    if (_themeCache != null) return _themeCache!;
     try {
       final regular = pw.Font.ttf(
           await rootBundle.load('assets/fonts/SpaceGrotesk-Regular.ttf'));
       final bold = pw.Font.ttf(
           await rootBundle.load('assets/fonts/SpaceGrotesk-Bold.ttf'));
-      return pw.ThemeData.withFont(
+      return _themeCache = pw.ThemeData.withFont(
           base: regular, bold: bold, italic: regular, boldItalic: bold);
     } catch (_) {
+      // Don't cache the fallback: a later call (outside a test) may succeed.
       return pw.ThemeData.withFont();
     }
   }

@@ -473,5 +473,6 @@ is proven.
 
 ---
 
-_Companion doc: `docs/google_drive_setup.md` (off-device backup — finishing this is
-the cheapest independent safety win, and it underpins the fallback story above)._
+_Note (2026-09-20): the off-device Google Drive backup this plan refers to was
+removed. Backups are now on-device only, plus a manual "Send a copy" that shares
+the zip out through the OS share sheet (Drive, email, another app)._
