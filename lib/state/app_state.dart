@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/annotation.dart';
 import '../models/book.dart';
@@ -25,6 +26,22 @@ import '../theme/app_theme.dart';
 
 /// Reserved space id for the locked Crypt folder.
 const String kCryptSpaceId = '__crypt__';
+
+const _uuid = Uuid();
+
+/// Default title for a new note created inside a circuit: "Note #1", "Note #2"…
+/// A circuit note is never left empty, so the app's empty-note cleanup can
+/// never delete it (and orphan the branches beneath it).
+String defaultNoteTitle(int n) => 'Note #$n';
+
+/// Default title for the placeholder left behind when a node with children is
+/// deleted: "Placeholder #1", "Placeholder #2"… Also never empty.
+String defaultPlaceholderTitle(int n) => 'Placeholder #$n';
+
+/// A set of notes deleted together, for the Recently Deleted list. [top] is the
+/// member whose parent is not itself in the group (the root of the deleted
+/// subtree); [key] identifies the group for restore / permanent delete.
+typedef TrashGroup = ({String key, Note top, List<Note> members});
 
 /// How long deleted notes stay in Recently Deleted before being purged.
 const Duration kTrashRetention = Duration(days: 30);
@@ -156,8 +173,11 @@ class AppState extends ChangeNotifier {
     final set = <String>{};
     for (final n in _notes) {
       // Match the Home feed exactly: skip hidden folds, or a tag would appear
-      // in the picker yet filter down to an empty feed.
-      if (_isFeedNote(n) && !hidden.contains(n.spaceId)) set.addAll(n.tags);
+      // in the picker yet filter down to an empty feed. A shown branch reads
+      // its root's folder.
+      if (_isFeedNote(n) && !hidden.contains(_effectiveFolder(n))) {
+        set.addAll(n.tags);
+      }
     }
     final list = set.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -579,6 +599,7 @@ class AppState extends ChangeNotifier {
     _rev++;
     AppPalette.dark = effectiveDark;
     await _purgeExpiredTrash();
+    await _repairCircuits();
     await _importSharedInbox();
     _loaded = true;
     notifyListeners();
@@ -620,14 +641,65 @@ class AppState extends ChangeNotifier {
 
   // ---- Reads -------------------------------------------------------------
 
-  /// A note is on the "home feed" when it isn't archived, deleted, in Crypt,
-  /// a journal entry, or a book page (those live only in their own places).
+  /// A memoized id -> Note index, rebuilt when the library changes ([_rev]), so
+  /// resolving a branch's circuit root is O(1). A per-note feed/search predicate
+  /// must never scan [_notes] (that is O(n^2)); it reads this index instead.
+  Map<String, Note>? _idIndex;
+  int _idIndexRev = -1;
+  Map<String, Note> get _noteIndex {
+    if (_idIndex == null || _idIndexRev != _rev) {
+      final m = <String, Note>{};
+      for (final n in _notes) {
+        m[n.id] = n;
+      }
+      _idIndex = m;
+      _idIndexRev = _rev;
+    }
+    return _idIndex!;
+  }
+
+  /// The circuit's first note for [n]: [n] itself for a root or a non-circuit
+  /// note, else the root looked up by id; null when [n] is not in a circuit or
+  /// the root is missing.
+  Note? circuitRootOf(Note n) {
+    if (n.circuitId == null) return null;
+    if (n.circuitId == n.id) return n;
+    return _noteIndex[n.circuitId!];
+  }
+
+  /// [circuitRootOf], but falling back to [n] when the root is missing — the
+  /// form the effective-value predicates use so a stray branch still resolves.
+  Note _rootOrSelf(Note n) {
+    if (n.circuitId == null || n.circuitId == n.id) return n;
+    return _noteIndex[n.circuitId!] ?? n;
+  }
+
+  /// The folder a note effectively lives in: a branch inherits its root's.
+  String? _effectiveFolder(Note n) => _rootOrSelf(n).spaceId;
+
+  /// Live everywhere: not effectively archived, deleted or in Crypt, and not a
+  /// journal entry or a book page. A branch reads folder/archive/Crypt from its
+  /// root, so a whole circuit hides or archives together.
+  bool _isLiveNote(Note n) {
+    final r = _rootOrSelf(n);
+    return !r.archived &&
+        n.deletedAt == null &&
+        r.deletedAt == null &&
+        r.spaceId != kCryptSpaceId &&
+        n.journalDate == null &&
+        n.bookId == null;
+  }
+
+  /// A note on the Home feed: live, and either not a circuit branch or a branch
+  /// explicitly shown in the feed (never a placeholder).
   bool _isFeedNote(Note n) =>
-      !n.archived &&
-      n.deletedAt == null &&
-      n.spaceId != kCryptSpaceId &&
-      n.journalDate == null &&
-      n.bookId == null;
+      _isLiveNote(n) &&
+      (!n.isCircuitNode || (n.circuitShowInFeed && !n.circuitPlaceholder));
+
+  /// A note eligible for universal search: live and not a placeholder. Unlike
+  /// the feed this keeps every branch (shown in the feed or not), matching how
+  /// search reaches into hidden folders.
+  bool _isSearchableNote(Note n) => _isLiveNote(n) && !n.circuitPlaceholder;
 
   /// Ids of folds the user has flagged to keep out of the Home and Sparks feeds
   /// (their notes/sparks then show only inside the fold). Recomputed per feed
@@ -830,7 +902,7 @@ class AppState extends ChangeNotifier {
       _notesCache = _notes
           .where((n) =>
               _isFeedNote(n) &&
-              !hidden.contains(n.spaceId) &&
+              !hidden.contains(_effectiveFolder(n)) &&
               (tag == null || n.tags.contains(tag)))
           .toList()
         ..sort((a, b) {
@@ -843,11 +915,10 @@ class AppState extends ChangeNotifier {
     return _notesCache!;
   }
 
-  /// Notes eligible for universal search: the same population as the Home feed
-  /// but *including* hidden folds (search reaches everywhere except Crypt) and
-  /// never narrowed by the transient tag filter, so a note tucked inside a
-  /// hidden fold stays findable.
-  List<Note> get searchableNotes => _notes.where(_isFeedNote).toList();
+  /// Notes eligible for universal search: live notes (including branches and
+  /// notes in hidden folds — search reaches everywhere except Crypt) minus
+  /// placeholders, never narrowed by the transient tag filter.
+  List<Note> get searchableNotes => _notes.where(_isSearchableNote).toList();
 
   List<Note> get archivedNotes => _notes
       .where((n) =>
@@ -974,10 +1045,17 @@ class AppState extends ChangeNotifier {
   List<String> wikiLinkTitlesOf(Note n) =>
       parseWikiLinkTitles(_linkScanText(n));
 
-  /// A note that can be the target of a link (not deleted, not in Crypt, not a
-  /// book page — Crypt stays out of the graph so it never leaks through a link).
-  bool _isLinkableNote(Note n) =>
-      n.deletedAt == null && n.spaceId != kCryptSpaceId && n.bookId == null;
+  /// A note that can be the target of a link (not effectively deleted, not in
+  /// Crypt, not a book page, not a placeholder — Crypt stays out of the graph so
+  /// it never leaks through a link). A branch reads deletion/Crypt from its root.
+  bool _isLinkableNote(Note n) {
+    final r = _rootOrSelf(n);
+    return n.deletedAt == null &&
+        r.deletedAt == null &&
+        r.spaceId != kCryptSpaceId &&
+        n.bookId == null &&
+        !n.circuitPlaceholder;
+  }
 
   /// Resolves a `[[title]]` to a note: the most recently edited linkable note
   /// whose title matches (case-insensitively), or null if none exists yet.
@@ -1185,9 +1263,18 @@ class AppState extends ChangeNotifier {
   }
 
   /// Creates a fresh note titled [title] — used when a `[[link]]` points at a
-  /// note that doesn't exist yet — persists it, and returns it.
-  Future<Note> createLinkedNote(String title) async {
+  /// note that doesn't exist yet — persists it, and returns it. When
+  /// [circuitParent] is a note in a circuit, the new note is created as its last
+  /// child, so a link written from inside a circuit stays in the circuit. The
+  /// link's text is kept as the title (not renumbered to "Note #N").
+  Future<Note> createLinkedNote(String title, {Note? circuitParent}) async {
     final note = Note(title: title.trim());
+    if (circuitParent != null && circuitParent.inCircuit) {
+      note
+        ..circuitId = circuitParent.circuitId
+        ..circuitParentId = circuitParent.id
+        ..circuitOrder = circuitChildren(circuitParent.id).length;
+    }
     _notes.add(note);
     await _persist();
     return note;
@@ -1386,34 +1473,47 @@ class AppState extends ChangeNotifier {
   }
 
   /// Soft-delete: moves the note to Recently Deleted (kept ~30 days).
+  ///
+  /// Circuit-safe routing (the safety net behind the section 8.1 UI dialogs):
+  /// a first note deletes the whole circuit; a branch with live children leaves
+  /// a placeholder so those children stay attached; anything else deletes as it
+  /// always has. No caller can orphan a branch through this method.
   Future<void> deleteNote(String id) async {
     final idx = _notes.indexWhere((n) => n.id == id);
     if (idx < 0) return;
-    _notes[idx]
+    final note = _notes[idx];
+    if (note.isCircuitRoot) {
+      await deleteCircuit(id);
+      return;
+    }
+    if (note.isCircuitNode) {
+      if (circuitChildren(id).isNotEmpty) {
+        await deleteCircuitNodeKeepSlot(id);
+      } else {
+        await deleteCircuitSubtree(id);
+      }
+      return;
+    }
+    note
       ..deletedAt = DateTime.now()
       ..updatedAt = DateTime.now();
     unawaited(NotificationService.instance.cancel(id));
     await _persist();
   }
 
+  /// Restores a note from Recently Deleted, acting on its whole trash group so
+  /// a deleted subtree comes back together (see [restoreTrashGroup]).
   Future<void> restoreNote(String id) async {
-    final idx = _notes.indexWhere((n) => n.id == id);
-    if (idx < 0) return;
-    _notes[idx]
-      ..deletedAt = null
-      ..updatedAt = DateTime.now();
-    await _persist();
+    final note = noteById(id);
+    if (note == null) return;
+    await restoreTrashGroup(note.trashGroupId ?? id);
   }
 
-  /// Permanently removes a note and its images.
+  /// Permanently removes a note and its images, acting on its whole trash group.
   Future<void> permanentlyDeleteNote(String id) async {
-    final idx = _notes.indexWhere((n) => n.id == id);
-    if (idx < 0) return;
-    final note = _notes.removeAt(idx);
-    for (final path in note.imagePaths) {
-      await _storage.deleteImage(path);
-    }
-    await _persist();
+    final note = noteById(id);
+    if (note == null) return;
+    await permanentlyDeleteTrashGroup(note.trashGroupId ?? id);
   }
 
   Future<void> emptyTrash() async {
@@ -1471,8 +1571,862 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
+  // ---- Circuits ----------------------------------------------------------
+  //
+  // A circuit is a tree of notes: one "root" (the first note) and any number of
+  // "branches" placed under a parent. All of the logic below is headless — the
+  // map UI (later phases) only calls these. Structural changes (parent, order,
+  // placeholder flags, layout, show-in-feed) never bump [Note.updatedAt], so
+  // "Modified" reflects content only; rename and colour do bump it.
+
+  /// Reassigns [siblings]' orders to a contiguous 0..n-1 by their current order.
+  void _renumber(List<Note> siblings) {
+    siblings.sort((a, b) => a.circuitOrder.compareTo(b.circuitOrder));
+    for (var i = 0; i < siblings.length; i++) {
+      siblings[i].circuitOrder = i;
+    }
+  }
+
+  /// Parents [node] under [parentId] as the last child. The order is a sentinel
+  /// that sorts last; a following [_renumber] of that sibling list compacts it.
+  void _appendUnder(Note node, String? parentId) {
+    node.circuitParentId = parentId;
+    node.circuitOrder = 1 << 30;
+  }
+
+  /// A fresh, titled branch: a rich note with an empty body, or a Markdown note
+  /// whose source carries the title as its `# heading` (the Markdown screen
+  /// rebuilds the title from that heading, so a title field alone would be lost).
+  Note _makeCircuitNote({
+    required String circuitId,
+    required String? parentId,
+    required int order,
+    required String title,
+    required bool markdown,
+  }) {
+    final Note note = markdown
+        ? Note(
+            markdown: true,
+            title: title,
+            blocks: [NoteBlock(type: NoteBlockType.text, text: '# $title\n')],
+          )
+        : Note(
+            title: title,
+            blocks: [NoteBlock(type: NoteBlockType.text)],
+          );
+    return note
+      ..circuitId = circuitId
+      ..circuitParentId = parentId
+      ..circuitOrder = order;
+  }
+
+  /// Sets a note's title. For a Markdown note it also rewrites the source's
+  /// leading `# heading`, since that heading — not the title field — is what the
+  /// Markdown screen persists. Bumps [Note.updatedAt] (a rename is a content
+  /// change).
+  void _renameNoteTitle(Note note, String title) {
+    note.title = title;
+    if (note.markdown) {
+      for (final b in note.blocks) {
+        if (!b.isText) continue;
+        final lines = b.text.split('\n');
+        var replaced = false;
+        for (var i = 0; i < lines.length; i++) {
+          if (lines[i].trim().isEmpty) continue;
+          if (RegExp(r'^#\s+').hasMatch(lines[i].trimLeft())) {
+            lines[i] = '# $title';
+            replaced = true;
+          }
+          break; // only a leading heading is the title
+        }
+        b.text = replaced ? lines.join('\n') : '# $title\n${b.text}';
+        break;
+      }
+    }
+    note.updatedAt = DateTime.now();
+  }
+
+  /// The smallest n >= 1 whose `format(n)` is not the trimmed title of a live
+  /// note in this circuit. Shared by new-note titles and placeholder titles;
+  /// "Note" and "Placeholder" numbering are independent because the formats
+  /// differ. A number freed by a deleted note is reused.
+  String _nextNumberedTitle(String circuitId, String Function(int n) format) {
+    final used = <String>{};
+    for (final n in _notes) {
+      if (n.circuitId == circuitId && n.deletedAt == null) {
+        used.add(n.title.trim());
+      }
+    }
+    var i = 1;
+    while (used.contains(format(i).trim())) {
+      i++;
+    }
+    return format(i);
+  }
+
+  // ---- 6.1 Queries ----
+
+  /// A circuit's live children of [parentId], sorted by order.
+  List<Note> circuitChildren(String parentId) {
+    final out = <Note>[];
+    for (final n in _notes) {
+      if (n.circuitParentId == parentId && n.deletedAt == null) out.add(n);
+    }
+    out.sort((a, b) => a.circuitOrder.compareTo(b.circuitOrder));
+    return out;
+  }
+
+  /// A circuit's live nodes, root first.
+  List<Note> circuitNodes(String circuitId) {
+    final out = <Note>[];
+    for (final n in _notes) {
+      if (n.circuitId == circuitId && n.deletedAt == null) out.add(n);
+    }
+    out.sort((a, b) {
+      if (a.id == circuitId) return b.id == circuitId ? 0 : -1;
+      if (b.id == circuitId) return 1;
+      return a.circuitOrder.compareTo(b.circuitOrder);
+    });
+    return out;
+  }
+
+  /// Live branches of a circuit, excluding the root and placeholders.
+  int circuitBranchCount(String circuitId) {
+    var n = 0;
+    for (final note in _notes) {
+      if (note.circuitId == circuitId &&
+          note.id != circuitId &&
+          note.deletedAt == null &&
+          !note.circuitPlaceholder) {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /// Whether [ancestorId] is an ancestor of [nodeId] in its circuit.
+  bool isCircuitAncestor(String ancestorId, String nodeId) {
+    var cur = noteById(nodeId);
+    final seen = <String>{};
+    while (cur != null && cur.circuitParentId != null) {
+      final pid = cur.circuitParentId!;
+      if (pid == ancestorId) return true;
+      if (!seen.add(pid)) break; // cycle guard
+      cur = noteById(pid);
+    }
+    return false;
+  }
+
+  /// Root-to-node path (for a breadcrumb).
+  List<Note> circuitPath(String nodeId) {
+    final out = <Note>[];
+    var cur = noteById(nodeId);
+    final seen = <String>{};
+    while (cur != null && seen.add(cur.id)) {
+      out.add(cur);
+      final pid = cur.circuitParentId;
+      if (pid == null) break;
+      cur = noteById(pid);
+    }
+    return out.reversed.toList();
+  }
+
+  /// Live feed notes that could be placed into a circuit: not already in one,
+  /// not a journal entry, book page or Crypt note.
+  List<Note> notesPlaceableInCircuit() {
+    final out = <Note>[];
+    for (final n in _notes) {
+      if (_isFeedNote(n) && !n.inCircuit) out.add(n);
+    }
+    return out;
+  }
+
+  // ---- 6.2 Creation ----
+
+  /// An unsaved first note for a brand-new circuit (`circuitId == id`). It is
+  /// added to the library on its first save with content or its first branch.
+  Note newCircuitRootDraft() {
+    final note = Note(blocks: [NoteBlock(type: NoteBlockType.text)]);
+    note.circuitId = note.id;
+    return note;
+  }
+
+  /// Adds [root] to the library if it isn't there yet (called before the first
+  /// **+** or **map** on an unsaved first note).
+  Future<void> ensureCircuitRootSaved(Note root) async {
+    if (_notes.any((n) => n.id == root.id)) return;
+    _notes.add(root);
+    await _persist();
+  }
+
+  /// Adds a titled branch as the last child of [parentId].
+  Future<Note> addCircuitChild(
+    String parentId, {
+    bool markdown = false,
+    String Function(int n) noteTitle = defaultNoteTitle,
+  }) async {
+    final parent = noteById(parentId);
+    if (parent == null || !parent.inCircuit) {
+      throw StateError('addCircuitChild: parent is not in a circuit');
+    }
+    final circuitId = parent.circuitId!;
+    final child = _makeCircuitNote(
+      circuitId: circuitId,
+      parentId: parentId,
+      order: circuitChildren(parentId).length,
+      title: _nextNumberedTitle(circuitId, noteTitle),
+      markdown: markdown,
+    );
+    _notes.add(child);
+    await _persist();
+    return child;
+  }
+
+  /// Adds a titled branch right after [nodeId] among its siblings. On the first
+  /// note (which has no siblings) this adds a child instead.
+  Future<Note> addCircuitSibling(
+    String nodeId, {
+    bool markdown = false,
+    String Function(int n) noteTitle = defaultNoteTitle,
+  }) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.inCircuit) {
+      throw StateError('addCircuitSibling: node is not in a circuit');
+    }
+    if (node.isCircuitRoot) {
+      return addCircuitChild(nodeId, markdown: markdown, noteTitle: noteTitle);
+    }
+    final circuitId = node.circuitId!;
+    final parentId = node.circuitParentId!;
+    final sib = _makeCircuitNote(
+      circuitId: circuitId,
+      parentId: parentId,
+      order: 0,
+      title: _nextNumberedTitle(circuitId, noteTitle),
+      markdown: markdown,
+    );
+    _notes.add(sib);
+    final sibs = circuitChildren(parentId)..removeWhere((n) => n.id == sib.id);
+    final anchor = sibs.indexWhere((s) => s.id == nodeId);
+    sibs.insert(anchor + 1, sib);
+    for (var i = 0; i < sibs.length; i++) {
+      sibs[i].circuitOrder = i;
+    }
+    await _persist();
+    return sib;
+  }
+
+  // ---- 6.3 Structure (no updatedAt bump, except rename/colour) ----
+
+  /// Moves a node up (-1) or down (+1) among its siblings; clamps at the ends.
+  Future<void> moveCircuitNode(String nodeId, int delta) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.isCircuitNode) return;
+    final sibs = circuitChildren(node.circuitParentId!);
+    final i = sibs.indexWhere((s) => s.id == nodeId);
+    if (i < 0) return;
+    final j = (i + delta).clamp(0, sibs.length - 1);
+    if (i == j) return;
+    sibs.insert(j, sibs.removeAt(i));
+    for (var k = 0; k < sibs.length; k++) {
+      sibs[k].circuitOrder = k;
+    }
+    await _persist();
+  }
+
+  /// Makes a node the last child of its previous sibling. No-op on a first
+  /// child. The node's whole subtree moves with it.
+  Future<void> indentCircuitNode(String nodeId) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.isCircuitNode) return;
+    final oldParent = node.circuitParentId!;
+    final sibs = circuitChildren(oldParent);
+    final i = sibs.indexWhere((s) => s.id == nodeId);
+    if (i <= 0) return;
+    final prev = sibs[i - 1];
+    _appendUnder(node, prev.id);
+    _renumber(circuitChildren(oldParent));
+    _renumber(circuitChildren(prev.id));
+    await _persist();
+  }
+
+  /// Makes a node a sibling of its parent, right after it. No-op when the parent
+  /// is the root (a branch can never sit beside the first note).
+  Future<void> outdentCircuitNode(String nodeId) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.isCircuitNode) return;
+    final parent = noteById(node.circuitParentId!);
+    if (parent == null || parent.circuitParentId == null) return;
+    final oldParent = parent.id;
+    node.circuitParentId = parent.circuitParentId;
+    final gsibs = circuitChildren(node.circuitParentId!)
+      ..removeWhere((n) => n.id == nodeId);
+    final pIdx = gsibs.indexWhere((s) => s.id == parent.id);
+    gsibs.insert(pIdx + 1, node);
+    for (var i = 0; i < gsibs.length; i++) {
+      gsibs[i].circuitOrder = i;
+    }
+    _renumber(circuitChildren(oldParent));
+    await _persist();
+  }
+
+  /// Moves a node (with its subtree) to be the last child of [newParentId].
+  /// Returns false when the target is the node itself, one of its descendants,
+  /// in another circuit, or when the node is the root.
+  Future<bool> moveCircuitNodeTo(String nodeId, String newParentId) async {
+    final node = noteById(nodeId);
+    final newParent = noteById(newParentId);
+    if (node == null || newParent == null) return false;
+    if (node.isCircuitRoot) return false;
+    if (nodeId == newParentId) return false;
+    if (node.circuitId != newParent.circuitId) return false;
+    if (isCircuitAncestor(nodeId, newParentId)) return false;
+    final oldParent = node.circuitParentId;
+    _appendUnder(node, newParentId);
+    if (oldParent != null && oldParent != newParentId) {
+      _renumber(circuitChildren(oldParent));
+    }
+    _renumber(circuitChildren(newParentId));
+    await _persist();
+    return true;
+  }
+
+  /// A node takes a placeholder's place: it (and its subtree) detach from where
+  /// they were, adopt the placeholder's parent and order, and take on the
+  /// placeholder's children after their own. The placeholder — which holds only
+  /// its title — is removed outright (it skips the trash). [nodeId] may be a
+  /// branch of the same circuit or a note from [notesPlaceableInCircuit]. Invalid
+  /// when the node is the placeholder itself, the root, or an ancestor of the
+  /// placeholder.
+  Future<bool> fillPlaceholder(String slotId, String nodeId) async {
+    final slot = noteById(slotId);
+    final node = noteById(nodeId);
+    if (slot == null || node == null || !slot.circuitPlaceholder) return false;
+    if (nodeId == slotId) return false;
+    if (node.isCircuitRoot) return false;
+    if (isCircuitAncestor(nodeId, slotId)) return false;
+    final circuitId = slot.circuitId!;
+    if (!node.inCircuit) {
+      if (!notesPlaceableInCircuit().any((n) => n.id == nodeId)) return false;
+      node
+        ..spaceId = null
+        ..circuitShowInFeed = false;
+    } else if (node.circuitId != circuitId) {
+      return false;
+    }
+    final oldParent = node.circuitParentId;
+    node
+      ..circuitId = circuitId
+      ..circuitParentId = slot.circuitParentId
+      ..circuitOrder = slot.circuitOrder;
+    // Adopt the placeholder's children after the node's own. Computed *after*
+    // the reparent above, so a node that was itself a child of the slot is no
+    // longer counted among the slot's children.
+    final base = circuitChildren(nodeId).length;
+    final slotChildren = circuitChildren(slotId);
+    for (var i = 0; i < slotChildren.length; i++) {
+      slotChildren[i].circuitParentId = nodeId;
+      slotChildren[i].circuitOrder = base + i;
+    }
+    _notes.removeWhere((n) => n.id == slotId);
+    if (oldParent != null) _renumber(circuitChildren(oldParent));
+    _renumber(circuitChildren(nodeId));
+    if (slot.circuitParentId != null) {
+      _renumber(circuitChildren(slot.circuitParentId!));
+    }
+    await _persist();
+    return true;
+  }
+
+  Future<void> setCircuitShowInFeed(String nodeId, bool show) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.isCircuitNode || node.circuitPlaceholder) return;
+    if (node.circuitShowInFeed == show) return;
+    node.circuitShowInFeed = show;
+    await _persist();
+  }
+
+  Future<void> setCircuitLayout(String rootId, String mode) async {
+    const valid = {'ltr', 'ttb', 'radial'};
+    if (!valid.contains(mode)) return;
+    final root = noteById(rootId);
+    if (root == null || !root.isCircuitRoot || root.circuitLayout == mode) {
+      return;
+    }
+    root.circuitLayout = mode;
+    await _persist();
+  }
+
+  Future<void> renameCircuitNode(String nodeId, String title) async {
+    final node = noteById(nodeId);
+    if (node == null) return;
+    _renameNoteTitle(node, title);
+    await _persist();
+  }
+
+  Future<void> setCircuitNodeColor(String nodeId, int? color) async {
+    final node = noteById(nodeId);
+    if (node == null) return;
+    node
+      ..colorValue = color
+      ..updatedAt = DateTime.now();
+    await _persist();
+  }
+
+  // ---- 6.4 Existing notes ----
+
+  /// Places an existing Home note under [parentId] as its last child. Clears the
+  /// note's folder and show-in-feed so it leaves the Home feed and follows the
+  /// circuit. Only notes from [notesPlaceableInCircuit] are valid.
+  Future<bool> placeNoteInCircuit(String noteId, String parentId) async {
+    final note = noteById(noteId);
+    final parent = noteById(parentId);
+    if (note == null || parent == null || !parent.inCircuit) return false;
+    if (!notesPlaceableInCircuit().any((n) => n.id == noteId)) return false;
+    note
+      ..spaceId = null
+      ..circuitShowInFeed = false
+      ..circuitId = parent.circuitId;
+    _appendUnder(note, parentId);
+    _renumber(circuitChildren(parentId));
+    await _persist();
+    return true;
+  }
+
+  /// Removes a branch from its circuit; it becomes a standalone Home note. Its
+  /// children move up to its parent, taking its slot. The root can't be removed.
+  Future<void> removeFromCircuit(String nodeId) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.isCircuitNode) return;
+    final parentId = node.circuitParentId!;
+    final parentSibs = circuitChildren(parentId);
+    final idx = parentSibs.indexWhere((s) => s.id == nodeId);
+    final children = circuitChildren(nodeId);
+    for (final c in children) {
+      c.circuitParentId = parentId;
+    }
+    node
+      ..circuitId = null
+      ..circuitParentId = null
+      ..circuitOrder = 0
+      ..circuitShowInFeed = false
+      ..circuitPlaceholder = false
+      ..circuitPlaceholderFor = null;
+    if (idx >= 0) {
+      parentSibs
+        ..removeAt(idx)
+        ..insertAll(idx, children);
+    }
+    for (var i = 0; i < parentSibs.length; i++) {
+      parentSibs[i].circuitOrder = i;
+    }
+    await _persist();
+  }
+
+  // ---- 6.5 Deletion and trash ----
+
+  /// A node and its live descendants, the node first.
+  List<Note> _circuitSubtree(String nodeId) {
+    final root = noteById(nodeId);
+    if (root == null) return const [];
+    final out = <Note>[root];
+    final stack = <String>[nodeId];
+    final seen = <String>{nodeId};
+    while (stack.isNotEmpty) {
+      final pid = stack.removeLast();
+      for (final c in _notes) {
+        if (c.circuitParentId == pid &&
+            c.deletedAt == null &&
+            seen.add(c.id)) {
+          out.add(c);
+          stack.add(c.id);
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Soft-deletes a whole circuit (root and every node) as one trash group.
+  Future<void> deleteCircuit(String rootId) async {
+    final root = noteById(rootId);
+    if (root == null || !root.isCircuitRoot) return;
+    final now = DateTime.now();
+    final group = _uuid.v4();
+    for (final n in _notes) {
+      if (n.circuitId == rootId && n.deletedAt == null) {
+        n
+          ..deletedAt = now
+          ..updatedAt = now
+          ..trashGroupId = group;
+        unawaited(NotificationService.instance.cancel(n.id));
+      }
+    }
+    await _persist();
+  }
+
+  /// Soft-deletes a node and its descendants as one trash group.
+  Future<void> deleteCircuitSubtree(String nodeId) async {
+    final members = _circuitSubtree(nodeId);
+    if (members.isEmpty) return;
+    final now = DateTime.now();
+    // A single node is a group of one (keyed by its id); a larger subtree
+    // shares a generated group id.
+    final group = members.length == 1 ? null : _uuid.v4();
+    for (final m in members) {
+      m
+        ..deletedAt = now
+        ..updatedAt = now
+        ..trashGroupId = group;
+      unawaited(NotificationService.instance.cancel(m.id));
+    }
+    await _persist();
+  }
+
+  /// Soft-deletes a single node but leaves a titled placeholder in its place,
+  /// keeping the children under it. The deleted node is a group of one.
+  Future<void> deleteCircuitNodeKeepSlot(
+    String nodeId, {
+    String Function(int n) placeholderTitle = defaultPlaceholderTitle,
+  }) async {
+    final node = noteById(nodeId);
+    if (node == null || !node.isCircuitNode) return;
+    final circuitId = node.circuitId!;
+    final now = DateTime.now();
+    final placeholder =
+        Note(title: _nextNumberedTitle(circuitId, placeholderTitle))
+          ..circuitId = circuitId
+          ..circuitParentId = node.circuitParentId
+          ..circuitOrder = node.circuitOrder
+          ..circuitPlaceholder = true
+          ..circuitPlaceholderFor = node.id;
+    _notes.add(placeholder);
+    for (final c in circuitChildren(nodeId)) {
+      c.circuitParentId = placeholder.id;
+    }
+    node
+      ..deletedAt = now
+      ..updatedAt = now
+      ..trashGroupId = null;
+    unawaited(NotificationService.instance.cancel(node.id));
+    await _persist();
+  }
+
+  /// Removes a placeholder outright (it skips the trash); its children move up
+  /// to its parent, taking its slot.
+  Future<void> deletePlaceholder(String slotId) async {
+    final slot = noteById(slotId);
+    if (slot == null || !slot.circuitPlaceholder) return;
+    final parentId = slot.circuitParentId;
+    final children = circuitChildren(slotId);
+    List<Note>? parentSibs;
+    var idx = -1;
+    if (parentId != null) {
+      parentSibs = circuitChildren(parentId);
+      idx = parentSibs.indexWhere((s) => s.id == slotId);
+    }
+    for (final c in children) {
+      c.circuitParentId = parentId;
+    }
+    _notes.removeWhere((n) => n.id == slotId);
+    if (parentSibs != null && idx >= 0) {
+      parentSibs
+        ..removeAt(idx)
+        ..insertAll(idx, children);
+      for (var i = 0; i < parentSibs.length; i++) {
+        parentSibs[i].circuitOrder = i;
+      }
+    }
+    await _persist();
+  }
+
+  /// The trash grouped for the Recently Deleted list. A note deleted alone is a
+  /// group of one, keyed by its id; a subtree or a whole circuit shares a key.
+  List<TrashGroup> get deletedNoteGroups {
+    final byKey = <String, List<Note>>{};
+    for (final n in _notes) {
+      if (n.deletedAt == null) continue;
+      byKey.putIfAbsent(n.trashGroupId ?? n.id, () => []).add(n);
+    }
+    final groups = <TrashGroup>[];
+    byKey.forEach((key, members) {
+      final ids = members.map((m) => m.id).toSet();
+      var top = members.first;
+      for (final m in members) {
+        final pid = m.circuitParentId;
+        if (pid == null || !ids.contains(pid)) {
+          top = m;
+          break;
+        }
+      }
+      groups.add((key: key, top: top, members: members));
+    });
+    groups.sort((a, b) => b.top.deletedAt!.compareTo(a.top.deletedAt!));
+    return groups;
+  }
+
+  /// Restores a trash group (see section 6.5 rules 1-7).
+  Future<void> restoreTrashGroup(String key) async {
+    TrashGroup? group;
+    for (final g in deletedNoteGroups) {
+      if (g.key == key) {
+        group = g;
+        break;
+      }
+    }
+    if (group == null) return;
+    final members = group.members;
+    final top = group.top;
+    final now = DateTime.now();
+
+    void clearDeleted() {
+      for (final m in members) {
+        m
+          ..deletedAt = null
+          ..updatedAt = now
+          ..trashGroupId = null;
+      }
+    }
+
+    // Rule 1: not a circuit group — clear deletedAt, as today.
+    if (!members.any((m) => m.inCircuit)) {
+      clearDeleted();
+      await _persist();
+      return;
+    }
+
+    final circuitId = top.circuitId!;
+
+    // Rule 2: top is a root — restore every member.
+    if (top.id == circuitId) {
+      clearDeleted();
+      await _persist();
+      return;
+    }
+
+    // Rule 3: top is a branch whose root is itself in the trash — restore the
+    // root's group first, then carry on.
+    final trashedRoot = noteById(circuitId);
+    if (trashedRoot != null && trashedRoot.deletedAt != null) {
+      await restoreTrashGroup(trashedRoot.trashGroupId ?? trashedRoot.id);
+    }
+
+    final liveRoot = noteById(circuitId);
+
+    // Rule 7: the root is gone entirely — top becomes a new circuit's first note.
+    if (liveRoot == null || liveRoot.deletedAt != null) {
+      clearDeleted();
+      for (final m in members) {
+        m.circuitId = top.id;
+      }
+      top
+        ..circuitParentId = null
+        ..circuitOrder = 0
+        ..circuitShowInFeed = false;
+      _renumber(circuitChildren(top.id));
+      await _persist();
+      return;
+    }
+
+    // The root is live: restore the group, then re-home the top.
+    clearDeleted();
+
+    // Rule 4: a live placeholder stands in for the top — it takes that slot.
+    Note? placeholder;
+    for (final n in _notes) {
+      if (n.circuitPlaceholder &&
+          n.deletedAt == null &&
+          n.circuitPlaceholderFor == top.id) {
+        placeholder = n;
+        break;
+      }
+    }
+    if (placeholder != null) {
+      await fillPlaceholder(placeholder.id, top.id);
+      return; // fillPlaceholder persists
+    }
+
+    // Rule 5: the top's parent is live — append the top as its last child.
+    final parent =
+        top.circuitParentId == null ? null : noteById(top.circuitParentId!);
+    if (parent != null &&
+        parent.deletedAt == null &&
+        parent.circuitId == circuitId) {
+      _appendUnder(top, parent.id);
+      _renumber(circuitChildren(parent.id));
+      await _persist();
+      return;
+    }
+
+    // Rule 6: otherwise append the top as the root's last child.
+    _appendUnder(top, liveRoot.id);
+    _renumber(circuitChildren(liveRoot.id));
+    await _persist();
+  }
+
+  /// Permanently deletes a whole trash group and its images.
+  Future<void> permanentlyDeleteTrashGroup(String key) async {
+    TrashGroup? group;
+    for (final g in deletedNoteGroups) {
+      if (g.key == key) {
+        group = g;
+        break;
+      }
+    }
+    if (group == null) return;
+    final ids = group.members.map((m) => m.id).toSet();
+    for (final m in group.members) {
+      for (final path in m.imagePaths) {
+        await _storage.deleteImage(path);
+      }
+    }
+    _notes.removeWhere((n) => ids.contains(n.id));
+    await _persist();
+  }
+
+  // ---- 6.6 Integrity repair ----
+
+  /// Guards against bad circuit data (from restores, older builds or bugs). Runs
+  /// on load, right after [_purgeExpiredTrash]. Never bumps [Note.updatedAt] and
+  /// persists only if it actually changed something.
+  Future<void> _repairCircuits() async {
+    var changed = false;
+    final byId = <String, Note>{for (final n in _notes) n.id: n};
+
+    // 1. A branch with no parent becomes the root of its own circuit.
+    for (final n in _notes) {
+      if (n.circuitId != null &&
+          n.circuitId != n.id &&
+          n.circuitParentId == null) {
+        n.circuitId = n.id;
+        changed = true;
+      }
+    }
+
+    // 2. Branch hygiene: a branch never carries its own folder or archive.
+    for (final n in _notes) {
+      if (n.circuitId == null || n.circuitId == n.id) continue;
+      if (n.spaceId != null) {
+        n.spaceId = null;
+        changed = true;
+      }
+      if (n.archived) {
+        n.archived = false;
+        changed = true;
+      }
+    }
+
+    // 3. Repair each circuit's structure over its live members. A first note
+    // found in the Crypt stays there; its branches are kept hidden by the
+    // effective-folder checks, never moved out.
+    final circuits = <String, List<Note>>{};
+    for (final n in _notes) {
+      if (n.circuitId != null && n.deletedAt == null) {
+        circuits.putIfAbsent(n.circuitId!, () => []).add(n);
+      }
+    }
+
+    circuits.forEach((circuitId, members) {
+      // 3a. Ensure a valid live root; else promote the topmost surviving
+      // ancestor and re-key the circuit onto it.
+      Note? existingRoot = byId[circuitId];
+      if (existingRoot != null &&
+          (existingRoot.circuitId != existingRoot.id ||
+              existingRoot.deletedAt != null)) {
+        existingRoot = null; // not a valid, live root
+      }
+      final Note root;
+      if (existingRoot != null) {
+        root = existingRoot;
+      } else {
+        final ids = members.map((m) => m.id).toSet();
+        Note? promote;
+        for (final m in members) {
+          if (m.circuitParentId == null || !ids.contains(m.circuitParentId)) {
+            if (promote == null || m.createdAt.isBefore(promote.createdAt)) {
+              promote = m;
+            }
+          }
+        }
+        promote ??= members
+            .reduce((a, b) => a.createdAt.isBefore(b.createdAt) ? a : b);
+        for (final m in members) {
+          if (m.circuitId != promote.id) {
+            m.circuitId = promote.id;
+            changed = true;
+          }
+        }
+        promote.circuitParentId = null;
+        root = promote;
+        changed = true;
+      }
+      final rootId = root.id;
+
+      // 3b. Any branch with a missing / foreign / deleted parent, or caught in
+      // a cycle, moves directly under the root.
+      for (final m in members) {
+        if (m.id == rootId) continue;
+        var bad = false;
+        final pid = m.circuitParentId;
+        final parent = pid == null ? null : byId[pid];
+        if (parent == null ||
+            parent.circuitId != rootId ||
+            parent.deletedAt != null) {
+          bad = true;
+        } else {
+          final seen = <String>{m.id};
+          Note? cur = parent;
+          while (cur != null && cur.id != rootId) {
+            if (!seen.add(cur.id)) {
+              bad = true;
+              break;
+            }
+            final ppid = cur.circuitParentId;
+            cur = ppid == null ? null : byId[ppid];
+          }
+        }
+        if (bad && m.circuitParentId != rootId) {
+          m.circuitParentId = rootId;
+          changed = true;
+        }
+      }
+
+      // 3c. Renumber each sibling list 0..n-1, stable by order then createdAt.
+      final byParent = <String, List<Note>>{};
+      for (final m in members) {
+        if (m.id == rootId) continue;
+        byParent.putIfAbsent(m.circuitParentId ?? rootId, () => []).add(m);
+      }
+      byParent.forEach((_, sibs) {
+        sibs.sort((a, b) {
+          final c = a.circuitOrder.compareTo(b.circuitOrder);
+          return c != 0 ? c : a.createdAt.compareTo(b.createdAt);
+        });
+        for (var i = 0; i < sibs.length; i++) {
+          if (sibs[i].circuitOrder != i) {
+            sibs[i].circuitOrder = i;
+            changed = true;
+          }
+        }
+      });
+
+      // 3d. A placeholder blanked of its title gets a numbered one again.
+      for (final m in members) {
+        if (m.circuitPlaceholder && m.title.trim().isEmpty) {
+          m.title = _nextNumberedTitle(rootId, defaultPlaceholderTitle);
+          changed = true;
+        }
+      }
+    });
+
+    if (changed) await _persist();
+  }
+
   Future<void> moveNoteToSpace(String noteId, String? spaceId) async {
     final note = _notes.firstWhere((n) => n.id == noteId);
+    // A branch never carries its own folder — it follows the first note. And a
+    // circuit's first note can never be filed into the Crypt (section 6.8).
+    if (note.isCircuitNode) return;
+    if (note.isCircuitRoot && spaceId == kCryptSpaceId) return;
     note.spaceId = spaceId;
     note.updatedAt = DateTime.now();
     await _persist();
@@ -1539,6 +2493,7 @@ class AppState extends ChangeNotifier {
   Future<void> bulkArchiveNotes(Set<String> ids, bool archived) async {
     for (final n in _notes) {
       if (!ids.contains(n.id)) continue;
+      if (n.isCircuitNode) continue; // a branch inherits archive from its root
       n
         ..archived = archived
         ..updatedAt = DateTime.now();
@@ -1549,6 +2504,8 @@ class AppState extends ChangeNotifier {
   Future<void> bulkMoveNotes(Set<String> ids, String? spaceId) async {
     for (final n in _notes) {
       if (!ids.contains(n.id)) continue;
+      if (n.isCircuitNode) continue; // a branch follows its root's folder
+      if (n.isCircuitRoot && spaceId == kCryptSpaceId) continue; // no Crypt
       n
         ..spaceId = spaceId
         ..updatedAt = DateTime.now();
@@ -1558,12 +2515,21 @@ class AppState extends ChangeNotifier {
 
   Future<void> bulkDeleteNotes(Set<String> ids) async {
     final now = DateTime.now();
+    final roots = <String>[];
     for (final n in _notes) {
       if (!ids.contains(n.id)) continue;
+      if (n.isCircuitRoot) {
+        roots.add(n.id); // cascade the whole circuit below
+        continue;
+      }
+      if (n.isCircuitNode) continue; // branches are managed on the circuit map
       n
         ..deletedAt = now
         ..updatedAt = now;
       unawaited(NotificationService.instance.cancel(n.id));
+    }
+    for (final rootId in roots) {
+      await deleteCircuit(rootId);
     }
     await _persist();
   }
