@@ -153,7 +153,7 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
             ),
             Icon(Icons.arrow_drop_down_rounded,
@@ -314,7 +314,7 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
                   style: const TextStyle(
                       fontSize: 40,
                       height: 1.0,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: _ink)),
               const SizedBox(width: 10),
               Padding(
@@ -347,7 +347,7 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
           children: [
             Text('$value',
                 style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w800, color: _ink)),
+                    fontSize: 20, fontWeight: FontWeight.w700, color: _ink)),
             const SizedBox(height: 2),
             Text(label,
                 style: TextStyle(
@@ -610,7 +610,7 @@ class _CurveGraphState extends State<_CurveGraph> {
             Text('$pct%',
                 style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: Colors.white)),
             if (label.isNotEmpty)
               Text(label,
@@ -649,7 +649,7 @@ class _CurveGraphState extends State<_CurveGraph> {
             maxLines: 1,
             style: const TextStyle(
                 fontSize: 9.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: Colors.white)),
       ),
     );
@@ -936,7 +936,7 @@ class _MetricTile extends StatelessWidget {
               Text(value,
                   style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
             ],
           ),

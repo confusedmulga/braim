@@ -252,7 +252,7 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
               _isNote ? context.t.saveNoteToBraim : context.t.saveToBraim,
               style: TextStyle(
                 fontSize: 16.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppPalette.inkPrimary,
               ),
             ),

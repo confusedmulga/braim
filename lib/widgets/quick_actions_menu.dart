@@ -143,7 +143,7 @@ class SelectionActionBar extends StatelessWidget {
               Text(
                 '$count',
                 style: TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     fontSize: 16,
                     color: AppPalette.inkPrimary),
               ),

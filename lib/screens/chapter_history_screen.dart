@@ -228,7 +228,7 @@ class _Card extends StatelessWidget {
                         _label(context),
                         style: TextStyle(
                           fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: _chipColor(context),
                         ),
                       ),
@@ -295,7 +295,7 @@ class _DeltaBadge extends StatelessWidget {
         '${up ? '+' : '−'}${delta.abs()}',
         style: TextStyle(
           fontSize: 11.5,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: color,
         ),
       ),
@@ -321,7 +321,7 @@ class _Empty extends StatelessWidget {
             Text(context.t.versionHistoryEmpty,
                 style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary)),
             const SizedBox(height: 6),
             Text(
@@ -386,7 +386,7 @@ class _VersionPreviewScreen extends StatelessWidget {
               style: TextStyle(
                 fontFamily: fontFamily ?? kNoteHeadingFont,
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppPalette.inkPrimary,
               ),
             ),

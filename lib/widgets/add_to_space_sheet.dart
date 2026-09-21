@@ -52,7 +52,7 @@ class _AddToSpaceSheet extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
                 child: Text(context.t.addToName(spaceName),
                     style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontSize: 16,
                         color: AppPalette.inkPrimary)),
               ),

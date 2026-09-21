@@ -162,7 +162,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                     Text(context.t.textSize,
                         style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppPalette.inkPrimary)),
                     const SizedBox(height: 16),
                     Row(
@@ -782,7 +782,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                                 style: TextStyle(
                                   fontFamily: kNoteHeadingFont,
                                   fontSize: 24,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                   color: AppPalette.inkPrimary,
                                 ),
                               ),
@@ -795,7 +795,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                               style: TextStyle(
                                 fontFamily: kNoteHeadingFont,
                                 fontSize: 24,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: AppPalette.inkPrimary,
                               ),
                               maxLines: null,
@@ -807,7 +807,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                                   color: AppPalette.inkSecondary
                                       .withValues(alpha: 0.6),
                                   fontSize: 24,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                 ),
                                 border: InputBorder.none,
                               ),
@@ -828,7 +828,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                           fontFamily: titleFont,
                           fontSize: 24,
                           height: 1.15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary,
                         ),
                       ),
@@ -845,7 +845,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                         style: TextStyle(
                           fontFamily: titleFont,
                           fontSize: 24,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary,
                         ),
                         maxLines: null,
@@ -859,7 +859,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                             color:
                                 AppPalette.inkSecondary.withValues(alpha: 0.6),
                             fontSize: 24,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                           ),
                           border: InputBorder.none,
                         ),

@@ -23,8 +23,6 @@ String _lastBackupText(BuildContext context, DateTime? last) {
   return context.t.lastBackupAgo(DateTime.now().difference(last).inDays);
 }
 
-/// The connected Google account's avatar — the profile photo, falling back to a
-/// generic account icon while it loads or when none is available.
 /// "2026-09-02 14:03 · 4.2 MB" for a backup row, from a date and byte size.
 String _backupMetaLine(DateTime? modified, int? size) {
   final parts = <String>[];
@@ -110,7 +108,7 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Text(t.devicePickTitle,
                   style: TextStyle(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       fontSize: 16,
                       color: AppPalette.inkPrimary)),
             ),
@@ -386,7 +384,7 @@ class SettingsScreen extends StatelessWidget {
                       Text(context.t.settings,
                           style: TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: AppPalette.inkPrimary)),
                     ],
                   ),
@@ -896,7 +894,7 @@ class SettingsScreen extends StatelessWidget {
                           children: [
                             Text(context.t.appTitle,
                                 style: TextStyle(
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w700,
                                     fontSize: 16,
                                     color: AppPalette.inkPrimary)),
                             const SizedBox(height: 4),

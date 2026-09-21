@@ -78,7 +78,7 @@ class _SidePaneState extends State<SidePane> {
                   Text(context.t.appTitle,
                       style: TextStyle(
                           fontSize: 22,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary)),
                 ],
               ),

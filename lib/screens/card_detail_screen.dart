@@ -224,7 +224,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                     Text(context.t.textSize,
                         style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppPalette.inkPrimary)),
                     const SizedBox(height: 16),
                     Row(
@@ -514,7 +514,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                         style: TextStyle(
                           fontFamily: kNoteHeadingFont,
                           fontSize: 22,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary,
                         ),
                       ),
@@ -527,7 +527,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                       style: TextStyle(
                         fontFamily: kNoteHeadingFont,
                         fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppPalette.inkPrimary,
                       ),
                       maxLines: null,
@@ -540,7 +540,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                           color:
                               AppPalette.inkSecondary.withValues(alpha: 0.6),
                           fontSize: 22,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                         border: InputBorder.none,
                       ),

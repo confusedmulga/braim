@@ -208,7 +208,7 @@ class _ReflexesScreenState extends State<ReflexesScreen> {
             style: TextStyle(
               fontSize: 12.5,
               letterSpacing: 0.3,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: selected ? Colors.white : color,
             ),
           ),
@@ -316,7 +316,7 @@ class _PomodoroCard extends StatelessWidget {
                   Text(context.t.pomodoro,
                       style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary)),
                   const SizedBox(height: 1),
                   Text(context.t.focusTimer,
@@ -363,7 +363,7 @@ class _ReflexHeader extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 44,
                       height: 1,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
           const SizedBox(width: 6),
           Container(
@@ -387,7 +387,7 @@ class _ReflexHeader extends StatelessWidget {
               Text(DateFormat('EEEE').format(date),
                   style: TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
             ],
           ),
@@ -409,7 +409,7 @@ class _ReflexHeader extends StatelessWidget {
                 Text('${(progress! * 100).round()}%',
                     style: const TextStyle(
                         fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppPalette.journalAccent)),
                 const SizedBox(width: 8),
               ],
@@ -558,7 +558,7 @@ Future<void> _pickImpulseColor(
                 padding: const EdgeInsets.only(left: 4, bottom: 12),
                 child: Text(context.t.noteColor,
                     style: TextStyle(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontSize: 16,
                         color: AppPalette.inkPrimary)),
               ),
@@ -639,7 +639,7 @@ class _ImpulseCard extends StatelessWidget {
         ),
         child: Text(label,
             style: TextStyle(
-                fontSize: 10.5, fontWeight: FontWeight.w800, color: color)),
+                fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
       );
 
   @override
@@ -681,7 +681,7 @@ class _ImpulseCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 16.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary,
                   ),
                 ),
@@ -712,7 +712,7 @@ class _ImpulseCard extends StatelessWidget {
               Text('$pct%',
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: barColor,
                   )),
             ],
@@ -993,7 +993,7 @@ class _ImpulseDetailScreenState extends State<ImpulseDetailScreen> {
                     Text('$pct%',
                         style: TextStyle(
                             fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: barColor)),
                   ],
                 ),
@@ -1167,7 +1167,7 @@ class _BulkTimeSheetState extends State<_BulkTimeSheet> {
               Text(context.t.changeAllTimes,
                   style: TextStyle(
                       fontSize: 17,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
               const SizedBox(height: 4),
               Text(context.t.changeAllTimesHint,
@@ -2282,7 +2282,7 @@ class _DailyReminderCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppPalette.inkPrimary)),
               ),
               if (editMode) ...[
@@ -2378,7 +2378,7 @@ class _SectionTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               fontSize: 15.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: AppPalette.inkPrimary),
                         ),
                         if (_dateSpanLabel(
@@ -2579,7 +2579,7 @@ class _SubsectionTree extends StatelessWidget {
                     color: done ? green : ink,
                     fontSize: 16,
                     letterSpacing: 0.5,
-                    fontWeight: FontWeight.w900)),
+                    fontWeight: FontWeight.w700)),
             Expanded(
               child: Text(
                 title,

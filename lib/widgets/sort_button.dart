@@ -46,7 +46,7 @@ class _SortSheet extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(t.sortBy,
                       style: TextStyle(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           fontSize: 16,
                           color: AppPalette.inkPrimary)),
                 ),

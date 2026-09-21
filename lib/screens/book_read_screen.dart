@@ -875,7 +875,7 @@ class _BookReadScreenState extends State<BookReadScreen> {
                           Text(context.t.contentsSection,
                               style: TextStyle(
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                   color: AppPalette.inkPrimary)),
                           const Spacer(),
                           Text('${(_progressOf(_prog.value) * 100).round()}%',
@@ -1168,7 +1168,7 @@ class _ReaderSettingsSheet extends StatelessWidget {
               Text(context.t.readerSettings,
                   style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
               const SizedBox(height: 16),
               Row(
@@ -1258,7 +1258,7 @@ class _ReaderSettingsSheet extends StatelessWidget {
                                   fontFamily: 'Lora',
                                   fontSize: 20,
                                   fontWeight: t.bold
-                                      ? FontWeight.w800
+                                      ? FontWeight.w700
                                       : FontWeight.w500,
                                   color: t.ink,
                                 )),

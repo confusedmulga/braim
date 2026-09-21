@@ -211,7 +211,7 @@ class FrostedScaffold extends StatelessWidget {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 17.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: AppPalette.inkPrimary,
                             ),
                           ),

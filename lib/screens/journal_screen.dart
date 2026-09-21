@@ -537,7 +537,7 @@ class _DayCell extends StatelessWidget {
               '${day.day}',
               style: TextStyle(
                 fontSize: 17,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: numberColor,
               ),
             ),
@@ -655,7 +655,7 @@ class _CalendarCard extends StatelessWidget {
                   DateFormat('MMMM yyyy').format(shown),
                   style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary,
                   ),
                 ),
@@ -813,7 +813,7 @@ class _MonthGrid extends StatelessWidget {
                     fontSize: 12.5,
                     height: 1.0,
                     fontWeight: isToday || isSelected
-                        ? FontWeight.w800
+                        ? FontWeight.w700
                         : FontWeight.w500,
                     color: isToday ? Colors.white : AppPalette.inkPrimary,
                   ),
@@ -902,7 +902,7 @@ class JournalEntryTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
@@ -943,7 +943,7 @@ class JournalEntryTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 15.5,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppPalette.inkPrimary,
               ),
             ),
@@ -1012,7 +1012,7 @@ class _MemoryTile extends StatelessWidget {
                 context.t.onThisDayYearsAgo(years),
                 style: const TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppPalette.journalAccent,
                 ),
               ),
@@ -1024,7 +1024,7 @@ class _MemoryTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppPalette.inkPrimary,
               ),
             ),

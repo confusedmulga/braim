@@ -242,7 +242,7 @@ class _ImpulseHistoryScreenState extends State<ImpulseHistoryScreen> {
             child: Text(DateFormat('MMMM yyyy').format(month),
                 style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary)),
           ),
           ...rows,
@@ -388,7 +388,7 @@ class _DayDetailSheet extends StatelessWidget {
             child: Text(DateFormat('EEEE, MMM d, yyyy').format(day),
                 style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary)),
           ),
           Padding(
@@ -404,7 +404,7 @@ class _DayDetailSheet extends StatelessWidget {
                 Text('${(frac * 100).round()}%',
                     style: TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: frac >= 1
                             ? AppPalette.journalAccent
                             : AppPalette.inkSecondary)),
