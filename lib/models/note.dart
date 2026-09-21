@@ -329,6 +329,14 @@ class Note {
     this.fontScale = 1.0,
     this.checkedToBottom = false,
     this.markdown = false,
+    this.circuitId,
+    this.circuitParentId,
+    this.circuitOrder = 0,
+    this.circuitShowInFeed = false,
+    this.circuitPlaceholder = false,
+    this.circuitPlaceholderFor,
+    this.circuitLayout = 'ltr',
+    this.trashGroupId,
     this.archived = false,
     this.pinned = false,
     this.deletedAt,
@@ -443,6 +451,45 @@ class Note {
   /// When set, the note is in Recently Deleted (kept ~30 days, then purged).
   DateTime? deletedAt;
 
+  // ---- Circuits -----------------------------------------------------------
+  //
+  // A circuit is a tree of notes. The first note is the "root"; every other
+  // note is a "branch" placed under a parent. A branch carries no folder,
+  // archive or Crypt of its own — those are read from the root. All of these
+  // default to the non-circuit values, so a note that is not in a circuit
+  // serializes exactly as it did before circuits existed.
+
+  /// Id of the circuit's first note. On the first note it equals [id]; null for
+  /// a note that is not part of any circuit.
+  String? circuitId;
+
+  /// Id of this branch's parent node. Null for the first note (and non-circuit
+  /// notes).
+  String? circuitParentId;
+
+  /// Position among siblings, contiguous from 0.
+  int circuitOrder;
+
+  /// A branch that is also surfaced in the Home feed (roots always are).
+  bool circuitShowInFeed;
+
+  /// A placeholder standing in for a deleted node so its children stay attached.
+  /// Always carries a numbered "Placeholder #N" title, so it is never empty.
+  bool circuitPlaceholder;
+
+  /// For a placeholder: the id of the deleted note it replaced, used by restore.
+  String? circuitPlaceholderFor;
+
+  /// First note only: the map layout, one of 'ltr', 'ttb' or 'radial'.
+  String circuitLayout;
+
+  /// Shared by notes deleted together (one trash group); cleared on restore.
+  String? trashGroupId;
+
+  bool get inCircuit => circuitId != null;
+  bool get isCircuitRoot => circuitId != null && circuitId == id;
+  bool get isCircuitNode => circuitId != null && circuitId != id; // a branch
+
   final DateTime createdAt;
   DateTime updatedAt;
 
@@ -505,6 +552,17 @@ class Note {
         if (fontScale != 1.0) 'fontScale': fontScale,
         if (checkedToBottom) 'checkedToBottom': checkedToBottom,
         if (markdown) 'markdown': true,
+        // Circuit fields — written only when they differ from the default, so a
+        // note that is not in a circuit is byte-for-byte identical to before.
+        if (circuitId != null) 'circuitId': circuitId,
+        if (circuitParentId != null) 'circuitParentId': circuitParentId,
+        if (circuitOrder != 0) 'circuitOrder': circuitOrder,
+        if (circuitShowInFeed) 'circuitShowInFeed': true,
+        if (circuitPlaceholder) 'circuitPlaceholder': true,
+        if (circuitPlaceholderFor != null)
+          'circuitPlaceholderFor': circuitPlaceholderFor,
+        if (circuitLayout != 'ltr') 'circuitLayout': circuitLayout,
+        if (trashGroupId != null) 'trashGroupId': trashGroupId,
         'archived': archived,
         'pinned': pinned,
         'deletedAt': deletedAt?.toIso8601String(),
@@ -541,6 +599,14 @@ class Note {
         fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
         checkedToBottom: (json['checkedToBottom'] as bool?) ?? false,
         markdown: (json['markdown'] as bool?) ?? false,
+        circuitId: json['circuitId'] as String?,
+        circuitParentId: json['circuitParentId'] as String?,
+        circuitOrder: (json['circuitOrder'] as num?)?.toInt() ?? 0,
+        circuitShowInFeed: (json['circuitShowInFeed'] as bool?) ?? false,
+        circuitPlaceholder: (json['circuitPlaceholder'] as bool?) ?? false,
+        circuitPlaceholderFor: json['circuitPlaceholderFor'] as String?,
+        circuitLayout: (json['circuitLayout'] as String?) ?? 'ltr',
+        trashGroupId: json['trashGroupId'] as String?,
         archived: (json['archived'] as bool?) ?? false,
         pinned: (json['pinned'] as bool?) ?? false,
         deletedAt: DateTime.tryParse(json['deletedAt'] as String? ?? ''),
