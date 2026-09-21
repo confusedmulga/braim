@@ -918,8 +918,10 @@ Phase 1 tests:
   structure. Plus a round trip through the FFI SQLite store.
 
 ### Phase 2: Layout engine (no UI)
-- [ ] `lib/services/circuit_layout.dart` with all three modes (section 7).
-- [ ] `test/circuit_layout_test.dart` covering the section 7 test list.
+- [x] `lib/services/circuit_layout.dart` with all three modes (section 7).
+- [x] `test/circuit_layout_test.dart` covering the section 7 test list
+      (20 tests; four shapes x three modes plus collapse, determinism,
+      edges and + anchor).
 
 ### Phase 3: The usable loop (first visible phase)
 - [ ] "New circuit" in the pencil menu.
@@ -1066,6 +1068,7 @@ adb -s emulator-5554 install -r build/app/outputs/flutter-apk/app-debug.apk
 | Circuits in the Crypt | **Decided by the owner:** not allowed. See sections 1 and 6.8 |
 | Placeholder naming | **Decided by the owner:** "Placeholder #1", "#2" and so on, so a placeholder is never an empty note |
 | Titles for new notes in a circuit | **Decided by the owner:** "Note #1", "Note #2" and so on, from every creation path (sections 1 and 6.2) |
+| Radial ring spacing vs the default `ringGap` (120) | **Implemented (Phase 2), confirm:** the default `ringGap` (120) is smaller than the node diagonal + `breadthGap` (~213), which section 7 says rings must clear, so a parent and its single child stacked on one radius would overlap. The layout uses `max(ringGap, nodeDiagonal + breadthGap)` for the actual ring spacing, which keeps section 7's no-overlap guarantee. Nodes only ever sit further apart, never closer. |
 
 ---
 
