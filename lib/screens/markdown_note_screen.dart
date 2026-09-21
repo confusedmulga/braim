@@ -16,6 +16,7 @@ import '../services/wiki_links.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_button.dart';
+import '../widgets/circuit_sheets.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/markdown_view.dart';
@@ -23,6 +24,7 @@ import '../widgets/move_to_space_sheet.dart';
 import '../widgets/note_info.dart';
 import '../widgets/quick_actions_menu.dart';
 import 'card_detail_screen.dart';
+import 'circuit_map_screen.dart';
 import 'note_open.dart';
 
 /// A GitHub-flavored Markdown node. Reading renders the raw markdown like a
@@ -30,10 +32,23 @@ import 'note_open.dart';
 /// preview toggle) and re-renders on save. Distinct from the handwriting-style
 /// rich [NoteEditorScreen] — this is the app's "document" surface.
 class MarkdownNoteScreen extends StatefulWidget {
-  const MarkdownNoteScreen({super.key, required this.note, this.isNew = false});
+  const MarkdownNoteScreen({
+    super.key,
+    required this.note,
+    this.isNew = false,
+    this.fromCircuitMap = false,
+    this.startEditing = false,
+  });
 
   final Note note;
   final bool isNew;
+
+  /// Opened from the circuit map: **+** and **map** pop back to it.
+  final bool fromCircuitMap;
+
+  /// Open straight into the source editor (a fresh circuit branch) without the
+  /// empty-note cleanup that [isNew] also drives.
+  final bool startEditing;
 
   @override
   State<MarkdownNoteScreen> createState() => _MarkdownNoteScreenState();
@@ -44,8 +59,9 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   late final TextEditingController _ctrl =
       TextEditingController(text: widget.note.markdownSource);
 
-  /// New nodes open straight into the editor; existing ones open rendered.
-  late bool _editing = widget.isNew;
+  /// New nodes (and fresh circuit branches) open into the editor; existing
+  /// ones open rendered.
+  late bool _editing = widget.isNew || widget.startEditing;
 
   /// Within the editor, flip between the source and a live preview.
   bool _preview = false;
@@ -63,7 +79,14 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     final src = _ctrl.text;
     final state = context.read<AppState>();
     if (src.trim().isEmpty) {
-      // An emptied node leaves nothing behind.
+      // A circuit branch is never deleted for being empty — that would orphan
+      // its children (section 9). Save it as it is; only a plain node leaves
+      // nothing behind. (A first note is always rich, never Markdown.)
+      if (_note.isCircuitNode) {
+        await state.upsertNote(_note);
+        _persisted = true;
+        return;
+      }
       if (_persisted) await state.deleteNote(_note.id);
       _persisted = false;
       return;
@@ -89,7 +112,9 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     final state = context.read<AppState>();
     final ref = state.resolveLink(title);
     if (ref == null) {
-      final created = await state.createLinkedNote(title);
+      if (_note.inCircuit) await state.ensureCircuitRootSaved(_note);
+      final created = await state.createLinkedNote(title,
+          circuitParent: _note.inCircuit ? _note : null);
       if (!mounted) return;
       await Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => noteScreen(created, isNew: true)));
@@ -125,6 +150,46 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
         _preview = false;
       });
 
+  // ---- Circuit map --------------------------------------------------------
+
+  void _goToMap(String focusNodeId, {required bool highlight}) {
+    final circuitId = _note.circuitId;
+    if (circuitId == null) return;
+    if (widget.fromCircuitMap) {
+      Navigator.of(context)
+          .pop(CircuitMapFocus(focusNodeId, highlight: highlight));
+    } else {
+      Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => CircuitMapScreen(
+              circuitId: circuitId,
+              focusNodeId: focusNodeId,
+              highlight: highlight)));
+    }
+  }
+
+  Future<void> _circuitMap() async {
+    await _save();
+    if (!mounted) return;
+    _goToMap(_note.id, highlight: false);
+  }
+
+  Future<void> _circuitAdd() async {
+    await _save();
+    if (!mounted) return;
+    final state = context.read<AppState>();
+    final choice =
+        await showCircuitAddSheet(context, rootOnly: _note.isCircuitRoot);
+    if (choice == null || !mounted) return;
+    String title(int n) => context.t.circuitNoteTitle(n);
+    final created = (choice.under || _note.isCircuitRoot)
+        ? await state.addCircuitChild(_note.id,
+            markdown: choice.markdown, noteTitle: title)
+        : await state.addCircuitSibling(_note.id,
+            markdown: choice.markdown, noteTitle: title);
+    if (!mounted) return;
+    _goToMap(created.id, highlight: true);
+  }
+
   // ---- Overflow menu ------------------------------------------------------
 
   void _showMenu() {
@@ -159,19 +224,23 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
                     _shareMarkdown),
                 _tile(sheetCtx, Icons.picture_as_pdf_outlined,
                     context.t.exportAsPdf, _exportPdf),
-                _tile(sheetCtx, Icons.drive_file_move_outline,
-                    context.t.moveToFolder, _move),
-                _tile(
-                  sheetCtx,
-                  _note.archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
-                  _note.archived ? context.t.unarchive : context.t.archive,
-                  () async {
-                    await state.bulkArchiveNotes({_note.id}, !_note.archived);
-                    if (mounted) Navigator.of(context).pop();
-                  },
-                ),
+                // A branch follows its first note's folder and archive state,
+                // so it shows neither control.
+                if (!_note.isCircuitNode)
+                  _tile(sheetCtx, Icons.drive_file_move_outline,
+                      context.t.moveToFolder, _move),
+                if (!_note.isCircuitNode)
+                  _tile(
+                    sheetCtx,
+                    _note.archived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    _note.archived ? context.t.unarchive : context.t.archive,
+                    () async {
+                      await state.bulkArchiveNotes({_note.id}, !_note.archived);
+                      if (mounted) Navigator.of(context).pop();
+                    },
+                  ),
                 _tile(sheetCtx, Icons.delete_outline_rounded, context.t.delete,
                     _confirmDelete,
                     danger: true),
@@ -240,7 +309,8 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   }
 
   Future<void> _move() async {
-    final choice = await showMoveToSpaceSheet(context, currentSpaceId: _note.spaceId);
+    final choice = await showMoveToSpaceSheet(context,
+        currentSpaceId: _note.spaceId, allowCrypt: !_note.inCircuit);
     if (choice == null || !mounted) return;
     await context
         .read<AppState>()
@@ -262,8 +332,25 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
         .copyWith(statusBarColor: Colors.transparent);
 
     final Widget body;
-    final List<Widget> actions;
+    List<Widget> actions;
     final Widget fab;
+
+    // A circuit branch (never a placeholder) gets + and map buttons before its
+    // own actions, in both view and edit mode.
+    final circuitButtons = _note.inCircuit && !_note.circuitPlaceholder
+        ? <Widget>[
+            FrostedCircleButton(
+              icon: Icons.add_rounded,
+              tooltip: context.t.circuitAddTitle,
+              onTap: _circuitAdd,
+            ),
+            FrostedCircleButton(
+              icon: Icons.account_tree_rounded,
+              tooltip: context.t.circuitMap,
+              onTap: _circuitMap,
+            ),
+          ]
+        : const <Widget>[];
 
     if (_editing) {
       body = _preview
@@ -279,7 +366,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
                 expands: true,
                 maxLines: null,
                 minLines: null,
-                autofocus: widget.isNew,
+                autofocus: widget.isNew || widget.startEditing,
                 keyboardType: TextInputType.multiline,
                 textAlignVertical: TextAlignVertical.top,
                 style: const TextStyle(
@@ -333,6 +420,8 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
         onTap: _startEditing,
       );
     }
+
+    actions = [...circuitButtons, ...actions];
 
     return PopScope(
       // Let the back gesture pop directly while viewing (so Android's

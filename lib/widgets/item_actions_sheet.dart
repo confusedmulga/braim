@@ -23,6 +23,7 @@ Future<void> showItemActions(
   required Future<void> Function(bool archived) onSetArchived,
   required Future<void> Function(String? spaceId) onMove,
   required Future<void> Function() onDelete,
+  bool allowCrypt = true,
 }) async {
   final t = context.t;
   final action = await showModalBottomSheet<String>(
@@ -49,8 +50,8 @@ Future<void> showItemActions(
                 Text(archived ? t.unarchived : t.archived)),
       );
     case 'move':
-      final selected =
-          await showMoveToSpaceSheet(context, currentSpaceId: currentSpaceId);
+      final selected = await showMoveToSpaceSheet(context,
+          currentSpaceId: currentSpaceId, allowCrypt: allowCrypt);
       if (selected == null) return;
       await onMove(selected == '__none__' ? null : selected);
     case 'newfolder':

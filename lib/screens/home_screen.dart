@@ -14,8 +14,7 @@ import '../widgets/glass.dart';
 import '../widgets/note_background.dart';
 import '../widgets/note_card.dart';
 import '../widgets/quick_actions_menu.dart';
-import 'markdown_note_screen.dart';
-import 'note_editor_screen.dart';
+import 'note_open.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -103,7 +102,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _moveOne(Note n) async {
-    final choice = await showMoveToSpaceSheet(context, currentSpaceId: n.spaceId);
+    final choice = await showMoveToSpaceSheet(context,
+        currentSpaceId: n.spaceId, allowCrypt: !n.inCircuit);
     if (choice == null || !mounted) return;
     await context
         .read<AppState>()
@@ -144,7 +144,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _bulkMove() async {
-    final choice = await showMoveToSpaceSheet(context, currentSpaceId: null);
+    final state = context.read<AppState>();
+    // A selection holding a circuit's first note can't be filed into the Crypt.
+    final hasCircuit = _selected.any((id) {
+      final note = state.noteById(id);
+      return note != null && note.inCircuit;
+    });
+    final choice = await showMoveToSpaceSheet(context,
+        currentSpaceId: null, allowCrypt: !hasCircuit);
     if (choice == null || !mounted) return;
     await context
         .read<AppState>()
@@ -247,9 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
               final n = notes[i];
               return GlassMorph(
                 key: ValueKey(n.id),
-                openBuilder: (_) => n.markdown
-                    ? MarkdownNoteScreen(note: n)
-                    : NoteEditorScreen(note: n, isNew: false),
+                openBuilder: (_) => noteScreen(n),
                 closedBuilder: (context, open) => NoteCard(
                   note: n,
                   space: state.spaceById(n.spaceId),

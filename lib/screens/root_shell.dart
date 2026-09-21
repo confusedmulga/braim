@@ -434,6 +434,8 @@ class _RootShellState extends State<RootShell>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    item('circuit', Icons.account_tree_rounded,
+                        context.t.newCircuit),
                     item('markdown', Icons.data_object_rounded,
                         context.t.newMarkdown),
                     item('import', Icons.upload_file_rounded,
@@ -461,6 +463,8 @@ class _RootShellState extends State<RootShell>
     );
     if (!mounted) return;
     switch (choice) {
+      case 'circuit':
+        _newCircuit();
       case 'markdown':
         _newMarkdown();
       case 'import':
@@ -468,6 +472,16 @@ class _RootShellState extends State<RootShell>
       case 'note':
         openNote();
     }
+  }
+
+  /// Opens a new, empty first note for a circuit. Like a normal new note it's
+  /// only persisted once it gains content or its first branch, so backing out
+  /// of an untouched one leaves nothing behind.
+  void _newCircuit() {
+    final draft = context.read<AppState>().newCircuitRootDraft();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => NoteEditorScreen(note: draft, isNew: true),
+    ));
   }
 
   /// Opens a blank Markdown node in its source editor. It only persists once

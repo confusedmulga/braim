@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
 
 import '../models/note.dart';
 import '../models/space.dart';
 import '../services/note_markdown.dart';
+import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
 import 'note_preview.dart';
@@ -99,6 +101,9 @@ class NoteCard extends StatelessWidget {
     final ink2 = colored
         ? NoteColors.onSwatch.withValues(alpha: 0.72)
         : AppPalette.inkSecondary;
+    // A circuit's first note reads as a "Circuit" tile: a tree badge, the
+    // title, a peek of the body, and a footer counting its notes.
+    if (note.isCircuitRoot) return _circuitBody(context, ink, ink2);
     // A Markdown node reads as a clean "document" tile (sans face + a badge),
     // distinct from the handwriting-style notes around it.
     if (note.markdown) return _markdownBody(context, ink, ink2);
@@ -274,6 +279,111 @@ class NoteCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(context.t.emptyNote,
                 style: TextStyle(fontStyle: FontStyle.italic, color: ink2)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// The feed tile for a circuit's first note: a "Circuit" badge, the title, a
+  /// couple of lines of the first note's body, and a footer counting the notes
+  /// with up to three child titles.
+  Widget _circuitBody(BuildContext context, Color ink, Color ink2) {
+    final state = context.read<AppState>();
+    final title = note.title.trim();
+    final preview = note.textPreview;
+    final count = state.circuitBranchCount(note.id);
+    final children = state
+        .circuitChildren(note.id)
+        .where((n) => !n.circuitPlaceholder)
+        .take(3)
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: ink.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.account_tree_rounded, size: 13, color: ink2),
+                const SizedBox(width: 4),
+                Text(context.t.circuitLabel,
+                    style: TextStyle(
+                        fontFamily: kNoteHeadingFont,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                        color: ink2)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(title.isEmpty ? context.t.untitledCircuit : title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontFamily: kNoteHeadingFont,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: ink)),
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(preview,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontFamily: activeBodyFont,
+                    fontSize: 15,
+                    height: 1.25,
+                    color: ink2)),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.account_tree_rounded, size: 13, color: ink2),
+              const SizedBox(width: 5),
+              Text(context.t.circuitNotesCount(count),
+                  style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: ink2)),
+            ],
+          ),
+          if (children.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final c in children)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: ink.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      c.title.trim().isEmpty
+                          ? context.t.untitledNote
+                          : c.title.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: ink),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ],
       ),

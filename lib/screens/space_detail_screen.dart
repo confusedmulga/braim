@@ -67,6 +67,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       onSetArchived: (a) => state.setNoteArchived(note.id, a),
       onMove: (spaceId) => state.moveNoteToSpace(note.id, spaceId),
       onDelete: () => state.deleteNote(note.id),
+      allowCrypt: !note.inCircuit,
     );
   }
 

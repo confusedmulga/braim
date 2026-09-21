@@ -25,6 +25,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
 import '../widgets/bubble_button.dart';
+import '../widgets/circuit_sheets.dart';
 import '../widgets/expand_from_button.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
@@ -39,6 +40,7 @@ import '../widgets/note_links_section.dart';
 import '../widgets/note_tags_editor.dart';
 import '../widgets/wiki_text.dart';
 import 'card_detail_screen.dart';
+import 'circuit_map_screen.dart';
 import 'reflexes_screen.dart';
 
 class NoteEditorScreen extends StatefulWidget {
@@ -46,10 +48,20 @@ class NoteEditorScreen extends StatefulWidget {
     super.key,
     required this.note,
     required this.isNew,
+    this.fromCircuitMap = false,
+    this.startEditing = false,
   });
 
   final Note note;
   final bool isNew;
+
+  /// Opened from the circuit map: the **+** and **map** buttons pop back to it
+  /// (with a [CircuitMapFocus]) instead of pushing a new map.
+  final bool fromCircuitMap;
+
+  /// Open straight into the editor (used by the map for a fresh circuit note)
+  /// without the empty-note cleanup that [isNew] also drives.
+  final bool startEditing;
 
   @override
   State<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -265,7 +277,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                       state.upsertNote(_note);
                     },
                   ),
-                if (!widget.isNew && !_isJournal)
+                // A branch inherits archive from its first note, so it has no
+                // Archive control of its own.
+                if (!widget.isNew && !_isJournal && !_note.isCircuitNode)
                   _menuTile(
                     sheetCtx,
                     _note.archived
@@ -390,9 +404,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     _note = widget.note;
     _titleCtrl = TextEditingController(text: _note.title);
     _savedFingerprint = _fingerprint();
-    // Saved notes open as a page to read; a note being created opens ready
-    // to write.
-    _editing = widget.isNew;
+    // Saved notes open as a page to read; a note being created — or a circuit
+    // note opened fresh from the map — opens ready to write.
+    _editing = widget.isNew || widget.startEditing;
     _autosave = Timer.periodic(
         const Duration(seconds: 3), (_) => _autosaveTick());
     // Snapshot a book chapter's pre-edit state when a writing session opens,
@@ -456,6 +470,22 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         return;
       }
       if (_note.isEmpty) {
+        // Circuit notes must survive being emptied, or deleting a branch would
+        // orphan its children (section 9). A branch, or a first note that still
+        // has branches, is saved as it is. An empty first note with no branches
+        // is a draft: remove it outright unless it was saved with content this
+        // session, in which case it soft-deletes like any emptied note.
+        if (_note.inCircuit) {
+          final hasBranches = state.circuitChildren(_note.id).isNotEmpty;
+          if (_note.isCircuitNode || hasBranches) {
+            await state.upsertNote(_note);
+          } else if (_persisted) {
+            await state.deleteNote(_note.id);
+          } else if (state.noteById(_note.id) != null) {
+            await state.permanentlyDeleteNote(_note.id);
+          }
+          return;
+        }
         // Emptied out: drop it, including a note this session created and
         // already wrote (autosave or an article Save).
         if (!widget.isNew || _persisted) await state.deleteNote(_note.id);
@@ -499,8 +529,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   }
 
   Future<void> _pickSpace() async {
-    final selected =
-        await showMoveToSpaceSheet(context, currentSpaceId: _note.spaceId);
+    // A branch follows its first note's folder; never picks its own. And a
+    // circuit's first note can never be filed into the Crypt (section 6.8) —
+    // the note screen sets spaceId directly, so hiding the Crypt row is what
+    // protects this path.
+    if (_note.isCircuitNode) return;
+    final selected = await showMoveToSpaceSheet(context,
+        currentSpaceId: _note.spaceId, allowCrypt: !_note.inCircuit);
     if (selected == null) return;
     setState(() => _note.spaceId = selected == '__none__' ? null : selected);
   }
@@ -613,11 +648,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   }
 
   /// Creates a note for an unresolved `[[title]]` and opens it ready to write.
+  /// From inside a circuit the new note is created as a child of this one, so
+  /// it stays in the circuit (keeping the link's text as its title).
   Future<void> _createAndOpenLinkedNote(String title) async {
     _collect();
     final state = context.read<AppState>();
+    if (_note.inCircuit) await state.ensureCircuitRootSaved(_note);
     if (!_note.isEmpty) state.upsertNote(_note);
-    final created = await state.createLinkedNote(title);
+    final created = await state.createLinkedNote(title,
+        circuitParent: _note.inCircuit ? _note : null);
     if (!mounted) return;
     await Navigator.of(context)
         .push(cupertinoRoute(NoteEditorScreen(note: created, isNew: true)));
@@ -665,6 +704,56 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         TextSelection.collapsed(offset: at + insert.length));
   }
 
+  // ---- Circuit map --------------------------------------------------------
+
+  /// Saves the current note before leaving for the map: an unsaved first note
+  /// joins the library, and content is written back.
+  Future<void> _saveForCircuit(AppState state) async {
+    _collect();
+    await state.ensureCircuitRootSaved(_note);
+    if (!_note.isEmpty) state.upsertNote(_note);
+  }
+
+  /// Goes to the map focused on [focusNodeId]. When this note was itself opened
+  /// from the map, pop back to it (keeping the stack flat); otherwise push one.
+  void _goToMap(String focusNodeId, {required bool highlight}) {
+    final circuitId = _note.circuitId;
+    if (circuitId == null) return;
+    if (widget.fromCircuitMap) {
+      Navigator.of(context)
+          .pop(CircuitMapFocus(focusNodeId, highlight: highlight));
+    } else {
+      Navigator.of(context).push(cupertinoRoute(CircuitMapScreen(
+          circuitId: circuitId,
+          focusNodeId: focusNodeId,
+          highlight: highlight)));
+    }
+  }
+
+  Future<void> _circuitMap() async {
+    final state = context.read<AppState>();
+    await _saveForCircuit(state);
+    if (!mounted) return;
+    _goToMap(_note.id, highlight: false);
+  }
+
+  Future<void> _circuitAdd() async {
+    final state = context.read<AppState>();
+    await _saveForCircuit(state);
+    if (!mounted) return;
+    final choice =
+        await showCircuitAddSheet(context, rootOnly: _note.isCircuitRoot);
+    if (choice == null || !mounted) return;
+    String title(int n) => context.t.circuitNoteTitle(n);
+    final created = (choice.under || _note.isCircuitRoot)
+        ? await state.addCircuitChild(_note.id,
+            markdown: choice.markdown, noteTitle: title)
+        : await state.addCircuitSibling(_note.id,
+            markdown: choice.markdown, noteTitle: title);
+    if (!mounted) return;
+    _goToMap(created.id, highlight: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -680,8 +769,25 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
 
     // The right-hand chrome: a single overflow button whose menu collects
     // share / copy / (sink ticked) / archive / delete.
+    // A circuit note (never a placeholder) gets a + and a map button before the
+    // overflow menu, so you can branch off it or jump to the map.
+    final circuitControls = _note.inCircuit && !_note.circuitPlaceholder;
     final Widget topActions = BubblePill(
             children: [
+              if (circuitControls) ...[
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: context.t.circuitAddTitle,
+                  icon: const Icon(Icons.add_rounded),
+                  onPressed: _circuitAdd,
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: context.t.circuitMap,
+                  icon: const Icon(Icons.account_tree_rounded),
+                  onPressed: _circuitMap,
+                ),
+              ],
               IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: context.t.moreOptions,

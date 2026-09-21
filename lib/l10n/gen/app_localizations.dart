@@ -3903,6 +3903,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guide'**
   String get guideSettingsLabel;
+
+  /// No description provided for @newCircuit.
+  ///
+  /// In en, this message translates to:
+  /// **'New circuit'**
+  String get newCircuit;
+
+  /// No description provided for @circuitLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Circuit'**
+  String get circuitLabel;
+
+  /// No description provided for @untitledCircuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled circuit'**
+  String get untitledCircuit;
+
+  /// No description provided for @circuitMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Circuit map'**
+  String get circuitMap;
+
+  /// No description provided for @circuitNotesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, =1{1 note} other{{n} notes}}'**
+  String circuitNotesCount(int n);
+
+  /// No description provided for @circuitIn.
+  ///
+  /// In en, this message translates to:
+  /// **'In {title}'**
+  String circuitIn(String title);
+
+  /// No description provided for @circuitMoreNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'+ {n} notes'**
+  String circuitMoreNotes(int n);
+
+  /// No description provided for @circuitAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to circuit'**
+  String get circuitAddTitle;
+
+  /// No description provided for @circuitNextTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Next to this note'**
+  String get circuitNextTo;
+
+  /// No description provided for @circuitUnder.
+  ///
+  /// In en, this message translates to:
+  /// **'Under this note'**
+  String get circuitUnder;
+
+  /// No description provided for @circuitTypeNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get circuitTypeNote;
+
+  /// No description provided for @circuitTypeMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown'**
+  String get circuitTypeMarkdown;
+
+  /// No description provided for @circuitCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get circuitCreate;
+
+  /// No description provided for @circuitRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get circuitRename;
+
+  /// No description provided for @circuitColour.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get circuitColour;
+
+  /// No description provided for @circuitMoveUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Move up'**
+  String get circuitMoveUp;
+
+  /// No description provided for @circuitMoveDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Move down'**
+  String get circuitMoveDown;
+
+  /// No description provided for @circuitIndent.
+  ///
+  /// In en, this message translates to:
+  /// **'Move into the note above'**
+  String get circuitIndent;
+
+  /// No description provided for @circuitOutdent.
+  ///
+  /// In en, this message translates to:
+  /// **'Move out one level'**
+  String get circuitOutdent;
+
+  /// No description provided for @circuitMoveTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to...'**
+  String get circuitMoveTo;
+
+  /// No description provided for @circuitMoveBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap where to move \"{title}\"'**
+  String circuitMoveBanner(String title);
+
+  /// No description provided for @circuitSlotBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the note to move into this placeholder'**
+  String get circuitSlotBanner;
+
+  /// No description provided for @circuitAddSibling.
+  ///
+  /// In en, this message translates to:
+  /// **'Add note next to this'**
+  String get circuitAddSibling;
+
+  /// No description provided for @circuitAddChild.
+  ///
+  /// In en, this message translates to:
+  /// **'Add note under this'**
+  String get circuitAddChild;
+
+  /// No description provided for @circuitAddChildMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Markdown note under this'**
+  String get circuitAddChildMarkdown;
+
+  /// No description provided for @circuitAddExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an existing note under this'**
+  String get circuitAddExisting;
+
+  /// No description provided for @circuitShowInFeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Show in Home feed'**
+  String get circuitShowInFeed;
+
+  /// No description provided for @circuitHideFromFeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide from Home feed'**
+  String get circuitHideFromFeed;
+
+  /// No description provided for @circuitRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from circuit'**
+  String get circuitRemove;
+
+  /// No description provided for @circuitDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{title}\"?'**
+  String circuitDeleteTitle(String title);
+
+  /// No description provided for @circuitDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It has {n} notes under it.'**
+  String circuitDeleteBody(int n);
+
+  /// No description provided for @circuitDeleteAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all {n}'**
+  String circuitDeleteAll(int n);
+
+  /// No description provided for @circuitDeleteOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete only this note'**
+  String get circuitDeleteOnly;
+
+  /// No description provided for @circuitDeleteOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Leaves a placeholder so the notes under it stay put'**
+  String get circuitDeleteOnlyHint;
+
+  /// No description provided for @circuitDeleteCircuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete circuit \"{title}\" and all its {n} notes?'**
+  String circuitDeleteCircuit(String title, int n);
+
+  /// No description provided for @circuitNoteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Note #{n}'**
+  String circuitNoteTitle(int n);
+
+  /// No description provided for @circuitPlaceholderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Placeholder #{n}'**
+  String circuitPlaceholderTitle(int n);
+
+  /// No description provided for @circuitSlotWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a new note here'**
+  String get circuitSlotWrite;
+
+  /// No description provided for @circuitSlotWriteMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a Markdown note here'**
+  String get circuitSlotWriteMarkdown;
+
+  /// No description provided for @circuitSlotPlace.
+  ///
+  /// In en, this message translates to:
+  /// **'Place an existing note here'**
+  String get circuitSlotPlace;
+
+  /// No description provided for @circuitSlotMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Move a note here'**
+  String get circuitSlotMove;
+
+  /// No description provided for @circuitSlotRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove placeholder'**
+  String get circuitSlotRemove;
+
+  /// No description provided for @circuitNoCrypt.
+  ///
+  /// In en, this message translates to:
+  /// **'Circuits can\'t be moved into the Crypt'**
+  String get circuitNoCrypt;
+
+  /// No description provided for @circuitLayoutLtr.
+  ///
+  /// In en, this message translates to:
+  /// **'Left to right'**
+  String get circuitLayoutLtr;
+
+  /// No description provided for @circuitLayoutTtb.
+  ///
+  /// In en, this message translates to:
+  /// **'Top down'**
+  String get circuitLayoutTtb;
+
+  /// No description provided for @circuitLayoutRadial.
+  ///
+  /// In en, this message translates to:
+  /// **'Radial'**
+  String get circuitLayoutRadial;
+
+  /// No description provided for @circuitFit.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit to screen'**
+  String get circuitFit;
+
+  /// No description provided for @circuitPickNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a note'**
+  String get circuitPickNote;
+
+  /// No description provided for @circuitRestoredWithRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'The circuit was restored too'**
+  String get circuitRestoredWithRoot;
+
+  /// No description provided for @circuitBulkSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Circuit notes are managed on the circuit map'**
+  String get circuitBulkSkipped;
 }
 
 class _AppLocalizationsDelegate

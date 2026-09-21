@@ -2147,4 +2147,182 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideSettingsLabel => 'Guide';
+
+  @override
+  String get newCircuit => 'New circuit';
+
+  @override
+  String get circuitLabel => 'Circuit';
+
+  @override
+  String get untitledCircuit => 'Untitled circuit';
+
+  @override
+  String get circuitMap => 'Circuit map';
+
+  @override
+  String circuitNotesCount(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n notes',
+      one: '1 note',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String circuitIn(String title) {
+    return 'In $title';
+  }
+
+  @override
+  String circuitMoreNotes(int n) {
+    return '+ $n notes';
+  }
+
+  @override
+  String get circuitAddTitle => 'Add to circuit';
+
+  @override
+  String get circuitNextTo => 'Next to this note';
+
+  @override
+  String get circuitUnder => 'Under this note';
+
+  @override
+  String get circuitTypeNote => 'Note';
+
+  @override
+  String get circuitTypeMarkdown => 'Markdown';
+
+  @override
+  String get circuitCreate => 'Create';
+
+  @override
+  String get circuitRename => 'Rename';
+
+  @override
+  String get circuitColour => 'Colour';
+
+  @override
+  String get circuitMoveUp => 'Move up';
+
+  @override
+  String get circuitMoveDown => 'Move down';
+
+  @override
+  String get circuitIndent => 'Move into the note above';
+
+  @override
+  String get circuitOutdent => 'Move out one level';
+
+  @override
+  String get circuitMoveTo => 'Move to...';
+
+  @override
+  String circuitMoveBanner(String title) {
+    return 'Tap where to move \"$title\"';
+  }
+
+  @override
+  String get circuitSlotBanner => 'Tap the note to move into this placeholder';
+
+  @override
+  String get circuitAddSibling => 'Add note next to this';
+
+  @override
+  String get circuitAddChild => 'Add note under this';
+
+  @override
+  String get circuitAddChildMarkdown => 'Add Markdown note under this';
+
+  @override
+  String get circuitAddExisting => 'Add an existing note under this';
+
+  @override
+  String get circuitShowInFeed => 'Show in Home feed';
+
+  @override
+  String get circuitHideFromFeed => 'Hide from Home feed';
+
+  @override
+  String get circuitRemove => 'Remove from circuit';
+
+  @override
+  String circuitDeleteTitle(String title) {
+    return 'Delete \"$title\"?';
+  }
+
+  @override
+  String circuitDeleteBody(int n) {
+    return 'It has $n notes under it.';
+  }
+
+  @override
+  String circuitDeleteAll(int n) {
+    return 'Delete all $n';
+  }
+
+  @override
+  String get circuitDeleteOnly => 'Delete only this note';
+
+  @override
+  String get circuitDeleteOnlyHint =>
+      'Leaves a placeholder so the notes under it stay put';
+
+  @override
+  String circuitDeleteCircuit(String title, int n) {
+    return 'Delete circuit \"$title\" and all its $n notes?';
+  }
+
+  @override
+  String circuitNoteTitle(int n) {
+    return 'Note #$n';
+  }
+
+  @override
+  String circuitPlaceholderTitle(int n) {
+    return 'Placeholder #$n';
+  }
+
+  @override
+  String get circuitSlotWrite => 'Write a new note here';
+
+  @override
+  String get circuitSlotWriteMarkdown => 'Write a Markdown note here';
+
+  @override
+  String get circuitSlotPlace => 'Place an existing note here';
+
+  @override
+  String get circuitSlotMove => 'Move a note here';
+
+  @override
+  String get circuitSlotRemove => 'Remove placeholder';
+
+  @override
+  String get circuitNoCrypt => 'Circuits can\'t be moved into the Crypt';
+
+  @override
+  String get circuitLayoutLtr => 'Left to right';
+
+  @override
+  String get circuitLayoutTtb => 'Top down';
+
+  @override
+  String get circuitLayoutRadial => 'Radial';
+
+  @override
+  String get circuitFit => 'Fit to screen';
+
+  @override
+  String get circuitPickNote => 'Choose a note';
+
+  @override
+  String get circuitRestoredWithRoot => 'The circuit was restored too';
+
+  @override
+  String get circuitBulkSkipped =>
+      'Circuit notes are managed on the circuit map';
 }
