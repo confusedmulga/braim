@@ -924,21 +924,21 @@ Phase 1 tests:
       edges and + anchor).
 
 ### Phase 3: The usable loop (first visible phase)
-- [ ] "New circuit" in the pencil menu.
-- [ ] Empty-note rules in both note screens (section 9).
-- [ ] `fromCircuitMap` plumbing, `CircuitMapFocus`, the **+** and **map**
+- [x] "New circuit" in the pencil menu.
+- [x] Empty-note rules in both note screens (section 9).
+- [x] `fromCircuitMap` plumbing, `CircuitMapFocus`, the **+** and **map**
       buttons, the add sheet.
-- [ ] `startEditing` flag, and the localized `circuitNoteTitle` formatter
+- [x] `startEditing` flag, and the localized `circuitNoteTitle` formatter
       passed at every creation call (section 9).
-- [ ] Map screen, left to right only: pan, zoom, fit, centre on focus, tap to
+- [x] Map screen, left to right only: pan, zoom, fit, centre on focus, tap to
       open, **+** to add a child, highlight pulse.
-- [ ] Circuit card in the feed; feed tap through `noteScreen`.
-- [ ] Crypt barrier in the UI (section 6.8): `allowCrypt` on the folder picker
-      at every call site, and the add-to-folder sheet exclusions. This lands
-      here, not later, because this is the first phase where a circuit exists
-      and could be moved.
-- [ ] Strings for this phase.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Circuit card in the feed; feed tap through `noteScreen`.
+- [x] Crypt barrier in the UI (section 6.8): `allowCrypt` on the folder picker
+      at every call site (note screens, Home quick actions and multi-select,
+      `item_actions_sheet`), and the add-to-folder sheet exclusions.
+- [x] Strings for this phase (full section 11 set added to `app_en.arb`).
+- [x] Analyzer clean, full suite 158 green, emulator debug build + owner test
+      script (section 13).
 
 ### Phase 4: Editing on the map
 - [ ] Node sheet with every action; delete dialog; placeholder sheet;

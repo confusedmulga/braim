@@ -9,9 +9,13 @@ import 'glass.dart';
 
 /// Shows a sheet to move a note or card into a space. Returns the chosen
 /// space id, the sentinel `'__none__'` for no space, or null if dismissed.
+///
+/// Pass [allowCrypt] false to hide the Crypt row — used when moving a circuit
+/// note, which can never be filed into the Crypt (section 6.8).
 Future<String?> showMoveToSpaceSheet(
   BuildContext context, {
   required String? currentSpaceId,
+  bool allowCrypt = true,
 }) {
   final spaces = context.read<AppState>().spaces;
   return showModalBottomSheet<String?>(
@@ -68,17 +72,18 @@ Future<String?> showMoveToSpaceSheet(
                           : null,
                       onTap: () => Navigator.pop(context, '__none__'),
                     ),
-                    ListTile(
-                      leading: Icon(Icons.lock_rounded,
-                          color: AppPalette.textPrimary),
-                      title: Text(context.t.crypt),
-                      subtitle: Text(context.t.cryptLockedSecret,
-                          style: TextStyle(color: AppPalette.textSecondary)),
-                      trailing: currentSpaceId == kCryptSpaceId
-                          ? const Icon(Icons.check_rounded)
-                          : null,
-                      onTap: () => Navigator.pop(context, kCryptSpaceId),
-                    ),
+                    if (allowCrypt)
+                      ListTile(
+                        leading: Icon(Icons.lock_rounded,
+                            color: AppPalette.textPrimary),
+                        title: Text(context.t.crypt),
+                        subtitle: Text(context.t.cryptLockedSecret,
+                            style: TextStyle(color: AppPalette.textSecondary)),
+                        trailing: currentSpaceId == kCryptSpaceId
+                            ? const Icon(Icons.check_rounded)
+                            : null,
+                        onTap: () => Navigator.pop(context, kCryptSpaceId),
+                      ),
                     if (spaces.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(16),

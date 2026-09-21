@@ -903,5 +903,106 @@
   "tutTipsTitle": "Good to know",
   "tutTipsBody": "Search covers nodes, sparks and folds in one place, and it reads your tags too. Pin up to 10 favourites in each feed. Sort a feed or filter it by tag from the sort button, and press and hold the search button inside a fold to sort it the same way. Archive hides items without deleting them. Deleted items wait 30 days in Recently deleted. Set backups, dark mode and reminders in Settings.",
   "guideTitle": "How Braim works",
-  "guideSettingsLabel": "Guide"
+  "guideSettingsLabel": "Guide",
+  "newCircuit": "New circuit",
+  "circuitLabel": "Circuit",
+  "untitledCircuit": "Untitled circuit",
+  "circuitMap": "Circuit map",
+  "circuitNotesCount": "{n, plural, =1{1 note} other{{n} notes}}",
+  "@circuitNotesCount": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "circuitIn": "In {title}",
+  "@circuitIn": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "circuitMoreNotes": "+ {n} notes",
+  "@circuitMoreNotes": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "circuitAddTitle": "Add to circuit",
+  "circuitNextTo": "Next to this note",
+  "circuitUnder": "Under this note",
+  "circuitTypeNote": "Note",
+  "circuitTypeMarkdown": "Markdown",
+  "circuitCreate": "Create",
+  "circuitRename": "Rename",
+  "circuitColour": "Colour",
+  "circuitMoveUp": "Move up",
+  "circuitMoveDown": "Move down",
+  "circuitIndent": "Move into the note above",
+  "circuitOutdent": "Move out one level",
+  "circuitMoveTo": "Move to...",
+  "circuitMoveBanner": "Tap where to move \"{title}\"",
+  "@circuitMoveBanner": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "circuitSlotBanner": "Tap the note to move into this placeholder",
+  "circuitAddSibling": "Add note next to this",
+  "circuitAddChild": "Add note under this",
+  "circuitAddChildMarkdown": "Add Markdown note under this",
+  "circuitAddExisting": "Add an existing note under this",
+  "circuitShowInFeed": "Show in Home feed",
+  "circuitHideFromFeed": "Hide from Home feed",
+  "circuitRemove": "Remove from circuit",
+  "circuitDeleteTitle": "Delete \"{title}\"?",
+  "@circuitDeleteTitle": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "circuitDeleteBody": "It has {n} notes under it.",
+  "@circuitDeleteBody": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "circuitDeleteAll": "Delete all {n}",
+  "@circuitDeleteAll": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "circuitDeleteOnly": "Delete only this note",
+  "circuitDeleteOnlyHint": "Leaves a placeholder so the notes under it stay put",
+  "circuitDeleteCircuit": "Delete circuit \"{title}\" and all its {n} notes?",
+  "@circuitDeleteCircuit": {
+    "placeholders": {
+      "title": { "type": "String" },
+      "n": { "type": "int" }
+    }
+  },
+  "circuitNoteTitle": "Note #{n}",
+  "@circuitNoteTitle": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "circuitPlaceholderTitle": "Placeholder #{n}",
+  "@circuitPlaceholderTitle": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "circuitSlotWrite": "Write a new note here",
+  "circuitSlotWriteMarkdown": "Write a Markdown note here",
+  "circuitSlotPlace": "Place an existing note here",
+  "circuitSlotMove": "Move a note here",
+  "circuitSlotRemove": "Remove placeholder",
+  "circuitNoCrypt": "Circuits can't be moved into the Crypt",
+  "circuitLayoutLtr": "Left to right",
+  "circuitLayoutTtb": "Top down",
+  "circuitLayoutRadial": "Radial",
+  "circuitFit": "Fit to screen",
+  "circuitPickNote": "Choose a note",
+  "circuitRestoredWithRoot": "The circuit was restored too",
+  "circuitBulkSkipped": "Circuit notes are managed on the circuit map"
 }

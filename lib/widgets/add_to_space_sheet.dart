@@ -32,7 +32,13 @@ class _AddToSpaceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final notes = state.notes;
+    // Branches follow their first note, so they are never added to a folder
+    // directly; and a circuit's first note can never be added into the Crypt.
+    final notes = state.notes.where((n) {
+      if (n.isCircuitNode) return false;
+      if (n.isCircuitRoot && spaceId == kCryptSpaceId) return false;
+      return true;
+    }).toList();
     final cards = state.cards;
     final maxHeight = MediaQuery.of(context).size.height * 0.7;
 
