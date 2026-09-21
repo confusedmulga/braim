@@ -194,7 +194,7 @@ class _NoteStyleSheetState extends State<_NoteStyleSheet> {
         padding: const EdgeInsets.only(left: 4, bottom: 12),
         child: Text(text,
             style: TextStyle(
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 fontSize: 16,
                 color: AppPalette.inkPrimary)),
       );

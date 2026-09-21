@@ -78,7 +78,7 @@ class GuideScreen extends StatelessWidget {
                           Text(s.title,
                               style: TextStyle(
                                   fontSize: 15.5,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                   color: AppPalette.inkPrimary)),
                           const SizedBox(height: 6),
                           Text(s.body,
@@ -167,7 +167,7 @@ class _TutorialDialogState extends State<_TutorialDialog> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppPalette.inkPrimary,
                           ),
                         ),

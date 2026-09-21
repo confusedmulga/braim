@@ -106,7 +106,7 @@ class DailyDayCard extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 40,
                         height: 1,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppPalette.inkPrimary)),
                 const SizedBox(width: 5),
                 Container(
@@ -130,7 +130,7 @@ class DailyDayCard extends StatelessWidget {
                     Text(DateFormat('EEEE').format(date),
                         style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppPalette.inkPrimary)),
                   ],
                 ),
@@ -151,7 +151,7 @@ class DailyDayCard extends StatelessWidget {
                   Text('${(progress! * 100).round()}%',
                       style: TextStyle(
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.journalAccent)),
                   const SizedBox(width: 8),
                 ],
@@ -245,7 +245,10 @@ class _TodayProgressRing extends StatelessWidget {
                 child: Text(context.t.todaysProgress,
                     style: const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        // Lora ships weights 400/600/700 only; w800 falls back
+                        // to the system sans (most visibly on digits), so keep
+                        // the card on 700 to stay on Lora everywhere.
+                        fontWeight: FontWeight.w700,
                         color: _ink)),
               ),
               if (streak > 0) ...[
@@ -275,7 +278,7 @@ class _TodayProgressRing extends StatelessWidget {
                         : Text(rest ? '—' : '$pct%',
                             style: const TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: _ink)),
                   ),
                 ),
@@ -436,7 +439,7 @@ class _TodayProgressRing extends StatelessWidget {
                 Text('$value',
                     style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: _ink)),
               ],
             ),
@@ -537,7 +540,7 @@ class DailyDayList extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 13,
                       letterSpacing: 0.4,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkPrimary)),
             ),
             const SizedBox(width: 8),
@@ -545,7 +548,7 @@ class DailyDayList extends StatelessWidget {
               Text('${(dueProgress.fraction * 100).round()}%',
                   style: TextStyle(
                       fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkSecondary)),
           ],
         ),
@@ -1114,7 +1117,7 @@ class _TimelineEntry extends StatelessWidget {
                             style: TextStyle(
                                 fontSize: 14,
                                 height: 1.05,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: done
                                     ? AppPalette.inkSecondary
                                     : AppPalette.inkPrimary)),
@@ -1328,7 +1331,7 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
                 maxLines: null,
                 style: TextStyle(
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary),
                 decoration: InputDecoration(
                   isDense: true,
@@ -1337,7 +1340,7 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
                   hintText: context.t.dailyDayAdd,
                   hintStyle: TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppPalette.inkSecondary.withValues(alpha: 0.45)),
                 ),
               ),
@@ -1991,7 +1994,7 @@ class _TimeSlots extends StatelessWidget {
                         : (hint ?? context.t.setTime),
                     style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: minutes != null
                             ? AppPalette.inkPrimary
                             : AppPalette.inkSecondary)),

@@ -1636,7 +1636,7 @@ class _StyleDropdown extends StatelessWidget {
             child: Text(context.t.heading,
                 style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.inkPrimary))),
         PopupMenuItem(
             value: 2,
@@ -1660,7 +1660,7 @@ class _StyleDropdown extends StatelessWidget {
               Text(label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                     color: active ? primary : secondary,
                   )),
               Icon(Icons.arrow_drop_down_rounded,

@@ -178,7 +178,7 @@ class _CryptTile extends StatelessWidget {
                             style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 15,
-                                fontWeight: FontWeight.w800)),
+                                fontWeight: FontWeight.w700)),
                         const SizedBox(height: 2),
                         Text(context.t.itemsCount(itemCount),
                             style: TextStyle(

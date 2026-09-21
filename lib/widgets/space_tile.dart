@@ -63,7 +63,7 @@ class SpaceTile extends StatelessWidget {
             labelAlignment: Alignment.topLeft,
             labelStyle: const TextStyle(
               fontSize: 17,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
           Positioned(

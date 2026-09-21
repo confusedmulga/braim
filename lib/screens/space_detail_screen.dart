@@ -416,7 +416,7 @@ class _CoverHeader extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: Colors.white,
             shadows: [Shadow(blurRadius: 10, color: Colors.black54)],
           ),

@@ -71,7 +71,7 @@ class YearCard extends StatelessWidget {
                     '$year',
                     style: const TextStyle(
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
@@ -204,7 +204,7 @@ class _MonthHeader extends StatelessWidget {
             label,
             style: const TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: AppPalette.journalAccent,
             ),
           ),
@@ -365,7 +365,7 @@ class _MonthScrubberState extends State<_MonthScrubber> {
                       DateFormat('MMMM').format(DateTime(2024, _month!)),
                       style: const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
                     ),

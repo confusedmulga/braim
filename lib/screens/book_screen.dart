@@ -108,7 +108,7 @@ class BookTile extends StatelessWidget {
                     style: const TextStyle(
                       fontSize: 15,
                       height: 1.15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
@@ -211,7 +211,7 @@ class BookScreen extends StatelessWidget {
                   fontFamily: book.fontFamily,
                   fontSize: 27,
                   height: 1.15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppPalette.inkPrimary,
                 ),
               ),
@@ -418,7 +418,7 @@ class _SectionTitle extends StatelessWidget {
         text,
         style: TextStyle(
           fontSize: 16.5,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           color: AppPalette.inkPrimary,
         ),
       );

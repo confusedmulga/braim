@@ -249,7 +249,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
                     style: TextStyle(
                         fontSize: 12.5,
                         letterSpacing: 2,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: _c.completed
                             ? (dark
                                 ? Colors.white70
@@ -321,7 +321,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
             Text(label,
                 style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppPalette.scheme.surface)),
             const SizedBox(width: 8),
             Icon(icon, size: 22, color: AppPalette.scheme.surface),
@@ -378,7 +378,7 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
             Text(label,
                 style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: Colors.black)),
             const SizedBox(width: 6),
             Icon(icon, size: 20, color: Colors.black),
@@ -615,7 +615,7 @@ class _SettingsSheet extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary)),
                 ),
                 _stepBtn(Icons.add_rounded, plus),

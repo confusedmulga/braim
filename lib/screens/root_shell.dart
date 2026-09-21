@@ -612,7 +612,7 @@ class _RootShellState extends State<RootShell>
                   Text(context.t.rearrangeJournal,
                       style: TextStyle(
                           fontSize: 17,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppPalette.inkPrimary)),
                   const SizedBox(height: 3),
                   Text(context.t.rearrangeJournalHint,

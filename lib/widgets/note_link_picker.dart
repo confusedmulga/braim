@@ -65,7 +65,7 @@ class _NoteLinkPickerState extends State<_NoteLinkPicker> {
               context.t.linkToNote,
               style: TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: AppPalette.inkPrimary,
               ),
             ),
