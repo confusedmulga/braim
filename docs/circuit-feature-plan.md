@@ -941,11 +941,13 @@ Phase 1 tests:
       script (section 13).
 
 ### Phase 4: Editing on the map
-- [ ] Node sheet with every action; delete dialog; placeholder sheet;
+- [x] Node sheet with every action; delete dialog; placeholder sheet;
       existing-note picker; pick modes.
-- [ ] Layout-change animation.
-- [ ] Breadcrumb chip; ⋯ menu changes; linked notes created as children.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Layout-change animation (positional lerp; nodes and edges share the same
+      rects so branch lines never detach).
+- [x] Breadcrumb chip (rich screen); ⋯ menu delete dialogs on both note
+      screens; linked notes created as children (landed in Phase 3).
+- [x] Analyzer clean, tests green, emulator build + owner test script.
 
 ### Phase 5: Layout modes
 - [ ] Top-down and radial rendering, with their edge shapes and **+**

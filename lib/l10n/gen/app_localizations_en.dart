@@ -2325,4 +2325,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get circuitBulkSkipped =>
       'Circuit notes are managed on the circuit map';
+
+  @override
+  String get circuitOpen => 'Open';
+
+  @override
+  String get circuitDeleteCircuitAction => 'Delete circuit';
 }

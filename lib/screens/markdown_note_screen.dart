@@ -317,9 +317,49 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
         .bulkMoveNotes({_note.id}, choice == '__none__' ? null : choice);
   }
 
+  String _mdTitle() =>
+      _note.title.trim().isEmpty ? context.t.untitledNote : _note.title.trim();
+
+  int _descendantCount(AppState state, String id) {
+    var count = 0;
+    final stack = [id];
+    while (stack.isNotEmpty) {
+      final pid = stack.removeLast();
+      for (final c in state.circuitChildren(pid)) {
+        count++;
+        stack.add(c.id);
+      }
+    }
+    return count;
+  }
+
   Future<void> _confirmDelete() async {
+    final state = context.read<AppState>();
+    final id = _note.id;
+    // A Markdown note is always a branch when in a circuit; deleting one with
+    // children offers the keep-a-placeholder choice (section 8.1).
+    if (_note.isCircuitNode) {
+      if (state.circuitChildren(id).isNotEmpty) {
+        final descendants = _descendantCount(state, id);
+        final choice = await showCircuitDeleteWithChildrenDialog(context,
+            title: _mdTitle(), childCount: descendants);
+        if (choice == null || !mounted) return;
+        if (choice == CircuitDeleteChoice.all) {
+          await state.deleteCircuitSubtree(id);
+        } else {
+          await state.deleteCircuitNodeKeepSlot(id,
+              placeholderTitle: (n) => context.t.circuitPlaceholderTitle(n));
+        }
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
+      if (!await confirmDeleteItems(context, 1) || !mounted) return;
+      await state.deleteCircuitSubtree(id);
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
     if (!await confirmDeleteItems(context, 1) || !mounted) return;
-    if (_persisted) await context.read<AppState>().deleteNote(_note.id);
+    if (_persisted) await state.deleteNote(id);
     if (mounted) Navigator.of(context).pop();
   }
 
