@@ -6,12 +6,14 @@ import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 
 /// The quick actions offered when a note/card is long-pressed.
-enum QuickAction { move, select, pin, theme, archive, delete }
+enum QuickAction { move, select, pin, theme, archive, delete, hideFromFeed }
 
 /// A frosted, rounded list of the quick actions, shown on long-press. [pinned]
-/// picks the Pin vs Unpin label. Returns the chosen action, or null if dismissed.
+/// picks the Pin vs Unpin label. When [circuitBranch] is set (a branch shown in
+/// the feed), Folder and Archive — which follow the first note — are replaced by
+/// Hide from Home feed. Returns the chosen action, or null if dismissed.
 Future<QuickAction?> showQuickActions(BuildContext context,
-    {bool pinned = false}) {
+    {bool pinned = false, bool circuitBranch = false}) {
   return showModalBottomSheet<QuickAction>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -32,8 +34,9 @@ Future<QuickAction?> showQuickActions(BuildContext context,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _row(context, Icons.drive_file_move_outline,
-                      context.t.moveToFolder, QuickAction.move),
+                  if (!circuitBranch)
+                    _row(context, Icons.drive_file_move_outline,
+                        context.t.moveToFolder, QuickAction.move),
                   _row(context, Icons.check_circle_outline_rounded,
                       context.t.select, QuickAction.select),
                   _row(
@@ -45,8 +48,12 @@ Future<QuickAction?> showQuickActions(BuildContext context,
                       QuickAction.pin),
                   _row(context, Icons.palette_outlined, context.t.chooseTheme,
                       QuickAction.theme),
-                  _row(context, Icons.archive_outlined, context.t.archive,
-                      QuickAction.archive),
+                  if (circuitBranch)
+                    _row(context, Icons.visibility_off_outlined,
+                        context.t.circuitHideFromFeed, QuickAction.hideFromFeed)
+                  else
+                    _row(context, Icons.archive_outlined, context.t.archive,
+                        QuickAction.archive),
                   _row(context, Icons.delete_outline_rounded, context.t.delete,
                       QuickAction.delete,
                       danger: true),

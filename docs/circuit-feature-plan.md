@@ -957,10 +957,13 @@ Phase 1 tests:
 - [x] Analyzer clean, full suite green, emulator build + owner test script.
 
 ### Phase 6: Everywhere else
-- [ ] Search subtitle and icon; Recently Deleted groups; Home quick actions
-      and multi-select rules; "In {circuit}" chip on shown branches.
-- [ ] Seed circuit and its test; README section; string audit.
-- [ ] Analyzer, tests, emulator build, full owner test script.
+- [x] Search subtitle ("In {circuit}") and tree icon; Recently Deleted groups
+      with a "+ N notes" badge acting on the whole group; Home quick actions
+      (Hide-from-feed for shown branches, circuit-aware delete) and multi-select
+      skip-snackbar; "In {circuit}" chip on shown branches.
+- [x] Seed circuit ("Plan a trip") and its assertions in the sample-data test;
+      README 3-10 CIRCUITS + 2-1 pencil update + restore NOTE; strings audited.
+- [x] Analyzer clean, full suite 160 green, emulator build + owner test script.
 
 ### Phase 7: Optional polish
 - [ ] Share a circuit as a Markdown outline and as a PDF: the first note as H1,

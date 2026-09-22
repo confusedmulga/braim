@@ -661,6 +661,18 @@ void main() {
     expect(data.notes.any((n) => n.archived), isTrue);
     expect(data.notes.any((n) => n.deletedAt != null), isTrue);
 
+    // Exactly one sample circuit: a first note with eight branches, one shown
+    // in the feed, one Markdown, one coloured, and a placeholder holding a child.
+    final root = data.notes.singleWhere((n) => n.isCircuitRoot);
+    final circuit = data.notes.where((n) => n.circuitId == root.id).toList();
+    expect(circuit.length, 10); // root + 8 branches + 1 placeholder
+    expect(circuit.where((n) => n.isCircuitNode && !n.circuitPlaceholder).length,
+        8);
+    expect(circuit.any((n) => n.circuitShowInFeed), isTrue);
+    expect(circuit.any((n) => n.isCircuitNode && n.markdown), isTrue);
+    expect(circuit.any((n) => n.isCircuitNode && n.colorValue != null), isTrue);
+    expect(circuit.any((n) => n.circuitPlaceholder), isTrue);
+
     // Additive: loading again adds an independent copy, never wiping the first.
     await state.loadSampleData();
     await state.flushNow();

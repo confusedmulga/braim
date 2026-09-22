@@ -154,19 +154,7 @@ class _UniversalSearchResultsState extends State<UniversalSearchResults> {
         ],
         if (notes.isNotEmpty) ...[
           _label(context, context.t.sectionNotes),
-          for (final n in notes)
-            _ResultTile(
-              icon: Icons.lightbulb_outline_rounded,
-              title: n.title.trim().isNotEmpty
-                  ? n.title.trim()
-                  : (n.textPreview.isNotEmpty
-                      ? n.textPreview
-                      : context.t.emptyNote),
-              subtitle: n.title.trim().isNotEmpty && n.textPreview.isNotEmpty
-                  ? n.textPreview
-                  : null,
-              onTap: () => _openNote(context, n),
-            ),
+          for (final n in notes) _noteResult(state, n),
         ],
         if (cards.isNotEmpty) ...[
           _label(context, context.t.sectionCards),
@@ -181,19 +169,7 @@ class _UniversalSearchResultsState extends State<UniversalSearchResults> {
         ],
         if (archivedCount > 0) ...[
           _label(context, context.t.sectionArchived),
-          for (final n in archivedNotes)
-            _ResultTile(
-              icon: Icons.archive_outlined,
-              title: n.title.trim().isNotEmpty
-                  ? n.title.trim()
-                  : (n.textPreview.isNotEmpty
-                      ? n.textPreview
-                      : context.t.emptyNote),
-              subtitle: n.title.trim().isNotEmpty && n.textPreview.isNotEmpty
-                  ? n.textPreview
-                  : null,
-              onTap: () => _openNote(context, n),
-            ),
+          for (final n in archivedNotes) _noteResult(state, n, archived: true),
           for (final c in archivedCards)
             _ResultTile(
               icon: Icons.archive_outlined,
@@ -212,6 +188,39 @@ class _UniversalSearchResultsState extends State<UniversalSearchResults> {
     if (c.authorName.isNotEmpty) return c.authorName;
     if (c.siteName.isNotEmpty) return c.siteName;
     return c.url;
+  }
+
+  /// A search result for a note. A circuit note gets the tree icon; a branch
+  /// gets the "In {circuit}" subtitle instead of a body preview.
+  _ResultTile _noteResult(AppState state, Note n, {bool archived = false}) {
+    final title = n.title.trim().isNotEmpty
+        ? n.title.trim()
+        : (n.textPreview.isNotEmpty ? n.textPreview : context.t.emptyNote);
+    String? subtitle;
+    IconData icon;
+    if (n.isCircuitNode) {
+      final root = state.noteById(n.circuitId!);
+      final circuitName = (root == null || root.title.trim().isEmpty)
+          ? context.t.untitledCircuit
+          : root.title.trim();
+      subtitle = context.t.circuitIn(circuitName);
+      icon = Icons.account_tree_rounded;
+    } else {
+      subtitle = n.title.trim().isNotEmpty && n.textPreview.isNotEmpty
+          ? n.textPreview
+          : null;
+      icon = n.isCircuitRoot
+          ? Icons.account_tree_rounded
+          : (archived
+              ? Icons.archive_outlined
+              : Icons.lightbulb_outline_rounded);
+    }
+    return _ResultTile(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      onTap: () => _openNote(context, n),
+    );
   }
 
   void _openNote(BuildContext context, Note n) {

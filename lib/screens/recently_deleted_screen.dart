@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
-import '../models/note.dart';
 import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../state/app_state.dart';
@@ -55,14 +54,67 @@ class RecentlyDeletedScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _noteActions(BuildContext context, Note note) async {
+  Future<void> _groupActions(BuildContext context, TrashGroup group) async {
     final state = context.read<AppState>();
     final action = await _ask(context);
+    if (!context.mounted) return;
     if (action == 'restore') {
-      await state.restoreNote(note.id);
+      // Restoring a branch whose first note is also in the trash brings the
+      // whole circuit back (section 6.5, rule 3) — say so.
+      final top = group.top;
+      final revivesRoot = top.isCircuitNode &&
+          state.noteById(top.circuitId!)?.deletedAt != null;
+      await state.restoreTrashGroup(group.key);
+      if (revivesRoot && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.t.circuitRestoredWithRoot)),
+        );
+      }
     } else if (action == 'delete') {
-      await state.permanentlyDeleteNote(note.id);
+      await state.permanentlyDeleteTrashGroup(group.key);
     }
+  }
+
+  /// A trash card for a group: the top note, badged with "+ N notes" when the
+  /// group holds more than one (a deleted circuit or subtree).
+  Widget _groupCard(BuildContext context, AppState state, TrashGroup group) {
+    final extra = group.members.length - 1;
+    final card = NoteCard(
+      note: group.top,
+      space: state.spaceById(group.top.spaceId),
+      onTap: () => _groupActions(context, group),
+      onLongPress: () => _groupActions(context, group),
+    );
+    if (extra <= 0) return card;
+    return Stack(
+      children: [
+        card,
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.account_tree_rounded,
+                    size: 12, color: Colors.white),
+                const SizedBox(width: 4),
+                Text(context.t.circuitMoreNotes(extra),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _cardActions(BuildContext context, TweetCard card) async {
@@ -88,34 +140,29 @@ class RecentlyDeletedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final notes = state.deletedNotes;
+    final groups = state.deletedNoteGroups;
     final cards = state.deletedCards;
     final spaces = state.deletedSpaces;
 
-    final left = <Note>[];
-    final right = <Note>[];
-    for (var i = 0; i < notes.length; i++) {
-      (i.isEven ? left : right).add(notes[i]);
+    final left = <TrashGroup>[];
+    final right = <TrashGroup>[];
+    for (var i = 0; i < groups.length; i++) {
+      (i.isEven ? left : right).add(groups[i]);
     }
 
-    Widget column(List<Note> items) => Expanded(
+    Widget column(List<TrashGroup> items) => Expanded(
           child: Column(
             children: [
-              for (final n in items)
+              for (final g in items)
                 Padding(
                   padding: const EdgeInsets.all(6),
-                  child: NoteCard(
-                    note: n,
-                    space: state.spaceById(n.spaceId),
-                    onTap: () => _noteActions(context, n),
-                    onLongPress: () => _noteActions(context, n),
-                  ),
+                  child: _groupCard(context, state, g),
                 ),
             ],
           ),
         );
 
-    final isEmpty = notes.isEmpty && cards.isEmpty && spaces.isEmpty;
+    final isEmpty = groups.isEmpty && cards.isEmpty && spaces.isEmpty;
 
     return FrostedScaffold(
       title: context.t.recentlyDeleted,
@@ -182,7 +229,7 @@ class RecentlyDeletedScreen extends StatelessWidget {
                         ],
                       ),
                     ],
-                    if (notes.isNotEmpty) ...[
+                    if (groups.isNotEmpty) ...[
                       _label(context, context.t.sectionNotes),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
