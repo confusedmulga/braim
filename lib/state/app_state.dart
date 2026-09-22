@@ -1938,6 +1938,37 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  /// Turns a placeholder into a real, titled note in place — keeping its
+  /// children and position — ready to edit. The placeholder's number is freed
+  /// and the note joins the "Note #N" numbering. Returns the note.
+  Future<Note> writeIntoPlaceholder(
+    String slotId, {
+    bool markdown = false,
+    String Function(int n) noteTitle = defaultNoteTitle,
+  }) async {
+    final slot = noteById(slotId);
+    if (slot == null || !slot.circuitPlaceholder) {
+      throw StateError('writeIntoPlaceholder: not a placeholder');
+    }
+    final circuitId = slot.circuitId!;
+    slot
+      ..circuitPlaceholder = false
+      ..circuitPlaceholderFor = null;
+    // Computed while the slot still carries its "Placeholder #N" title, so it
+    // isn't counted against the "Note #N" numbering.
+    final title = _nextNumberedTitle(circuitId, noteTitle);
+    slot
+      ..title = title
+      ..markdown = markdown
+      ..blocks = [
+        NoteBlock(
+            type: NoteBlockType.text, text: markdown ? '# $title\n' : '')
+      ]
+      ..updatedAt = DateTime.now();
+    await _persist();
+    return slot;
+  }
+
   Future<void> setCircuitShowInFeed(String nodeId, bool show) async {
     final node = noteById(nodeId);
     if (node == null || !node.isCircuitNode || node.circuitPlaceholder) return;

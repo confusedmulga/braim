@@ -1004,5 +1004,7 @@
   "circuitFit": "Fit to screen",
   "circuitPickNote": "Choose a note",
   "circuitRestoredWithRoot": "The circuit was restored too",
-  "circuitBulkSkipped": "Circuit notes are managed on the circuit map"
+  "circuitBulkSkipped": "Circuit notes are managed on the circuit map",
+  "circuitOpen": "Open",
+  "circuitDeleteCircuitAction": "Delete circuit"
 }

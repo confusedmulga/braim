@@ -38,6 +38,7 @@ import '../widgets/note_info.dart';
 import '../widgets/note_link_picker.dart';
 import '../widgets/note_links_section.dart';
 import '../widgets/note_tags_editor.dart';
+import '../widgets/quick_actions_menu.dart';
 import '../widgets/wiki_text.dart';
 import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
@@ -295,12 +296,16 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                   _menuTile(
                     sheetCtx,
                     Icons.delete_outline_rounded,
-                    context.t.delete,
-                    () {
-                      setState(() => _closing = true);
-                      Navigator.of(context).pop();
-                      _persistLater(state, delete: true);
-                    },
+                    _note.isCircuitRoot
+                        ? context.t.circuitDeleteCircuitAction
+                        : context.t.delete,
+                    _note.inCircuit
+                        ? _deleteCircuitFromMenu
+                        : () {
+                            setState(() => _closing = true);
+                            Navigator.of(context).pop();
+                            _persistLater(state, delete: true);
+                          },
                     danger: true,
                   ),
               ],
@@ -737,6 +742,78 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     _goToMap(_note.id, highlight: false);
   }
 
+  String _circuitTitle() {
+    final t = _note.title.trim();
+    if (t.isNotEmpty) return t;
+    return _note.isCircuitRoot ? context.t.untitledCircuit : context.t.untitledNote;
+  }
+
+  /// The breadcrumb shown above a branch's title: "{circuit} › {parent}".
+  String _circuitCrumb(AppState state) {
+    final root = state.circuitRootOf(_note);
+    final circuitName = (root == null || root.title.trim().isEmpty)
+        ? context.t.untitledCircuit
+        : root.title.trim();
+    final parent = _note.circuitParentId == null
+        ? null
+        : state.noteById(_note.circuitParentId!);
+    if (parent == null || parent.id == root?.id) return circuitName;
+    final parentName = parent.title.trim().isEmpty
+        ? context.t.untitledNote
+        : parent.title.trim();
+    return '$circuitName › $parentName';
+  }
+
+  int _descendantCount(AppState state, String id) {
+    var count = 0;
+    final stack = [id];
+    while (stack.isNotEmpty) {
+      final pid = stack.removeLast();
+      for (final c in state.circuitChildren(pid)) {
+        count++;
+        stack.add(c.id);
+      }
+    }
+    return count;
+  }
+
+  /// The ⋯ Delete for a circuit note: the whole circuit for a first note, the
+  /// choice dialog for a branch with children, or a plain confirm otherwise.
+  Future<void> _deleteCircuitFromMenu() async {
+    final state = context.read<AppState>();
+    final id = _note.id;
+    if (_note.isCircuitRoot) {
+      final total = state
+          .circuitNodes(id)
+          .where((n) => !n.circuitPlaceholder)
+          .length;
+      final ok = await confirmDeleteCircuit(context,
+          title: _circuitTitle(), count: total);
+      if (!ok || !mounted) return;
+      await state.deleteCircuit(id);
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    if (state.circuitChildren(id).isEmpty) {
+      if (await confirmDeleteItems(context, 1) && mounted) {
+        await state.deleteCircuitSubtree(id);
+        if (mounted) Navigator.of(context).pop();
+      }
+      return;
+    }
+    final descendants = _descendantCount(state, id);
+    final choice = await showCircuitDeleteWithChildrenDialog(context,
+        title: _circuitTitle(), childCount: descendants);
+    if (choice == null || !mounted) return;
+    if (choice == CircuitDeleteChoice.all) {
+      await state.deleteCircuitSubtree(id);
+    } else {
+      await state.deleteCircuitNodeKeepSlot(id,
+          placeholderTitle: (n) => context.t.circuitPlaceholderTitle(n));
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _circuitAdd() async {
     final state = context.read<AppState>();
     await _saveForCircuit(state);
@@ -824,6 +901,43 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                 // the title/first line below it.
                 padding: EdgeInsets.fromLTRB(18, topInset + 24, 18, 200),
                 children: [
+                  if (_note.isCircuitNode)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: InkWell(
+                          onTap: _circuitMap,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.account_tree_rounded,
+                                    size: 13, color: AppPalette.inkSecondary),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    _circuitCrumb(state),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppPalette.inkSecondary),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (space != null)
                     Builder(builder: (context) {
                       final tint = NoteColors.resolveStrong(space.colorValue);

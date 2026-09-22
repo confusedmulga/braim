@@ -4203,6 +4203,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Circuit notes are managed on the circuit map'**
   String get circuitBulkSkipped;
+
+  /// No description provided for @circuitOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get circuitOpen;
+
+  /// No description provided for @circuitDeleteCircuitAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete circuit'**
+  String get circuitDeleteCircuitAction;
 }
 
 class _AppLocalizationsDelegate

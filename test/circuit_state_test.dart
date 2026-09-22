@@ -380,6 +380,40 @@ void main() {
     expect(await s.fillPlaceholder(ph3.id, r3.id), isFalse);
   });
 
+  test('writeIntoPlaceholder turns a placeholder into a titled note in place',
+      () async {
+    final s = await emptyState();
+    final r = await newCircuit(s);
+    final a = await s.addCircuitChild(r.id);
+    final a1 = await s.addCircuitChild(a.id);
+    await s.deleteCircuitNodeKeepSlot(a.id);
+    final ph = s.circuitChildren(r.id).firstWhere((n) => n.circuitPlaceholder);
+
+    final written = await s.writeIntoPlaceholder(ph.id);
+    expect(written.id, ph.id);
+    expect(written.circuitPlaceholder, isFalse);
+    expect(written.circuitPlaceholderFor, isNull);
+    expect(written.title, 'Note #1'); // reuses the number freed by deleting a
+    expect(written.isEmpty, isFalse);
+    expect(ids(s.circuitChildren(written.id)), [a1.id]); // children kept
+    expect(ids(s.searchableNotes).contains(written.id), isTrue);
+  });
+
+  test('writeIntoPlaceholder can seed a Markdown note', () async {
+    final s = await emptyState();
+    final r = await newCircuit(s);
+    final a = await s.addCircuitChild(r.id);
+    await s.addCircuitChild(a.id);
+    await s.deleteCircuitNodeKeepSlot(a.id);
+    final ph = s.circuitChildren(r.id).firstWhere((n) => n.circuitPlaceholder);
+
+    final md = await s.writeIntoPlaceholder(ph.id, markdown: true);
+    expect(md.markdown, isTrue);
+    expect(md.markdownSource, '# Note #1\n');
+    expect(markdownTitle(md.markdownSource), 'Note #1');
+    expect(md.circuitPlaceholder, isFalse);
+  });
+
   // ---- Existing notes -----------------------------------------------------
 
   test('placeNoteInCircuit pulls a note in; removeFromCircuit lifts children',
