@@ -127,7 +127,10 @@ class NoteCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (thumb == null && space != null) ...[
+                  if (note.isCircuitNode) ...[
+                    _circuitChip(context, ink),
+                    const SizedBox(height: 8),
+                  ] else if (thumb == null && space != null) ...[
                     _spaceChip(space!, onColor: colored, cardInk: ink),
                     const SizedBox(height: 8),
                   ],
@@ -252,6 +255,10 @@ class NoteCard extends StatelessWidget {
               ],
             ),
           ),
+          if (note.isCircuitNode) ...[
+            const SizedBox(height: 8),
+            _circuitChip(context, ink),
+          ],
           if (title.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(title,
@@ -386,6 +393,40 @@ class NoteCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// The "In {circuit}" chip a branch shown in the feed carries where a folder
+  /// chip would otherwise sit.
+  Widget _circuitChip(BuildContext context, Color ink) {
+    final state = context.read<AppState>();
+    final root = note.circuitId == null ? null : state.noteById(note.circuitId!);
+    final name = (root == null || root.title.trim().isEmpty)
+        ? context.t.untitledCircuit
+        : root.title.trim();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: ink.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.account_tree_rounded,
+                size: 13, color: ink.withValues(alpha: 0.85)),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(context.t.circuitIn(name),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: ink)),
+            ),
+          ],
+        ),
       ),
     );
   }

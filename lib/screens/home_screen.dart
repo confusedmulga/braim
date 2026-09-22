@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/note.dart';
 import '../state/app_state.dart';
+import '../widgets/circuit_sheets.dart';
 import '../widgets/feed_greeting.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_morph.dart';
@@ -50,7 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---- Long-press quick actions ------------------------------------------
 
   Future<void> _showActions(Note n) async {
-    final action = await showQuickActions(context, pinned: n.pinned);
+    final action = await showQuickActions(context,
+        pinned: n.pinned, circuitBranch: n.isCircuitNode);
     if (action == null || !mounted) return;
     switch (action) {
       case QuickAction.move:
@@ -63,11 +65,65 @@ class _HomeScreenState extends State<HomeScreen> {
         await _pickTheme(n);
       case QuickAction.archive:
         await _archiveOne(n);
+      case QuickAction.hideFromFeed:
+        await context.read<AppState>().setCircuitShowInFeed(n.id, false);
       case QuickAction.delete:
-        if (await confirmDeleteItems(context, 1) && mounted) {
+        if (n.inCircuit) {
+          await _deleteCircuitNote(n);
+        } else if (await confirmDeleteItems(context, 1) && mounted) {
           await _deleteOne(n);
         }
     }
+  }
+
+  /// Quick-action delete for a circuit note: the whole circuit for a first
+  /// note, the keep-a-placeholder choice for a shown branch with children.
+  Future<void> _deleteCircuitNote(Note n) async {
+    final state = context.read<AppState>();
+    if (n.isCircuitRoot) {
+      final total = state
+          .circuitNodes(n.id)
+          .where((x) => !x.circuitPlaceholder)
+          .length;
+      final ok = await confirmDeleteCircuit(context,
+          title: _circuitTitleFor(n), count: total);
+      if (ok && mounted) await state.deleteCircuit(n.id);
+      return;
+    }
+    if (state.circuitChildren(n.id).isEmpty) {
+      if (await confirmDeleteItems(context, 1) && mounted) {
+        await state.deleteCircuitSubtree(n.id);
+      }
+      return;
+    }
+    final descendants = _descendantCount(state, n.id);
+    final choice = await showCircuitDeleteWithChildrenDialog(context,
+        title: _circuitTitleFor(n), childCount: descendants);
+    if (choice == CircuitDeleteChoice.all && mounted) {
+      await state.deleteCircuitSubtree(n.id);
+    } else if (choice == CircuitDeleteChoice.keepSlot && mounted) {
+      await state.deleteCircuitNodeKeepSlot(n.id,
+          placeholderTitle: (k) => context.t.circuitPlaceholderTitle(k));
+    }
+  }
+
+  String _circuitTitleFor(Note n) {
+    final t = n.title.trim();
+    if (t.isNotEmpty) return t;
+    return n.isCircuitRoot ? context.t.untitledCircuit : context.t.untitledNote;
+  }
+
+  int _descendantCount(AppState state, String id) {
+    var count = 0;
+    final stack = [id];
+    while (stack.isNotEmpty) {
+      final pid = stack.removeLast();
+      for (final c in state.circuitChildren(pid)) {
+        count++;
+        stack.add(c.id);
+      }
+    }
+    return count;
   }
 
   Future<void> _pinOne(Note n) async {
@@ -130,8 +186,22 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  bool _selectionHasBranch(AppState state) => _selected.any((id) {
+        final n = state.noteById(id);
+        return n != null && n.isCircuitNode;
+      });
+
+  void _snackCircuitSkipped() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.t.circuitBulkSkipped)),
+    );
+  }
+
   Future<void> _bulkArchive() async {
-    await context.read<AppState>().bulkArchiveNotes(_selected.toSet(), true);
+    final state = context.read<AppState>();
+    final skipped = _selectionHasBranch(state);
+    await state.bulkArchiveNotes(_selected.toSet(), true);
+    if (mounted && skipped) _snackCircuitSkipped();
     _exitSelection();
   }
 
@@ -139,7 +209,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!await confirmDeleteItems(context, _selected.length) || !mounted) {
       return;
     }
-    await context.read<AppState>().bulkDeleteNotes(_selected.toSet());
+    final state = context.read<AppState>();
+    final skipped = _selectionHasBranch(state);
+    await state.bulkDeleteNotes(_selected.toSet());
+    if (mounted && skipped) _snackCircuitSkipped();
     _exitSelection();
   }
 
@@ -153,9 +226,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final choice = await showMoveToSpaceSheet(context,
         currentSpaceId: null, allowCrypt: !hasCircuit);
     if (choice == null || !mounted) return;
-    await context
-        .read<AppState>()
-        .bulkMoveNotes(_selected.toSet(), choice == '__none__' ? null : choice);
+    final skipped = _selectionHasBranch(state);
+    await state.bulkMoveNotes(
+        _selected.toSet(), choice == '__none__' ? null : choice);
+    if (mounted && skipped) _snackCircuitSkipped();
     _exitSelection();
   }
 

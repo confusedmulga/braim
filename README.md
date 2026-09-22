@@ -69,7 +69,8 @@ exported to **PDF** through the share sheet, and a `.md` or `.txt` file shared
 into Braim is saved as a note.
 
 Press the pencil button to open a new rich note. Hold it for a short menu: a new
-**Markdown document**, **import** a `.md` or `.txt` file, or a plain new note.
+**circuit** (a note that grows into a tree, described in 3-10), a new **Markdown
+document**, **import** a `.md` or `.txt` file, or a plain new note.
 
 ### 2-2. CARDS (Links and Tweets)
 
@@ -210,6 +211,38 @@ Settings carries a **Test notifications** control that sends one notification
 immediately and a second ten seconds later, then reports which of them the
 operating system delivered, so notification permission and Do Not Disturb can be
 checked without waiting for a real reminder.
+
+### 3-10. CIRCUITS
+
+A circuit is a note that grows into a tree. It begins as one full note, the
+first note, and every branch under it is a full note of its own, rich or
+Markdown, nested to any depth. The first note appears in the Home feed as a
+**Circuit** card counting the notes inside it; the branches stay out of the feed
+unless one is set to show there.
+
+Start a circuit from the Home pencil menu (2-1). Inside any circuit note the top
+bar carries a **plus**, which adds a note next to or under the current one, and a
+**map** button. The map is a full-screen canvas that pans and pinch-zooms and
+lays the tree out three ways, **left to right**, **top down**, and **radial**,
+switched from the top bar and remembered per circuit. Tap a node to open it. The
+plus on the outer edge of a node adds a child. Long-press a node for its actions:
+rename, colour, move up or down, move into the note above or out one level, move
+to another branch, add or place notes, show or hide it in the Home feed, remove
+it from the circuit, or delete it.
+
+Every new note inside a circuit is titled "Note #1", "Note #2" and so on, so it
+is never an empty note that the cleanup could remove. Deleting a note that has
+notes under it offers to delete the whole subtree or to keep a titled
+**placeholder** in its place so the notes under it stay attached; a placeholder
+can later be written into, filled with an existing note, or removed. Deleting the
+first note deletes the whole circuit. A branch shown in the Home feed carries an
+"In {circuit}" chip, and circuit notes are found by search and can be linked with
+`[[wiki-links]]`. Circuits follow their first note into a folder, the Archive or
+Recently Deleted, and are never placed in the Crypt.
+
+**NOTE.** Restoring a backup into an older build of Braim that predates circuits
+shows the circuit notes as ordinary loose notes in the feed. Nothing is lost;
+reopening that backup in a current build restores the tree.
 
 ---
 

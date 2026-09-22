@@ -436,9 +436,86 @@ class SeedData {
       ),
     ];
 
+    // ---- A sample circuit ("Plan a trip") ---------------------------------
+    // A first note with eight branches three levels deep, one Markdown branch,
+    // one coloured branch, one branch shown in the Home feed, and a placeholder
+    // (a deleted node that kept its child) — so every circuit surface has
+    // something to show.
+    final tripRoot = Note(
+      title: 'Plan a trip',
+      blocks: [
+        text('A weekend away. Branch off each piece — flights, where to stay, '
+            'what to see — then open the circuit map to see it all at once.'),
+      ],
+      createdAt: ago(const Duration(days: 9)),
+      updatedAt: ago(const Duration(days: 2)),
+    );
+    tripRoot.circuitId = tripRoot.id;
+
+    Note branch(
+      String title,
+      String parentId,
+      int order, {
+      String body = '',
+      bool markdown = false,
+      int? color,
+      bool showInFeed = false,
+    }) {
+      final n = markdown
+          ? Note(
+              markdown: true,
+              title: title,
+              blocks: [text('# $title\n\n$body')])
+          : Note(
+              title: title,
+              colorValue: color,
+              blocks: body.isEmpty ? [text('')] : [text(body)]);
+      return n
+        ..circuitId = tripRoot.id
+        ..circuitParentId = parentId
+        ..circuitOrder = order
+        ..circuitShowInFeed = showInFeed;
+    }
+
+    final flights = branch('Flights', tripRoot.id, 0);
+    final fCompare = branch('Compare fares', flights.id, 0,
+        body: 'Skyscanner vs booking with the airline direct. Tuesdays win.');
+    final fBook = branch('Book by Friday', flights.id, 1,
+        body: 'Prices jump over the weekend.');
+    final stay = branch('Where to stay', tripRoot.id, 1,
+        body: 'Somewhere central and quiet.', color: 0xFFBFEAD6);
+    final stayShort = branch('Shortlist three places', stay.id, 0);
+    final packing = branch('Packing list', tripRoot.id, 2,
+        markdown: true, body: '- Passport\n- Chargers\n- A good book');
+    final see = branch('Things to see', tripRoot.id, 3,
+        body: 'The old harbour at dusk. The little museum. The bakery everyone '
+            'keeps mentioning.',
+        showInFeed: true);
+    // A placeholder (a node deleted while keeping its child) with one child.
+    final slot = Note(title: 'Placeholder #1')
+      ..circuitId = tripRoot.id
+      ..circuitParentId = tripRoot.id
+      ..circuitOrder = 4
+      ..circuitPlaceholder = true;
+    final museum = branch('Museum tickets', slot.id, 0,
+        body: 'Book online — the queue is brutal on weekends.');
+
+    final circuitNotes = <Note>[
+      tripRoot,
+      flights,
+      fCompare,
+      fBook,
+      stay,
+      stayShort,
+      packing,
+      see,
+      slot,
+      museum,
+    ];
+
     return SeedBundle(
       spaces: spaces,
-      notes: [...notes, ...bookPages],
+      notes: [...notes, ...bookPages, ...circuitNotes],
       cards: cards,
       books: [book],
     );
