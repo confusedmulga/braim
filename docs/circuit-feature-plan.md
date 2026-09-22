@@ -966,14 +966,22 @@ Phase 1 tests:
 - [x] Analyzer clean, full suite 160 green, emulator build + owner test script.
 
 ### Phase 7: Optional polish
-- [ ] Share a circuit as a Markdown outline and as a PDF: the first note as H1,
-      each branch as a heading by depth, bullets past H6, reusing
-      `NotePdf.fromMarkdown`.
-- [ ] Remember zoom and position per circuit (settings map, `readerPositions`
-      pattern).
-- [ ] Collapse and expand branches; the layout already supports `collapsed`.
-- [ ] Skip building off-screen nodes for very large circuits.
-- [ ] Drag a node onto another to re-parent it.
+- [x] Share a circuit as a Markdown outline and as a PDF (root's node sheet):
+      the first note as H1, each branch as a heading by depth, bullets past H6,
+      placeholders skipped, reusing `NotePdf.fromMarkdown`.
+- [x] Collapse and expand branches (node sheet toggle; a collapsed node shows a
+      child-count badge and hides its +), using the layout's `collapsed` support.
+- [ ] Remember zoom and position per circuit — **deferred**: the map is always
+      opened focused on a node (feed/note-screen paths all pass a `focusNodeId`,
+      and returning from a node re-centres on it), so a remembered free viewport
+      would almost never apply. Not worth the settings-map churn for this
+      navigation model.
+- [ ] Skip building off-screen nodes for very large circuits — **deferred**:
+      premature optimization at personal scale; the layout and the Positioned
+      chips are cheap for the circuit sizes a single operator builds.
+- [ ] Drag a node onto another to re-parent it — **deferred**: redundant with
+      the Move to... pick mode, and reliable drag-and-drop over a pan/zoom
+      `InteractiveViewer` is finicky to get right without on-device iteration.
 
 ---
 

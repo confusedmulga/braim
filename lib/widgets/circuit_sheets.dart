@@ -88,6 +88,7 @@ enum CircuitNodeAction {
   open,
   rename,
   colour,
+  toggleCollapse,
   moveUp,
   moveDown,
   indent,
@@ -99,6 +100,8 @@ enum CircuitNodeAction {
   addExisting,
   toggleFeed,
   remove,
+  shareOutline,
+  sharePdf,
   delete,
 }
 
@@ -112,6 +115,8 @@ Future<CircuitNodeAction?> showCircuitNodeSheet(
   required bool canMoveDown,
   required bool canIndent,
   required bool canOutdent,
+  bool hasChildren = false,
+  bool collapsed = false,
 }) {
   final t = context.t;
   final isRoot = note.isCircuitRoot;
@@ -157,6 +162,14 @@ Future<CircuitNodeAction?> showCircuitNodeSheet(
                       CircuitNodeAction.rename),
                   _act(sheetCtx, Icons.palette_outlined, t.circuitColour,
                       CircuitNodeAction.colour),
+                  if (hasChildren)
+                    _act(
+                        sheetCtx,
+                        collapsed
+                            ? Icons.unfold_more_rounded
+                            : Icons.unfold_less_rounded,
+                        collapsed ? t.circuitExpand : t.circuitCollapse,
+                        CircuitNodeAction.toggleCollapse),
                   if (!isRoot) ...[
                     _act(sheetCtx, Icons.arrow_upward_rounded, t.circuitMoveUp,
                         CircuitNodeAction.moveUp, enabled: canMoveUp),
@@ -194,6 +207,12 @@ Future<CircuitNodeAction?> showCircuitNodeSheet(
                   if (!isRoot)
                     _act(sheetCtx, Icons.link_off_rounded, t.circuitRemove,
                         CircuitNodeAction.remove),
+                  if (isRoot) ...[
+                    _act(sheetCtx, Icons.ios_share_rounded,
+                        t.circuitShareOutline, CircuitNodeAction.shareOutline),
+                    _act(sheetCtx, Icons.picture_as_pdf_outlined,
+                        t.circuitSharePdf, CircuitNodeAction.sharePdf),
+                  ],
                   _act(
                       sheetCtx,
                       Icons.delete_outline_rounded,

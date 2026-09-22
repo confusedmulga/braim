@@ -1,11 +1,16 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../services/circuit_layout.dart';
+import '../services/note_pdf.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/circuit_sheets.dart';
@@ -61,6 +66,10 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   String? _focusId;
   bool _highlight = false;
   _PickState? _pick;
+
+  /// Nodes whose subtree is collapsed (hidden on the map). In-memory: the map
+  /// opens fully expanded.
+  final Set<String> _collapsed = {};
 
   late final AnimationController _pulse = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 1200));
@@ -121,6 +130,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     return layoutCircuit(
       rootId: widget.circuitId,
       children: children,
+      collapsed: _collapsed,
       mode: mode,
     );
   }
@@ -345,7 +355,9 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         canMoveUp: canUp,
         canMoveDown: canDown,
         canIndent: canIndent,
-        canOutdent: canOutdent);
+        canOutdent: canOutdent,
+        hasChildren: state.circuitChildren(id).isNotEmpty,
+        collapsed: _collapsed.contains(id));
     if (action == null || !mounted) return;
     await _handleNodeAction(action, id);
   }
@@ -363,6 +375,10 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         if (title != null && mounted) {
           await state.renameCircuitNode(id, title.trim());
         }
+      case CircuitNodeAction.toggleCollapse:
+        setState(() {
+          if (!_collapsed.remove(id)) _collapsed.add(id);
+        });
       case CircuitNodeAction.colour:
         await showNoteStylePicker(
           context,
@@ -401,8 +417,113 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         await state.setCircuitShowInFeed(id, !note.circuitShowInFeed);
       case CircuitNodeAction.remove:
         await state.removeFromCircuit(id);
+      case CircuitNodeAction.shareOutline:
+        await _shareOutline();
+      case CircuitNodeAction.sharePdf:
+        await _sharePdf();
       case CircuitNodeAction.delete:
         await _deleteNode(id);
+    }
+  }
+
+  // ---- Share as an outline ------------------------------------------------
+
+  /// The circuit as a Markdown outline: the first note as H1, each branch as a
+  /// heading by depth, bullets once past H6. Placeholders are skipped, their
+  /// children taking their level. Reused for the Markdown and PDF shares.
+  String _circuitOutline() {
+    final state = context.read<AppState>();
+    final root = state.noteById(widget.circuitId);
+    if (root == null) return '';
+    final buf = StringBuffer();
+    void visit(Note n, int depth) {
+      if (n.circuitPlaceholder) {
+        for (final c in state.circuitChildren(n.id)) {
+          visit(c, depth);
+        }
+        return;
+      }
+      final title = n.title.trim().isEmpty
+          ? (depth == 0 ? context.t.untitledCircuit : context.t.untitledNote)
+          : n.title.trim();
+      if (depth <= 5) {
+        buf.writeln('${'#' * (depth + 1)} $title');
+      } else {
+        buf.writeln('${'  ' * (depth - 6)}- $title');
+      }
+      final body = _nodeBody(n);
+      if (body.isNotEmpty) {
+        buf
+          ..writeln()
+          ..writeln(body);
+      }
+      buf.writeln();
+      for (final c in state.circuitChildren(n.id)) {
+        visit(c, depth + 1);
+      }
+    }
+
+    visit(root, 0);
+    return buf.toString().trim();
+  }
+
+  String _nodeBody(Note n) {
+    if (n.markdown) {
+      final lines = n.markdownSource.split('\n');
+      var start = 0;
+      while (start < lines.length && lines[start].trim().isEmpty) {
+        start++;
+      }
+      if (start < lines.length &&
+          RegExp(r'^#\s+').hasMatch(lines[start].trim())) {
+        start++;
+      }
+      return lines.sublist(start).join('\n').trim();
+    }
+    return n.textPreview.trim();
+  }
+
+  String _circuitTitle() {
+    final root = context.read<AppState>().noteById(widget.circuitId);
+    return (root == null || root.title.trim().isEmpty)
+        ? context.t.untitledCircuit
+        : root.title.trim();
+  }
+
+  String _circuitFileBase() {
+    final root = context.read<AppState>().noteById(widget.circuitId);
+    final t = root?.title.trim() ?? '';
+    if (t.isEmpty) return 'circuit';
+    return t
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-');
+  }
+
+  Future<void> _shareOutline() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${_circuitFileBase()}.md');
+      await file.writeAsString(_circuitOutline());
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
+      }
+    }
+  }
+
+  Future<void> _sharePdf() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final bytes =
+          await NotePdf.fromMarkdown(_circuitOutline(), title: _circuitTitle());
+      await Printing.sharePdf(
+          bytes: bytes, filename: '${_circuitFileBase()}.pdf');
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(context.t.exportFailed)));
+      }
     }
   }
 
@@ -630,6 +751,9 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
                             focused: _focusId == id && _pick == null,
                             highlight: _highlight,
                             pulse: _pulse,
+                            collapsedCount: _collapsed.contains(id)
+                                ? state.circuitChildren(id).length
+                                : 0,
                             dimmed: _pick != null && !_isValidTarget(state, id),
                             onTap: _pick != null
                                 ? (_isValidTarget(state, id)
@@ -642,7 +766,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
                         ),
                       if (_pick == null)
                         for (final id in layout.rects.keys)
-                          if (!(state.noteById(id)?.circuitPlaceholder ?? true))
+                          if (!(state.noteById(id)?.circuitPlaceholder ?? true) &&
+                              !_collapsed.contains(id))
                             _plusButton(rects, layout, id),
                     ],
                   ),
@@ -731,6 +856,7 @@ class _NodeChip extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.dimmed = false,
+    this.collapsedCount = 0,
   });
 
   final Note? note;
@@ -740,6 +866,9 @@ class _NodeChip extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final bool dimmed;
+
+  /// When > 0, this node is collapsed and hides [collapsedCount] children.
+  final int collapsedCount;
 
   @override
   Widget build(BuildContext context) {
@@ -814,6 +943,26 @@ class _NodeChip extends StatelessWidget {
           if (note.circuitShowInFeed && !isPlaceholder) ...[
             const SizedBox(width: 6),
             Icon(Icons.home_rounded, size: 13, color: ink.withValues(alpha: 0.7)),
+          ],
+          if (collapsedCount > 0) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: ink.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.unfold_more_rounded, size: 11, color: ink),
+                  const SizedBox(width: 2),
+                  Text('$collapsedCount',
+                      style: TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: ink)),
+                ],
+              ),
+            ),
           ],
         ],
       ),
