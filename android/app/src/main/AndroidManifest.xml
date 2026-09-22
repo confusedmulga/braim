@@ -96,13 +96,6 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
-        <!-- Keep the notification large-icon. It is referenced only by name from
-             Dart (flutter_local_notifications' getIdentifier), which the release
-             resource shrinker can't see, so it gets stripped and notifications
-             fail with "invalid_large_icon". This static reference pins it. -->
-        <meta-data
-            android:name="com.solo.braim.notification_large_icon"
-            android:resource="@drawable/ic_notif_large" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
