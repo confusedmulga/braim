@@ -950,10 +950,11 @@ Phase 1 tests:
 - [x] Analyzer clean, tests green, emulator build + owner test script.
 
 ### Phase 5: Layout modes
-- [ ] Top-down and radial rendering, with their edge shapes and **+**
-      placement.
-- [ ] Layout switch, persisted per circuit.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Top-down and radial rendering, with their edge shapes (vertical cubic /
+      straight line) and mode-aware **+** placement.
+- [x] Layout switch button that cycles left-to-right, top-down, radial;
+      persisted per circuit via `setCircuitLayout`; animates and refits.
+- [x] Analyzer clean, full suite green, emulator build + owner test script.
 
 ### Phase 6: Everywhere else
 - [ ] Search subtitle and icon; Recently Deleted groups; Home quick actions

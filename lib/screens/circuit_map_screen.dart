@@ -111,6 +111,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   }
 
   CircuitLayout _buildLayout(AppState state) {
+    final root = state.noteById(widget.circuitId);
+    final mode = _modeFromString(root?.circuitLayout ?? 'ltr');
     final nodes = state.circuitNodes(widget.circuitId);
     final children = <String, List<String>>{};
     for (final n in nodes) {
@@ -119,8 +121,65 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     return layoutCircuit(
       rootId: widget.circuitId,
       children: children,
-      mode: CircuitLayoutMode.ltr,
+      mode: mode,
     );
+  }
+
+  static CircuitLayoutMode _modeFromString(String s) => switch (s) {
+        'ttb' => CircuitLayoutMode.ttb,
+        'radial' => CircuitLayoutMode.radial,
+        _ => CircuitLayoutMode.ltr,
+      };
+
+  static String _modeToString(CircuitLayoutMode m) => switch (m) {
+        CircuitLayoutMode.ltr => 'ltr',
+        CircuitLayoutMode.ttb => 'ttb',
+        CircuitLayoutMode.radial => 'radial',
+      };
+
+  static CircuitLayoutMode _nextMode(CircuitLayoutMode m) => switch (m) {
+        CircuitLayoutMode.ltr => CircuitLayoutMode.ttb,
+        CircuitLayoutMode.ttb => CircuitLayoutMode.radial,
+        CircuitLayoutMode.radial => CircuitLayoutMode.ltr,
+      };
+
+  Future<void> _cycleLayout() async {
+    final state = context.read<AppState>();
+    final root = state.noteById(widget.circuitId);
+    if (root == null) return;
+    final next = _nextMode(_modeFromString(root.circuitLayout));
+    await state.setCircuitLayout(widget.circuitId, _modeToString(next));
+    if (!mounted) return;
+    // The nodes glide via the layout-change animation; refit the viewport too.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fitToScreen();
+    });
+  }
+
+  IconData _layoutIcon(CircuitLayoutMode mode) => switch (mode) {
+        CircuitLayoutMode.ltr => Icons.account_tree_rounded,
+        CircuitLayoutMode.ttb => Icons.schema_rounded,
+        CircuitLayoutMode.radial => Icons.hub_rounded,
+      };
+
+  String _layoutTooltip(CircuitLayoutMode mode) => switch (mode) {
+        CircuitLayoutMode.ltr => context.t.circuitLayoutLtr,
+        CircuitLayoutMode.ttb => context.t.circuitLayoutTtb,
+        CircuitLayoutMode.radial => context.t.circuitLayoutRadial,
+      };
+
+  /// The centre of a node's + button for the given [rect] — mode-aware, so it
+  /// follows the node during the layout-change animation.
+  Offset _plusAnchorFor(CircuitLayout layout, Rect rect, String id) {
+    final dir = layout.outward(id);
+    final hw = layout.metrics.nodeW / 2;
+    final hh = layout.metrics.nodeH / 2;
+    final ax = dir.dx.abs();
+    final ay = dir.dy.abs();
+    final reach = ax < 1e-9
+        ? hh
+        : (ay < 1e-9 ? hw : math.min(hw / ax, hh / ay));
+    return rect.center + dir * (reach + CircuitLayout.plusReach);
   }
 
   String _layoutSig(CircuitLayout layout) {
@@ -513,6 +572,11 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
       onBack: _pick != null ? () => setState(() => _pick = null) : null,
       actions: [
         FrostedCircleButton(
+          icon: _layoutIcon(layout.mode),
+          tooltip: _layoutTooltip(layout.mode),
+          onTap: _cycleLayout,
+        ),
+        FrostedCircleButton(
           icon: Icons.fit_screen_rounded,
           tooltip: context.t.circuitFit,
           onTap: _fitToScreen,
@@ -553,6 +617,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
                             painter: _EdgePainter(
                                 rects,
                                 layout.edges,
+                                layout.mode,
                                 AppPalette.inkSecondary.withValues(alpha: 0.5)),
                           ),
                         ),
@@ -624,8 +689,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
 
   Widget _plusButton(Map<String, Rect> rects, CircuitLayout layout, String id) {
     final rect = rects[id] ?? layout.rects[id]!;
-    // Place the + just past the node's right edge (left-to-right layout).
-    final a = Offset(rect.right + CircuitLayout.plusReach, rect.center.dy);
+    final a = _plusAnchorFor(layout, rect, id);
     return Positioned(
       left: a.dx - 20,
       top: a.dy - 20,
@@ -792,13 +856,15 @@ class _NodeChip extends StatelessWidget {
   }
 }
 
-/// Draws the branch lines from the given [rects]: a cubic from each parent's
-/// right-middle to its child's left-middle, under the nodes.
+/// Draws the branch lines from the given [rects], under the nodes. The edge
+/// shape follows the layout mode: a horizontal cubic for left-to-right, a
+/// vertical cubic for top-down, and a straight line for radial.
 class _EdgePainter extends CustomPainter {
-  _EdgePainter(this.rects, this.edges, this.color);
+  _EdgePainter(this.rects, this.edges, this.mode, this.color);
 
   final Map<String, Rect> rects;
   final List<(String, String)> edges;
+  final CircuitLayoutMode mode;
   final Color color;
 
   @override
@@ -811,17 +877,35 @@ class _EdgePainter extends CustomPainter {
       final p = rects[edge.$1];
       final c = rects[edge.$2];
       if (p == null || c == null) continue;
-      final start = Offset(p.right, p.center.dy);
-      final end = Offset(c.left, c.center.dy);
-      final midX = (start.dx + end.dx) / 2;
-      final path = Path()
-        ..moveTo(start.dx, start.dy)
-        ..cubicTo(midX, start.dy, midX, end.dy, end.dx, end.dy);
+      final Path path;
+      switch (mode) {
+        case CircuitLayoutMode.ltr:
+          final start = Offset(p.right, p.center.dy);
+          final end = Offset(c.left, c.center.dy);
+          final midX = (start.dx + end.dx) / 2;
+          path = Path()
+            ..moveTo(start.dx, start.dy)
+            ..cubicTo(midX, start.dy, midX, end.dy, end.dx, end.dy);
+        case CircuitLayoutMode.ttb:
+          final start = Offset(p.center.dx, p.bottom);
+          final end = Offset(c.center.dx, c.top);
+          final midY = (start.dy + end.dy) / 2;
+          path = Path()
+            ..moveTo(start.dx, start.dy)
+            ..cubicTo(start.dx, midY, end.dx, midY, end.dx, end.dy);
+        case CircuitLayoutMode.radial:
+          path = Path()
+            ..moveTo(p.center.dx, p.center.dy)
+            ..lineTo(c.center.dx, c.center.dy);
+      }
       canvas.drawPath(path, paint);
     }
   }
 
   @override
   bool shouldRepaint(_EdgePainter old) =>
-      old.color != color || old.rects != rects || old.edges != edges;
+      old.color != color ||
+      old.rects != rects ||
+      old.edges != edges ||
+      old.mode != mode;
 }
