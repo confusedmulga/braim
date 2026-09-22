@@ -1006,5 +1006,9 @@
   "circuitRestoredWithRoot": "The circuit was restored too",
   "circuitBulkSkipped": "Circuit notes are managed on the circuit map",
   "circuitOpen": "Open",
-  "circuitDeleteCircuitAction": "Delete circuit"
+  "circuitDeleteCircuitAction": "Delete circuit",
+  "circuitCollapse": "Collapse",
+  "circuitExpand": "Expand",
+  "circuitShareOutline": "Share as outline",
+  "circuitSharePdf": "Share as PDF"
 }

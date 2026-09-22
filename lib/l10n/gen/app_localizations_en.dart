@@ -2331,4 +2331,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get circuitDeleteCircuitAction => 'Delete circuit';
+
+  @override
+  String get circuitCollapse => 'Collapse';
+
+  @override
+  String get circuitExpand => 'Expand';
+
+  @override
+  String get circuitShareOutline => 'Share as outline';
+
+  @override
+  String get circuitSharePdf => 'Share as PDF';
 }

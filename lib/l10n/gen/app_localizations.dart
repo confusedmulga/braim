@@ -4215,6 +4215,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete circuit'**
   String get circuitDeleteCircuitAction;
+
+  /// No description provided for @circuitCollapse.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get circuitCollapse;
+
+  /// No description provided for @circuitExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get circuitExpand;
+
+  /// No description provided for @circuitShareOutline.
+  ///
+  /// In en, this message translates to:
+  /// **'Share as outline'**
+  String get circuitShareOutline;
+
+  /// No description provided for @circuitSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share as PDF'**
+  String get circuitSharePdf;
 }
 
 class _AppLocalizationsDelegate
