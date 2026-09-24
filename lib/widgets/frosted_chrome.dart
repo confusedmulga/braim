@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
+import 'scrolling_title.dart';
 
 /// A rounded frosted-glass surface: one clipped BackdropFilter over a
 /// translucent tinted fill — the nav-island recipe. Shared by the floating top
@@ -137,10 +138,15 @@ class FrostedScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.background = true,
     this.bodyUnderChrome = false,
+    this.scrollingTitle = false,
   });
 
   final Widget body;
   final String? title;
+
+  /// A [title] too long for the bar drifts sideways so all of it can be read
+  /// (see [ScrollingTitle]) instead of being cut off with an ellipsis.
+  final bool scrollingTitle;
   final List<Widget> actions;
   final VoidCallback? onBack;
   final String? backTooltip;
@@ -191,34 +197,18 @@ class FrostedScaffold extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
               child: SizedBox(
                 height: FrostedCircleButton.size,
-                child: Stack(
+                // The title takes exactly the room between the back button
+                // and the actions, centred there, so it can never run under
+                // a button however many actions a screen has. With no actions
+                // a button-wide space stands in for them, keeping the title
+                // centred on screen.
+                child: Row(
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FrostedBackButton(
-                          onTap: onBack, tooltip: backTooltip),
-                    ),
-                    if (title != null)
-                      Padding(
-                        // Keep the title clear of the left/right chrome.
-                        padding: const EdgeInsets.symmetric(horizontal: 64),
-                        child: Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            title!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 17.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppPalette.inkPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (actionRow != null)
-                      Align(alignment: Alignment.centerRight, child: actionRow),
+                    FrostedBackButton(onTap: onBack, tooltip: backTooltip),
+                    const SizedBox(width: 14),
+                    Expanded(child: title == null ? const SizedBox() : _title()),
+                    const SizedBox(width: 14),
+                    actionRow ?? const SizedBox(width: FrostedCircleButton.size),
                   ],
                 ),
               ),
@@ -234,5 +224,23 @@ class FrostedScaffold extends StatelessWidget {
       body: content,
     );
     return background ? AppBackground(child: scaffold) : scaffold;
+  }
+
+  Widget _title() {
+    final style = TextStyle(
+      fontSize: 17.5,
+      fontWeight: FontWeight.w700,
+      color: AppPalette.inkPrimary,
+    );
+    if (scrollingTitle) return ScrollingTitle(title!, style: style);
+    return Center(
+      child: Text(
+        title!,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: style,
+      ),
+    );
   }
 }

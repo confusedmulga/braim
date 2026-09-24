@@ -723,6 +723,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
 
     return FrostedScaffold(
       title: title,
+      // The first note's title can be long; it drifts so all of it shows.
+      scrollingTitle: true,
       bodyUnderChrome: true,
       onBack: _pick != null ? () => setState(() => _pick = null) : null,
       actions: [
