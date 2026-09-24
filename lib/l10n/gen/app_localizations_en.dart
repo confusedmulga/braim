@@ -2343,4 +2343,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get circuitSharePdf => 'Share as PDF';
+
+  @override
+  String circuitBulkDeleteBody(int circuits, int notes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      circuits,
+      locale: localeName,
+      other:
+          'This includes $circuits circuits, so all $notes of their notes will move to Recently deleted, where they stay for 30 days.',
+      one:
+          'This includes a circuit, so all $notes of its notes will move to Recently deleted, where they stay for 30 days.',
+    );
+    return '$_temp0';
+  }
 }

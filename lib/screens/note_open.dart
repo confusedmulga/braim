@@ -35,3 +35,30 @@ Widget noteScreen(
             fromCircuitMap: fromCircuitMap,
             startEditing: startEditing,
           );
+
+/// The route of each note screen that is open right now, by note id.
+///
+/// Both note screens edit the shared [Note] instance and write their own
+/// controllers back into it when they save or close. Two screens open on one
+/// note would overwrite each other's edits, so the circuit map checks here and
+/// returns to a screen that is already open instead of opening a second one.
+class OpenNoteScreens {
+  OpenNoteScreens._();
+
+  static final Map<String, Route<dynamic>> _routes = {};
+
+  static void register(String noteId, Route<dynamic> route) =>
+      _routes[noteId] = route;
+
+  /// Forgets [noteId]'s screen, but only if [route] is still the one on
+  /// record (a newer screen for the same note may have registered since).
+  static void unregister(String noteId, Route<dynamic> route) {
+    if (identical(_routes[noteId], route)) _routes.remove(noteId);
+  }
+
+  /// The route of the open screen for [noteId], or null if none is open.
+  static Route<dynamic>? routeFor(String noteId) {
+    final route = _routes[noteId];
+    return (route != null && route.isActive) ? route : null;
+  }
+}

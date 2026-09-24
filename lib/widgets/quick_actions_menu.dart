@@ -81,12 +81,14 @@ Widget _row(BuildContext context, IconData icon, String label,
 
 /// Confirms before deleting note(s)/card(s). They go to Recently deleted, so
 /// this is a soft delete — but it's easy to hit by accident, hence the check.
-Future<bool> confirmDeleteItems(BuildContext context, int count) async {
+/// [message] replaces the standard body (a bulk delete that takes circuits).
+Future<bool> confirmDeleteItems(BuildContext context, int count,
+    {String? message}) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(context.t.deleteTitle),
-      content: Text(context.t.deleteItemsConfirm(count)),
+      content: Text(message ?? context.t.deleteItemsConfirm(count)),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(context, false),

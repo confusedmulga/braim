@@ -1273,7 +1273,7 @@ class AppState extends ChangeNotifier {
       note
         ..circuitId = circuitParent.circuitId
         ..circuitParentId = circuitParent.id
-        ..circuitOrder = circuitChildren(circuitParent.id).length;
+        ..circuitOrder = _childrenOf(circuitParent.id).length;
     }
     _notes.add(note);
     await _persist();
@@ -1487,7 +1487,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     if (note.isCircuitNode) {
-      if (circuitChildren(id).isNotEmpty) {
+      if (_childrenOf(id).isNotEmpty) {
         await deleteCircuitNodeKeepSlot(id);
       } else {
         await deleteCircuitSubtree(id);
@@ -1509,11 +1509,25 @@ class AppState extends ChangeNotifier {
     await restoreTrashGroup(note.trashGroupId ?? id);
   }
 
-  /// Permanently removes a note and its images, acting on its whole trash group.
+  /// Permanently removes a note and its images. A trashed note goes with its
+  /// whole trash group. A live note (an untouched draft being discarded) is
+  /// removed on its own — unless branches hang off it, which would be orphaned.
   Future<void> permanentlyDeleteNote(String id) async {
     final note = noteById(id);
     if (note == null) return;
-    await permanentlyDeleteTrashGroup(note.trashGroupId ?? id);
+    if (note.deletedAt != null) {
+      await permanentlyDeleteTrashGroup(note.trashGroupId ?? id);
+      return;
+    }
+    if (_childrenOf(id).isNotEmpty) return;
+    _notes.remove(note);
+    for (final path in note.imagePaths) {
+      await _storage.deleteImage(path);
+    }
+    final parentId = note.circuitParentId;
+    if (parentId != null) _renumber(_childrenOf(parentId));
+    unawaited(NotificationService.instance.cancel(id));
+    await _persist();
   }
 
   Future<void> emptyTrash() async {
@@ -1666,8 +1680,10 @@ class AppState extends ChangeNotifier {
 
   // ---- 6.1 Queries ----
 
-  /// A circuit's live children of [parentId], sorted by order.
-  List<Note> circuitChildren(String parentId) {
+  /// A circuit's live children of [parentId], sorted by order. A fresh scan —
+  /// the mutators below use it because they change structure before
+  /// [_persist] bumps [_rev], so the memoized [circuitChildren] would be stale.
+  List<Note> _childrenOf(String parentId) {
     final out = <Note>[];
     for (final n in _notes) {
       if (n.circuitParentId == parentId && n.deletedAt == null) out.add(n);
@@ -1675,6 +1691,50 @@ class AppState extends ChangeNotifier {
     out.sort((a, b) => a.circuitOrder.compareTo(b.circuitOrder));
     return out;
   }
+
+  /// A memoized parent id -> live children index, rebuilt when the library
+  /// changes ([_rev]), so the map can ask for every node's children per frame
+  /// without scanning [_notes] each time.
+  Map<String, List<Note>>? _childIndex;
+  int _childIndexRev = -1;
+
+  /// A circuit's live children of [parentId], sorted by order. The list is a
+  /// copy, safe for the caller to modify.
+  List<Note> circuitChildren(String parentId) {
+    if (_childIndex == null || _childIndexRev != _rev) {
+      final m = <String, List<Note>>{};
+      for (final n in _notes) {
+        final pid = n.circuitParentId;
+        if (pid == null || n.deletedAt != null) continue;
+        (m[pid] ??= []).add(n);
+      }
+      for (final list in m.values) {
+        list.sort((a, b) => a.circuitOrder.compareTo(b.circuitOrder));
+      }
+      _childIndex = m;
+      _childIndexRev = _rev;
+    }
+    return List.of(_childIndex![parentId] ?? const <Note>[]);
+  }
+
+  /// How many live notes sit below [nodeId] (children, grandchildren, ...).
+  int circuitDescendantCount(String nodeId) {
+    var count = 0;
+    final stack = [nodeId];
+    final seen = <String>{nodeId};
+    while (stack.isNotEmpty) {
+      for (final c in circuitChildren(stack.removeLast())) {
+        if (!seen.add(c.id)) continue; // cycle guard
+        count++;
+        stack.add(c.id);
+      }
+    }
+    return count;
+  }
+
+  /// Changes whenever the library does — lets a screen cache work derived from
+  /// it (the circuit map's layout) until something actually changes.
+  int get revision => _rev;
 
   /// A circuit's live nodes, root first.
   List<Note> circuitNodes(String circuitId) {
@@ -1773,7 +1833,7 @@ class AppState extends ChangeNotifier {
     final child = _makeCircuitNote(
       circuitId: circuitId,
       parentId: parentId,
-      order: circuitChildren(parentId).length,
+      order: _childrenOf(parentId).length,
       title: _nextNumberedTitle(circuitId, noteTitle),
       markdown: markdown,
     );
@@ -1806,7 +1866,7 @@ class AppState extends ChangeNotifier {
       markdown: markdown,
     );
     _notes.add(sib);
-    final sibs = circuitChildren(parentId)..removeWhere((n) => n.id == sib.id);
+    final sibs = _childrenOf(parentId)..removeWhere((n) => n.id == sib.id);
     final anchor = sibs.indexWhere((s) => s.id == nodeId);
     sibs.insert(anchor + 1, sib);
     for (var i = 0; i < sibs.length; i++) {
@@ -1822,7 +1882,7 @@ class AppState extends ChangeNotifier {
   Future<void> moveCircuitNode(String nodeId, int delta) async {
     final node = noteById(nodeId);
     if (node == null || !node.isCircuitNode) return;
-    final sibs = circuitChildren(node.circuitParentId!);
+    final sibs = _childrenOf(node.circuitParentId!);
     final i = sibs.indexWhere((s) => s.id == nodeId);
     if (i < 0) return;
     final j = (i + delta).clamp(0, sibs.length - 1);
@@ -1840,13 +1900,13 @@ class AppState extends ChangeNotifier {
     final node = noteById(nodeId);
     if (node == null || !node.isCircuitNode) return;
     final oldParent = node.circuitParentId!;
-    final sibs = circuitChildren(oldParent);
+    final sibs = _childrenOf(oldParent);
     final i = sibs.indexWhere((s) => s.id == nodeId);
     if (i <= 0) return;
     final prev = sibs[i - 1];
     _appendUnder(node, prev.id);
-    _renumber(circuitChildren(oldParent));
-    _renumber(circuitChildren(prev.id));
+    _renumber(_childrenOf(oldParent));
+    _renumber(_childrenOf(prev.id));
     await _persist();
   }
 
@@ -1859,14 +1919,14 @@ class AppState extends ChangeNotifier {
     if (parent == null || parent.circuitParentId == null) return;
     final oldParent = parent.id;
     node.circuitParentId = parent.circuitParentId;
-    final gsibs = circuitChildren(node.circuitParentId!)
+    final gsibs = _childrenOf(node.circuitParentId!)
       ..removeWhere((n) => n.id == nodeId);
     final pIdx = gsibs.indexWhere((s) => s.id == parent.id);
     gsibs.insert(pIdx + 1, node);
     for (var i = 0; i < gsibs.length; i++) {
       gsibs[i].circuitOrder = i;
     }
-    _renumber(circuitChildren(oldParent));
+    _renumber(_childrenOf(oldParent));
     await _persist();
   }
 
@@ -1884,9 +1944,9 @@ class AppState extends ChangeNotifier {
     final oldParent = node.circuitParentId;
     _appendUnder(node, newParentId);
     if (oldParent != null && oldParent != newParentId) {
-      _renumber(circuitChildren(oldParent));
+      _renumber(_childrenOf(oldParent));
     }
-    _renumber(circuitChildren(newParentId));
+    _renumber(_childrenOf(newParentId));
     await _persist();
     return true;
   }
@@ -1922,17 +1982,17 @@ class AppState extends ChangeNotifier {
     // Adopt the placeholder's children after the node's own. Computed *after*
     // the reparent above, so a node that was itself a child of the slot is no
     // longer counted among the slot's children.
-    final base = circuitChildren(nodeId).length;
-    final slotChildren = circuitChildren(slotId);
+    final base = _childrenOf(nodeId).length;
+    final slotChildren = _childrenOf(slotId);
     for (var i = 0; i < slotChildren.length; i++) {
       slotChildren[i].circuitParentId = nodeId;
       slotChildren[i].circuitOrder = base + i;
     }
     _notes.removeWhere((n) => n.id == slotId);
-    if (oldParent != null) _renumber(circuitChildren(oldParent));
-    _renumber(circuitChildren(nodeId));
+    if (oldParent != null) _renumber(_childrenOf(oldParent));
+    _renumber(_childrenOf(nodeId));
     if (slot.circuitParentId != null) {
-      _renumber(circuitChildren(slot.circuitParentId!));
+      _renumber(_childrenOf(slot.circuitParentId!));
     }
     await _persist();
     return true;
@@ -2019,7 +2079,7 @@ class AppState extends ChangeNotifier {
       ..circuitShowInFeed = false
       ..circuitId = parent.circuitId;
     _appendUnder(note, parentId);
-    _renumber(circuitChildren(parentId));
+    _renumber(_childrenOf(parentId));
     await _persist();
     return true;
   }
@@ -2030,9 +2090,9 @@ class AppState extends ChangeNotifier {
     final node = noteById(nodeId);
     if (node == null || !node.isCircuitNode) return;
     final parentId = node.circuitParentId!;
-    final parentSibs = circuitChildren(parentId);
+    final parentSibs = _childrenOf(parentId);
     final idx = parentSibs.indexWhere((s) => s.id == nodeId);
-    final children = circuitChildren(nodeId);
+    final children = _childrenOf(nodeId);
     for (final c in children) {
       c.circuitParentId = parentId;
     }
@@ -2131,7 +2191,7 @@ class AppState extends ChangeNotifier {
           ..circuitPlaceholder = true
           ..circuitPlaceholderFor = node.id;
     _notes.add(placeholder);
-    for (final c in circuitChildren(nodeId)) {
+    for (final c in _childrenOf(nodeId)) {
       c.circuitParentId = placeholder.id;
     }
     node
@@ -2148,11 +2208,11 @@ class AppState extends ChangeNotifier {
     final slot = noteById(slotId);
     if (slot == null || !slot.circuitPlaceholder) return;
     final parentId = slot.circuitParentId;
-    final children = circuitChildren(slotId);
+    final children = _childrenOf(slotId);
     List<Note>? parentSibs;
     var idx = -1;
     if (parentId != null) {
-      parentSibs = circuitChildren(parentId);
+      parentSibs = _childrenOf(parentId);
       idx = parentSibs.indexWhere((s) => s.id == slotId);
     }
     for (final c in children) {
@@ -2253,7 +2313,7 @@ class AppState extends ChangeNotifier {
         ..circuitParentId = null
         ..circuitOrder = 0
         ..circuitShowInFeed = false;
-      _renumber(circuitChildren(top.id));
+      _renumber(_childrenOf(top.id));
       await _persist();
       return;
     }
@@ -2283,14 +2343,14 @@ class AppState extends ChangeNotifier {
         parent.deletedAt == null &&
         parent.circuitId == circuitId) {
       _appendUnder(top, parent.id);
-      _renumber(circuitChildren(parent.id));
+      _renumber(_childrenOf(parent.id));
       await _persist();
       return;
     }
 
     // Rule 6: otherwise append the top as the root's last child.
     _appendUnder(top, liveRoot.id);
-    _renumber(circuitChildren(liveRoot.id));
+    _renumber(_childrenOf(liveRoot.id));
     await _persist();
   }
 

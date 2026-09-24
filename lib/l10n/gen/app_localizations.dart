@@ -4239,6 +4239,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share as PDF'**
   String get circuitSharePdf;
+
+  /// No description provided for @circuitBulkDeleteBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{circuits, plural, =1{This includes a circuit, so all {notes} of its notes will move to Recently deleted, where they stay for 30 days.} other{This includes {circuits} circuits, so all {notes} of their notes will move to Recently deleted, where they stay for 30 days.}}'**
+  String circuitBulkDeleteBody(int circuits, int notes);
 }
 
 class _AppLocalizationsDelegate

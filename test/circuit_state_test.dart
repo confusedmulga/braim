@@ -703,4 +703,83 @@ void main() {
     expect(ids(s2.circuitChildren(a.id)), [a1.id]);
     await store2.close();
   });
+
+  test('permanentlyDeleteNote removes a live, untouched draft first note',
+      () async {
+    // The note screen discards an empty circuit draft this way after the map
+    // saved it; routing through the trash groups used to make this a no-op.
+    final s = await emptyState();
+    final r = await newCircuit(s, title: '');
+    expect(s.noteById(r.id), isNotNull);
+    await s.permanentlyDeleteNote(r.id);
+    expect(s.noteById(r.id), isNull);
+  });
+
+  test('permanentlyDeleteNote never hard-deletes a live note with branches',
+      () async {
+    final s = await emptyState();
+    final r = await newCircuit(s);
+    final a = await s.addCircuitChild(r.id);
+    await s.permanentlyDeleteNote(r.id);
+    expect(s.noteById(r.id), isNotNull);
+    expect(s.noteById(a.id)!.circuitParentId, r.id);
+  });
+
+  test('permanentlyDeleteNote on a live leaf renumbers its siblings', () async {
+    final s = await emptyState();
+    final r = await newCircuit(s);
+    final a = await s.addCircuitChild(r.id);
+    final b = await s.addCircuitChild(r.id);
+    final c = await s.addCircuitChild(r.id);
+    await s.permanentlyDeleteNote(b.id);
+    expect(s.noteById(b.id), isNull);
+    expect(ids(s.circuitChildren(r.id)), [a.id, c.id]);
+    expect(s.noteById(c.id)!.circuitOrder, 1);
+  });
+
+  test('circuitChildren tracks every change and hands out a safe copy',
+      () async {
+    final s = await emptyState();
+    final r = await newCircuit(s);
+    final a = await s.addCircuitChild(r.id);
+    final b = await s.addCircuitChild(r.id);
+    expect(ids(s.circuitChildren(r.id)), [a.id, b.id]);
+
+    await s.moveCircuitNode(b.id, -1);
+    expect(ids(s.circuitChildren(r.id)), [b.id, a.id]);
+
+    await s.indentCircuitNode(a.id); // under b
+    expect(ids(s.circuitChildren(r.id)), [b.id]);
+    expect(ids(s.circuitChildren(b.id)), [a.id]);
+
+    // Mutating the returned list must not corrupt the cached index.
+    s.circuitChildren(b.id).clear();
+    expect(ids(s.circuitChildren(b.id)), [a.id]);
+
+    await s.deleteCircuitSubtree(a.id);
+    expect(s.circuitChildren(b.id), isEmpty);
+  });
+
+  test('circuitDescendantCount counts every live note below a node', () async {
+    final s = await emptyState();
+    final r = await newCircuit(s);
+    final a = await s.addCircuitChild(r.id);
+    final a1 = await s.addCircuitChild(a.id);
+    await s.addCircuitChild(a1.id);
+    await s.addCircuitChild(r.id);
+    expect(s.circuitDescendantCount(r.id), 4);
+    expect(s.circuitDescendantCount(a.id), 2);
+    await s.deleteCircuitSubtree(a1.id);
+    expect(s.circuitDescendantCount(a.id), 0);
+  });
+
+  test('revision changes with every library change', () async {
+    final s = await emptyState();
+    final before = s.revision;
+    final r = await newCircuit(s);
+    expect(s.revision, isNot(before));
+    final mid = s.revision;
+    await s.addCircuitChild(r.id);
+    expect(s.revision, isNot(mid));
+  });
 }

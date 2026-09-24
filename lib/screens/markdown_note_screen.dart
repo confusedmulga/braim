@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../models/note_block.dart';
+import '../services/file_names.dart';
 import '../services/note_markdown.dart';
 import '../services/note_pdf.dart';
 import '../services/wiki_links.dart';
@@ -69,8 +70,24 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   /// True once written to the library, so an emptied node is cleaned up.
   late bool _persisted = !widget.isNew;
 
+  /// This screen's route, registered in [OpenNoteScreens] while it is open.
+  ModalRoute<Object?>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_route != null) return;
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      _route = route;
+      OpenNoteScreens.register(_note.id, route);
+    }
+  }
+
   @override
   void dispose() {
+    final route = _route;
+    if (route != null) OpenNoteScreens.unregister(_note.id, route);
     _ctrl.dispose();
     super.dispose();
   }
@@ -79,10 +96,17 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     final src = _ctrl.text;
     final state = context.read<AppState>();
     if (src.trim().isEmpty) {
-      // A circuit branch is never deleted for being empty — that would orphan
-      // its children (section 9). Save it as it is; only a plain node leaves
-      // nothing behind. (A first note is always rich, never Markdown.)
-      if (_note.isCircuitNode) {
+      // A circuit note that others hang off is never deleted for being empty —
+      // that would orphan them (section 9). That is every branch, and a first
+      // note with branches: a first note starts out rich, but a restore or a
+      // repair can promote a Markdown branch into one. Keep the emptied source,
+      // exactly as the rich editor keeps an emptied note.
+      if (_note.isCircuitNode ||
+          (_note.isCircuitRoot &&
+              state.circuitChildren(_note.id).isNotEmpty)) {
+        _note
+          ..title = markdownTitle(src)
+          ..blocks = [NoteBlock(type: NoteBlockType.text, text: src)];
         await state.upsertNote(_note);
         _persisted = true;
         return;
@@ -152,19 +176,34 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
 
   // ---- Circuit map --------------------------------------------------------
 
-  void _goToMap(String focusNodeId, {required bool highlight}) {
+  Future<void> _goToMap(String focusNodeId, {required bool highlight}) async {
     final circuitId = _note.circuitId;
     if (circuitId == null) return;
     if (widget.fromCircuitMap) {
       Navigator.of(context)
           .pop(CircuitMapFocus(focusNodeId, highlight: highlight));
-    } else {
-      Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => CircuitMapScreen(
-              circuitId: circuitId,
-              focusNodeId: focusNodeId,
-              highlight: highlight)));
+      return;
     }
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => CircuitMapScreen(
+            circuitId: circuitId,
+            focusNodeId: focusNodeId,
+            highlight: highlight)));
+    _afterMap();
+  }
+
+  /// Back from a map pushed over this screen. The map edits the same note, so
+  /// it may have renamed it (a rename rewrites the source's `# heading`; take
+  /// it, or leaving would save the old source back) or deleted it.
+  void _afterMap() {
+    if (!mounted) return;
+    final live = context.read<AppState>().noteById(_note.id);
+    if (live == null || live.deletedAt != null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final src = _note.markdownSource;
+    if (_ctrl.text != src) setState(() => _ctrl.text = src);
   }
 
   Future<void> _circuitMap() async {
@@ -241,7 +280,12 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
                       if (mounted) Navigator.of(context).pop();
                     },
                   ),
-                _tile(sheetCtx, Icons.delete_outline_rounded, context.t.delete,
+                _tile(
+                    sheetCtx,
+                    Icons.delete_outline_rounded,
+                    _note.isCircuitRoot
+                        ? context.t.circuitDeleteCircuitAction
+                        : context.t.delete,
                     _confirmDelete,
                     danger: true),
               ],
@@ -272,12 +316,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     try {
       final md = _ctrl.text.trim().isEmpty ? _note.markdownSource : _ctrl.text;
       final dir = await getTemporaryDirectory();
-      final base = _note.title.trim().isEmpty
-          ? 'note'
-          : _note.title
-              .trim()
-              .replaceAll(RegExp(r'[^\w\s-]'), '')
-              .replaceAll(RegExp(r'\s+'), '-');
+      final base = safeFileBase(_note.title, fallback: 'note');
       final file = File('${dir.path}/$base.md');
       await file.writeAsString(md);
       await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
@@ -295,11 +334,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
       final title =
           _note.title.trim().isEmpty ? markdownTitle(src) : _note.title.trim();
       final bytes = await NotePdf.fromMarkdown(src, title: title);
-      final base = title.isEmpty
-          ? 'note'
-          : title
-              .replaceAll(RegExp(r'[^\w\s-]'), '')
-              .replaceAll(RegExp(r'\s+'), '-');
+      final base = safeFileBase(title, fallback: 'note');
       await Printing.sharePdf(bytes: bytes, filename: '$base.pdf');
     } catch (_) {
       if (mounted) {
@@ -317,49 +352,17 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
         .bulkMoveNotes({_note.id}, choice == '__none__' ? null : choice);
   }
 
-  String _mdTitle() =>
-      _note.title.trim().isEmpty ? context.t.untitledNote : _note.title.trim();
-
-  int _descendantCount(AppState state, String id) {
-    var count = 0;
-    final stack = [id];
-    while (stack.isNotEmpty) {
-      final pid = stack.removeLast();
-      for (final c in state.circuitChildren(pid)) {
-        count++;
-        stack.add(c.id);
-      }
-    }
-    return count;
-  }
-
   Future<void> _confirmDelete() async {
-    final state = context.read<AppState>();
-    final id = _note.id;
-    // A Markdown note is always a branch when in a circuit; deleting one with
-    // children offers the keep-a-placeholder choice (section 8.1).
-    if (_note.isCircuitNode) {
-      if (state.circuitChildren(id).isNotEmpty) {
-        final descendants = _descendantCount(state, id);
-        final choice = await showCircuitDeleteWithChildrenDialog(context,
-            title: _mdTitle(), childCount: descendants);
-        if (choice == null || !mounted) return;
-        if (choice == CircuitDeleteChoice.all) {
-          await state.deleteCircuitSubtree(id);
-        } else {
-          await state.deleteCircuitNodeKeepSlot(id,
-              placeholderTitle: (n) => context.t.circuitPlaceholderTitle(n));
-        }
-        if (mounted) Navigator.of(context).pop();
-        return;
+    // A circuit note gets the circuit dialogs (section 8.1): the whole circuit
+    // for a first note, the keep-a-placeholder choice for one with notes below.
+    if (_note.inCircuit) {
+      if (await confirmAndDeleteCircuitNote(context, _note) && mounted) {
+        Navigator.of(context).pop();
       }
-      if (!await confirmDeleteItems(context, 1) || !mounted) return;
-      await state.deleteCircuitSubtree(id);
-      if (mounted) Navigator.of(context).pop();
       return;
     }
     if (!await confirmDeleteItems(context, 1) || !mounted) return;
-    if (_persisted) await state.deleteNote(id);
+    if (_persisted) await context.read<AppState>().deleteNote(_note.id);
     if (mounted) Navigator.of(context).pop();
   }
 
