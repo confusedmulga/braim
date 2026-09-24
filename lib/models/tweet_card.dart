@@ -113,14 +113,40 @@ class TweetCard {
   /// Last mutation time; drives last-write-wins when syncing.
   DateTime updatedAt;
 
-  bool get isTweet =>
-      url.contains('twitter.com') || url.contains('x.com');
+  /// A link to X/Twitter, judged by the host — not a substring of the whole
+  /// URL, which also matched netflix.com, dropbox.com and any "…x.com" site.
+  bool get isTweet => isTweetUrl(url);
+
+  static bool isTweetUrl(String url) {
+    final host = Uri.tryParse(url.trim())?.host.toLowerCase() ?? '';
+    return host == 'x.com' ||
+        host.endsWith('.x.com') ||
+        host == 'twitter.com' ||
+        host.endsWith('.twitter.com');
+  }
+
+  /// Whether [imageUrl] — the `og:image` X serves for a tweet page — is media
+  /// the author actually posted, rather than a stand-in X uses when the tweet
+  /// has none (it falls back to the author's profile picture).
+  ///
+  /// A deny-list, not an allow-list: profile pictures are the stand-in X
+  /// serves, so only those are refused. Every media path — photos, video and
+  /// GIF posters, link-card images, and any path X adds later — still shows.
+  static bool isPostedTweetImage(String imageUrl) {
+    final path = Uri.tryParse(imageUrl.trim())?.path ?? '';
+    return !path.contains('/profile_images/') &&
+        !path.contains('/default_profile_images/');
+  }
 
   /// The image to display for this card: the fetched OG/media image, or — for a
   /// YouTube link with no image yet — a thumbnail derived straight from the
   /// video id (no network, so it always shows even when scraping is blocked).
+  /// A tweet only shows media it posted: a stand-in such as the author's
+  /// profile picture (saved by older builds) is not shown as the post's image.
   String get coverImageUrl {
-    if (imageUrl.isNotEmpty) return imageUrl;
+    if (imageUrl.isNotEmpty && (!isTweet || isPostedTweetImage(imageUrl))) {
+      return imageUrl;
+    }
     final vid = YouTubeService.videoId(url);
     return vid != null ? YouTubeService.thumbnailUrl(vid) : '';
   }

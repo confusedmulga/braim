@@ -131,9 +131,8 @@ class LinkPreviewService {
 
   String _handleFromUrl(String url) {
     try {
-      final uri = Uri.parse(url);
-      if (uri.host.contains('twitter.com') || uri.host.contains('x.com')) {
-        final segs = uri.pathSegments;
+      if (TweetCard.isTweetUrl(url)) {
+        final segs = Uri.parse(url.trim()).pathSegments;
         if (segs.isNotEmpty) return '@${segs.first}';
       }
     } catch (_) {}
@@ -172,8 +171,13 @@ class LinkPreviewService {
     final page = await Isolate.run(
         () => _parsePage(bytes, withArticle: !imageOnly));
 
-    if (page.imageUrl.isNotEmpty) card.imageUrl = page.imageUrl;
-    if (imageOnly) return page.imageUrl.isNotEmpty;
+    // A tweet with no photo still has an og:image — X falls back to the
+    // author's profile picture — which must not become the post's image.
+    final image = page.imageUrl;
+    final keep = image.isNotEmpty &&
+        (!card.isTweet || TweetCard.isPostedTweetImage(image));
+    if (keep) card.imageUrl = image;
+    if (imageOnly) return keep;
 
     if (page.siteName.isNotEmpty) card.siteName = page.siteName;
     // For a YouTube link, use the video's own title to name the spark (so the
