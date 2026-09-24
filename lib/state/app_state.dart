@@ -299,8 +299,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// The feed banner: shown when a backup is overdue, at most once a week —
-  /// a cross-dismiss keeps it away for the next seven days.
+  /// a cross-dismiss keeps it away for the next seven days. Never shown while
+  /// auto-backup is on: backups are already being taken, so it would only nag.
   bool get showBackupReminder {
+    if (_localAutoBackup) return false;
     if (!backupOverdue) return false;
     final dismissed = _backupReminderDismissedAt;
     if (dismissed == null) return true;

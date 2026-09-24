@@ -420,6 +420,23 @@ void main() {
     expect(state.backupOverdue, isFalse);
   });
 
+  test('the backup nudge never shows while auto-backup is on', () async {
+    final state = await boot(AppData(
+      notes: [Note(title: 'something worth backing up')],
+      spaces: [],
+      cards: [],
+    ));
+    expect(state.showBackupReminder, isTrue); // overdue, never backed up
+
+    await state.setLocalAutoBackup(true);
+    expect(state.showBackupReminder, isFalse);
+    // The backup is still overdue — auto-backup only silences the nudge.
+    expect(state.backupOverdue, isTrue);
+
+    await state.setLocalAutoBackup(false);
+    expect(state.showBackupReminder, isTrue);
+  });
+
   test('a per-note font scale and checked-to-bottom flag survive a reload',
       () async {
     final state = await boot(AppData(notes: [], spaces: [], cards: []));
