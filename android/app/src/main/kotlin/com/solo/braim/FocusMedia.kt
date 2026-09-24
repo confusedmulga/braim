@@ -38,6 +38,10 @@ class FocusMedia(private val context: Context) {
     // Set as the session's album art — the system media player renders it as the
     // card artwork/background and applies its own readability scrim (the way
     // Spotify's art appears). Loaded once and cached; null when absent.
+    // The PNG lives in drawable-nodpi: from the default drawable folder,
+    // decodeResource would scale it up by screen density and hold a
+    // 7-17 MB bitmap instead of the ~1 MB 512 px original. Its name is
+    // pinned in res/raw/keep.xml because it is only looked up by name.
     private var artLoaded = false
     private var art: Bitmap? = null
 
