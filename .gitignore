@@ -65,3 +65,6 @@ lib/firebase_options.dart
 firebase.json
 .firebaserc
 ios/Runner/GoogleService-Info.plist
+
+# Affinity Designer keeps a lock file beside a design while it is open.
+*~lock~

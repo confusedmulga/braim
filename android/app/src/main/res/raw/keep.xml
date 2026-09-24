@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resources the release resource shrinker cannot see referenced, because
+     they are looked up by name at runtime:
+     - ic_stat_braim: the notification small icon, named from Dart for every
+       reminder (flutter_local_notifications resolves it with getIdentifier).
+     - focus_art: the focus-timer media artwork, resolved with getIdentifier
+       in FocusMedia.kt.
+     Without this list a stricter shrinker can strip them in release builds
+     only, which debug builds on the emulator would never show. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_braim,@drawable/focus_art" />
