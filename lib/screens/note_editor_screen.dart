@@ -17,6 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/note.dart';
 import 'note_open.dart';
 import '../services/journal_format.dart';
+import '../services/file_names.dart';
 import '../services/note_markdown.dart';
 import '../services/note_pdf.dart';
 import '../services/notification_service.dart';
@@ -38,7 +39,6 @@ import '../widgets/note_info.dart';
 import '../widgets/note_link_picker.dart';
 import '../widgets/note_links_section.dart';
 import '../widgets/note_tags_editor.dart';
-import '../widgets/quick_actions_menu.dart';
 import '../widgets/wiki_text.dart';
 import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
@@ -88,6 +88,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   /// smooth; a static lookalike body is shown during the transition.
   bool _settled = false;
   bool _settleHooked = false;
+
+  /// This screen's route, registered in [OpenNoteScreens] while it is open.
+  ModalRoute<Object?>? _route;
 
   /// True while collapsing back into the feed: the frosted backdrop blur is
   /// dropped for the collapse so the shrinking glass stays perfectly paced.
@@ -333,12 +336,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     );
   }
 
-  String _fileBase() => _note.title.trim().isEmpty
-      ? 'note'
-      : _note.title
-          .trim()
-          .replaceAll(RegExp(r'[^\w\s-]'), '')
-          .replaceAll(RegExp(r'\s+'), '-');
+  String _fileBase() => safeFileBase(_note.title, fallback: 'note');
 
   /// Writes the note to a temporary `.md` file and opens the share sheet.
   Future<void> _shareMarkdown() async {
@@ -394,6 +392,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   void _autosaveTick() {
     // A saved article is being read, not written — nothing to autosave.
     if (_closing || _readOnly || !mounted) return;
+    // Covered by another screen (the circuit map): that screen may rename this
+    // note, and collecting now would write the stale title straight back.
+    if (_route?.isCurrent == false) return;
     _collect();
     if (_note.isEmpty) return;
     final fp = _fingerprint();
@@ -431,6 +432,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     if (_settleHooked) return;
     _settleHooked = true;
     final route = ModalRoute.of(context);
+    if (route != null) {
+      _route = route;
+      OpenNoteScreens.register(_note.id, route);
+    }
     final animation = route?.animation;
     if (animation == null || animation.isCompleted) {
       _settled = true;
@@ -452,6 +457,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
 
   @override
   void dispose() {
+    final route = _route;
+    if (route != null) OpenNoteScreens.unregister(_note.id, route);
     _autosave?.cancel();
     _expand.dispose();
     _titleCtrl.dispose();
@@ -716,22 +723,45 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   Future<void> _saveForCircuit(AppState state) async {
     _collect();
     await state.ensureCircuitRootSaved(_note);
-    if (!_note.isEmpty) state.upsertNote(_note);
+    if (!_note.isEmpty) {
+      _persisted = true;
+      _savedFingerprint = _fingerprint();
+      await state.upsertNote(_note);
+    }
   }
 
   /// Goes to the map focused on [focusNodeId]. When this note was itself opened
-  /// from the map, pop back to it (keeping the stack flat); otherwise push one.
-  void _goToMap(String focusNodeId, {required bool highlight}) {
+  /// from the map, pop back to it (keeping the stack flat); otherwise push one
+  /// and pick up whatever the map changed about this note once it closes.
+  Future<void> _goToMap(String focusNodeId, {required bool highlight}) async {
     final circuitId = _note.circuitId;
     if (circuitId == null) return;
     if (widget.fromCircuitMap) {
       Navigator.of(context)
           .pop(CircuitMapFocus(focusNodeId, highlight: highlight));
-    } else {
-      Navigator.of(context).push(cupertinoRoute(CircuitMapScreen(
-          circuitId: circuitId,
-          focusNodeId: focusNodeId,
-          highlight: highlight)));
+      return;
+    }
+    await Navigator.of(context).push(cupertinoRoute(CircuitMapScreen(
+        circuitId: circuitId,
+        focusNodeId: focusNodeId,
+        highlight: highlight)));
+    _afterMap();
+  }
+
+  /// Back from a map pushed over this screen. The map edits the same note, so
+  /// it may have renamed it (take the new title, or closing would write the
+  /// old one back) or deleted it (then there is nothing left to show).
+  void _afterMap() {
+    if (!mounted) return;
+    final live = context.read<AppState>().noteById(_note.id);
+    if (live == null || live.deletedAt != null) {
+      setState(() => _closing = true);
+      Navigator.of(context).pop();
+      return;
+    }
+    if (_titleCtrl.text != _note.title) {
+      setState(() => _titleCtrl.text = _note.title);
+      _savedFingerprint = _fingerprint();
     }
   }
 
@@ -740,12 +770,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     await _saveForCircuit(state);
     if (!mounted) return;
     _goToMap(_note.id, highlight: false);
-  }
-
-  String _circuitTitle() {
-    final t = _note.title.trim();
-    if (t.isNotEmpty) return t;
-    return _note.isCircuitRoot ? context.t.untitledCircuit : context.t.untitledNote;
   }
 
   /// The breadcrumb shown above a branch's title: "{circuit} › {parent}".
@@ -764,54 +788,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     return '$circuitName › $parentName';
   }
 
-  int _descendantCount(AppState state, String id) {
-    var count = 0;
-    final stack = [id];
-    while (stack.isNotEmpty) {
-      final pid = stack.removeLast();
-      for (final c in state.circuitChildren(pid)) {
-        count++;
-        stack.add(c.id);
-      }
-    }
-    return count;
-  }
-
   /// The ⋯ Delete for a circuit note: the whole circuit for a first note, the
   /// choice dialog for a branch with children, or a plain confirm otherwise.
   Future<void> _deleteCircuitFromMenu() async {
-    final state = context.read<AppState>();
-    final id = _note.id;
-    if (_note.isCircuitRoot) {
-      final total = state
-          .circuitNodes(id)
-          .where((n) => !n.circuitPlaceholder)
-          .length;
-      final ok = await confirmDeleteCircuit(context,
-          title: _circuitTitle(), count: total);
-      if (!ok || !mounted) return;
-      await state.deleteCircuit(id);
-      if (mounted) Navigator.of(context).pop();
-      return;
-    }
-    if (state.circuitChildren(id).isEmpty) {
-      if (await confirmDeleteItems(context, 1) && mounted) {
-        await state.deleteCircuitSubtree(id);
-        if (mounted) Navigator.of(context).pop();
-      }
-      return;
-    }
-    final descendants = _descendantCount(state, id);
-    final choice = await showCircuitDeleteWithChildrenDialog(context,
-        title: _circuitTitle(), childCount: descendants);
-    if (choice == null || !mounted) return;
-    if (choice == CircuitDeleteChoice.all) {
-      await state.deleteCircuitSubtree(id);
-    } else {
-      await state.deleteCircuitNodeKeepSlot(id,
-          placeholderTitle: (n) => context.t.circuitPlaceholderTitle(n));
-    }
-    if (mounted) Navigator.of(context).pop();
+    _collect();
+    if (!await confirmAndDeleteCircuitNote(context, _note) || !mounted) return;
+    setState(() => _closing = true);
+    Navigator.of(context).pop();
   }
 
   Future<void> _circuitAdd() async {

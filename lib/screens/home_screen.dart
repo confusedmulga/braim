@@ -69,61 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
         await context.read<AppState>().setCircuitShowInFeed(n.id, false);
       case QuickAction.delete:
         if (n.inCircuit) {
-          await _deleteCircuitNote(n);
+          await confirmAndDeleteCircuitNote(context, n);
         } else if (await confirmDeleteItems(context, 1) && mounted) {
           await _deleteOne(n);
         }
     }
-  }
-
-  /// Quick-action delete for a circuit note: the whole circuit for a first
-  /// note, the keep-a-placeholder choice for a shown branch with children.
-  Future<void> _deleteCircuitNote(Note n) async {
-    final state = context.read<AppState>();
-    if (n.isCircuitRoot) {
-      final total = state
-          .circuitNodes(n.id)
-          .where((x) => !x.circuitPlaceholder)
-          .length;
-      final ok = await confirmDeleteCircuit(context,
-          title: _circuitTitleFor(n), count: total);
-      if (ok && mounted) await state.deleteCircuit(n.id);
-      return;
-    }
-    if (state.circuitChildren(n.id).isEmpty) {
-      if (await confirmDeleteItems(context, 1) && mounted) {
-        await state.deleteCircuitSubtree(n.id);
-      }
-      return;
-    }
-    final descendants = _descendantCount(state, n.id);
-    final choice = await showCircuitDeleteWithChildrenDialog(context,
-        title: _circuitTitleFor(n), childCount: descendants);
-    if (choice == CircuitDeleteChoice.all && mounted) {
-      await state.deleteCircuitSubtree(n.id);
-    } else if (choice == CircuitDeleteChoice.keepSlot && mounted) {
-      await state.deleteCircuitNodeKeepSlot(n.id,
-          placeholderTitle: (k) => context.t.circuitPlaceholderTitle(k));
-    }
-  }
-
-  String _circuitTitleFor(Note n) {
-    final t = n.title.trim();
-    if (t.isNotEmpty) return t;
-    return n.isCircuitRoot ? context.t.untitledCircuit : context.t.untitledNote;
-  }
-
-  int _descendantCount(AppState state, String id) {
-    var count = 0;
-    final stack = [id];
-    while (stack.isNotEmpty) {
-      final pid = stack.removeLast();
-      for (final c in state.circuitChildren(pid)) {
-        count++;
-        stack.add(c.id);
-      }
-    }
-    return count;
   }
 
   Future<void> _pinOne(Note n) async {
@@ -206,7 +156,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _bulkDelete() async {
-    if (!await confirmDeleteItems(context, _selected.length) || !mounted) {
+    // A selected first note takes its whole circuit with it — say so.
+    final warning = circuitBulkDeleteWarning(context, _selected);
+    if (!await confirmDeleteItems(context, _selected.length,
+            message: warning) ||
+        !mounted) {
       return;
     }
     final state = context.read<AppState>();

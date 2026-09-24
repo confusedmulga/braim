@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/book.dart';
 import '../models/note.dart';
+import 'file_names.dart';
 
 /// Turns a book into something shareable: a typeset PDF, a Markdown file, or
 /// a real ePub. Everything here is pure data work, so it stays off the UI's
@@ -18,10 +19,8 @@ import '../models/note.dart';
 class BookExport {
   BookExport._();
 
-  static String _safeName(String s) {
-    final cleaned = s.replaceAll(RegExp(r'[^\w\s-]'), '').trim();
-    return cleaned.isEmpty ? 'book' : cleaned;
-  }
+  static String _safeName(String s) =>
+      safeFileBase(s, fallback: 'book', separator: ' ');
 
   static String _titleOf(Book book, String fallback) =>
       book.title.trim().isEmpty ? fallback : book.title.trim();

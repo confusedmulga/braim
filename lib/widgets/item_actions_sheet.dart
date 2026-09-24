@@ -14,6 +14,9 @@ import 'quick_actions_menu.dart';
 /// create a new folder and file the item into it, or move it to the trash.
 ///
 /// Handles everything internally; shows snackbars for pin-limit and results.
+/// [onConfirmAndDelete], when set, replaces the plain confirmation + [onDelete]
+/// for an item that brings its own delete dialogs (a circuit note); it returns
+/// whether anything was deleted.
 Future<void> showItemActions(
   BuildContext context, {
   required bool pinned,
@@ -23,6 +26,7 @@ Future<void> showItemActions(
   required Future<void> Function(bool archived) onSetArchived,
   required Future<void> Function(String? spaceId) onMove,
   required Future<void> Function() onDelete,
+  Future<bool> Function()? onConfirmAndDelete,
   bool allowCrypt = true,
 }) async {
   final t = context.t;
@@ -66,9 +70,13 @@ Future<void> showItemActions(
       );
     case 'delete':
       if (!context.mounted) return;
-      final sure = await confirmDeleteItems(context, 1);
-      if (!sure) return;
-      await onDelete();
+      if (onConfirmAndDelete != null) {
+        if (!await onConfirmAndDelete()) return;
+      } else {
+        final sure = await confirmDeleteItems(context, 1);
+        if (!sure) return;
+        await onDelete();
+      }
       messenger.showSnackBar(
         SnackBar(content: Text(t.movedToTrash)),
       );

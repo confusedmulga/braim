@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../services/circuit_layout.dart';
+import '../services/file_names.dart';
 import '../services/note_pdf.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -17,7 +18,6 @@ import '../widgets/circuit_sheets.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/note_background.dart';
-import '../widgets/quick_actions_menu.dart';
 import '../widgets/text_prompt.dart';
 import 'note_open.dart';
 
@@ -68,8 +68,21 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   _PickState? _pick;
 
   /// Nodes whose subtree is collapsed (hidden on the map). In-memory: the map
-  /// opens fully expanded.
+  /// opens fully expanded. Bump [_collapsedRev] on every change.
   final Set<String> _collapsed = {};
+  int _collapsedRev = 0;
+
+  // The layout and the node lookup, cached for one library revision and one
+  // collapse state — every build (and every animation frame) reuses them
+  // instead of re-scanning the library.
+  CircuitLayout? _layout;
+  Map<String, Note> _nodes = const {};
+  int _layoutRev = -1;
+  int _layoutCollapsedRev = -1;
+  CircuitLayout? _sigLayout;
+
+  /// Set once the map has started closing itself, so it never pops twice.
+  bool _leaving = false;
 
   late final AnimationController _pulse = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 1200));
@@ -119,7 +132,15 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     setState(() => _shownRects = next);
   }
 
-  CircuitLayout _buildLayout(AppState state) {
+  /// The circuit's layout, rebuilt only when the library or the collapse state
+  /// has changed since the last call.
+  CircuitLayout _layoutFor(AppState state) {
+    final cached = _layout;
+    if (cached != null &&
+        _layoutRev == state.revision &&
+        _layoutCollapsedRev == _collapsedRev) {
+      return cached;
+    }
     final root = state.noteById(widget.circuitId);
     final mode = _modeFromString(root?.circuitLayout ?? 'ltr');
     final nodes = state.circuitNodes(widget.circuitId);
@@ -127,12 +148,44 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     for (final n in nodes) {
       children[n.id] = state.circuitChildren(n.id).map((c) => c.id).toList();
     }
-    return layoutCircuit(
+    _nodes = {for (final n in nodes) n.id: n};
+    _layoutRev = state.revision;
+    _layoutCollapsedRev = _collapsedRev;
+    return _layout = layoutCircuit(
       rootId: widget.circuitId,
       children: children,
       collapsed: _collapsed,
       mode: mode,
     );
+  }
+
+  /// Expands every collapsed node above [id], so [id] is on the map. Returns
+  /// whether anything changed (the caller then rebuilds).
+  bool _revealNode(String id) {
+    var changed = false;
+    for (final n in context.read<AppState>().circuitPath(id)) {
+      if (n.id != id && _collapsed.remove(n.id)) changed = true;
+    }
+    if (changed) _collapsedRev++;
+    return changed;
+  }
+
+  /// Closes the map once its circuit is gone — deleted here, or from a note
+  /// screen opened on top of it. Removes only this map's own route (even when
+  /// another screen still covers it), and only once.
+  void _leaveMap() {
+    if (_leaving) return;
+    _leaving = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route == null) return;
+      if (route.isCurrent) {
+        Navigator.of(context).pop();
+      } else if (route.isActive) {
+        Navigator.of(context).removeRoute(route);
+      }
+    });
   }
 
   static CircuitLayoutMode _modeFromString(String s) => switch (s) {
@@ -250,13 +303,16 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   void _fitToScreen() {
     final vp = _viewport;
     if (vp == null) return;
-    _animateTo(_fitMatrix(_buildLayout(context.read<AppState>()), vp));
+    _animateTo(_fitMatrix(_layoutFor(context.read<AppState>()), vp));
   }
 
   void _focusOn(String id, {required bool highlight}) {
     final vp = _viewport;
     if (vp == null) return;
-    final layout = _buildLayout(context.read<AppState>());
+    // A node added or moved under a collapsed branch must not vanish: open
+    // the branches above it first.
+    _revealNode(id);
+    final layout = _layoutFor(context.read<AppState>());
     final rect = layout.rects[id];
     if (rect == null) return;
     final scale = _currentScale().clamp(0.15, 1.0).toDouble();
@@ -283,7 +339,6 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   }
 
   String _noteTitleFmt(int n) => context.t.circuitNoteTitle(n);
-  String _phTitleFmt(int n) => context.t.circuitPlaceholderTitle(n);
 
   String _displayTitle(Note note) {
     final t = note.title.trim();
@@ -315,7 +370,16 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     final state = context.read<AppState>();
     final note = state.noteById(id);
     if (note == null || note.circuitPlaceholder) return;
-    final result = await Navigator.of(context).push<CircuitMapFocus>(
+    // This note's screen is already open beneath the map (the map was opened
+    // from it): go back to it. A second screen on the same note would have the
+    // two overwrite each other's edits.
+    final navigator = Navigator.of(context);
+    final open = OpenNoteScreens.routeFor(id);
+    if (open != null && identical(open.navigator, navigator)) {
+      navigator.popUntil((r) => r == open);
+      return;
+    }
+    final result = await navigator.push<CircuitMapFocus>(
       MaterialPageRoute(
         builder: (_) => noteScreen(note,
             fromCircuitMap: true, startEditing: _bodyEmpty(note)),
@@ -378,6 +442,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
       case CircuitNodeAction.toggleCollapse:
         setState(() {
           if (!_collapsed.remove(id)) _collapsed.add(id);
+          _collapsedRev++;
         });
       case CircuitNodeAction.colour:
         await showNoteStylePicker(
@@ -396,6 +461,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         await state.moveCircuitNode(id, 1);
       case CircuitNodeAction.indent:
         await state.indentCircuitNode(id);
+        // Indenting under a collapsed sibling would hide the node — open it.
+        if (mounted && _revealNode(id)) setState(() {});
       case CircuitNodeAction.outdent:
         await state.outdentCircuitNode(id);
       case CircuitNodeAction.moveTo:
@@ -490,14 +557,9 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         : root.title.trim();
   }
 
-  String _circuitFileBase() {
-    final root = context.read<AppState>().noteById(widget.circuitId);
-    final t = root?.title.trim() ?? '';
-    if (t.isEmpty) return 'circuit';
-    return t
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        .replaceAll(RegExp(r'\s+'), '-');
-  }
+  String _circuitFileBase() => safeFileBase(
+      context.read<AppState>().noteById(widget.circuitId)?.title ?? '',
+      fallback: 'circuit');
 
   Future<void> _shareOutline() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -537,49 +599,11 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   }
 
   Future<void> _deleteNode(String id) async {
-    final state = context.read<AppState>();
-    final note = state.noteById(id);
+    final note = context.read<AppState>().noteById(id);
     if (note == null) return;
-    if (note.isCircuitRoot) {
-      final total = state
-          .circuitNodes(widget.circuitId)
-          .where((n) => !n.circuitPlaceholder)
-          .length;
-      final ok = await confirmDeleteCircuit(context,
-          title: _displayTitle(note), count: total);
-      if (ok && mounted) {
-        await state.deleteCircuit(id);
-        if (mounted) Navigator.of(context).maybePop();
-      }
-      return;
-    }
-    if (state.circuitChildren(id).isEmpty) {
-      if (await confirmDeleteItems(context, 1) && mounted) {
-        await state.deleteCircuitSubtree(id);
-      }
-      return;
-    }
-    final descendants = _descendantCount(state, id);
-    final choice = await showCircuitDeleteWithChildrenDialog(context,
-        title: _displayTitle(note), childCount: descendants);
-    if (choice == CircuitDeleteChoice.all && mounted) {
-      await state.deleteCircuitSubtree(id);
-    } else if (choice == CircuitDeleteChoice.keepSlot && mounted) {
-      await state.deleteCircuitNodeKeepSlot(id, placeholderTitle: _phTitleFmt);
-    }
-  }
-
-  int _descendantCount(AppState state, String id) {
-    var count = 0;
-    final stack = [id];
-    while (stack.isNotEmpty) {
-      final pid = stack.removeLast();
-      for (final c in state.circuitChildren(pid)) {
-        count++;
-        stack.add(c.id);
-      }
-    }
-    return count;
+    // Deleting the first note trashes the circuit; the build then sees it and
+    // closes the map (_leaveMap).
+    await confirmAndDeleteCircuitNote(context, note);
   }
 
   // ---- Placeholder sheet --------------------------------------------------
@@ -662,30 +686,40 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final root = state.noteById(widget.circuitId);
-    if (root == null || !root.isCircuitRoot) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) Navigator.of(context).maybePop();
-      });
+    // A trashed circuit is still found by id — close on that too, or the map
+    // would keep editing a circuit that is in Recently Deleted.
+    if (root == null || !root.isCircuitRoot || root.deletedAt != null) {
+      _leaveMap();
       return const SizedBox.shrink();
     }
     final title = _displayTitle(root);
-    final layout = _buildLayout(state);
+    final layout = _layoutFor(state);
 
-    // Drive the layout-change animation off a positional signature.
-    final sig = _layoutSig(layout);
-    if (sig != _sig) {
-      _sig = sig;
-      if (_shownRects.isEmpty) {
-        _shownRects = Map.of(layout.rects);
-      } else {
-        _fromRects = Map.of(_shownRects);
-        _target = layout;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _layoutCtrl.forward(from: 0);
-        });
+    // Drive the layout-change animation off a positional signature, checked
+    // only when the (cached) layout itself has changed.
+    if (!identical(layout, _sigLayout)) {
+      _sigLayout = layout;
+      final sig = _layoutSig(layout);
+      if (sig != _sig) {
+        _sig = sig;
+        if (_shownRects.isEmpty) {
+          _shownRects = Map.of(layout.rects);
+        } else {
+          _fromRects = Map.of(_shownRects);
+          _target = layout;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _layoutCtrl.forward(from: 0);
+          });
+        }
       }
     }
     final rects = _shownRects.isEmpty ? layout.rects : _shownRects;
+    final validTargets = _pick == null
+        ? const <String>{}
+        : {
+            for (final id in layout.rects.keys)
+              if (_isValidTarget(state, id)) id
+          };
 
     return FrostedScaffold(
       title: title,
@@ -747,16 +781,16 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
                         Positioned.fromRect(
                           rect: rects[id] ?? layout.rects[id]!,
                           child: _NodeChip(
-                            note: state.noteById(id),
+                            note: _nodes[id],
                             focused: _focusId == id && _pick == null,
                             highlight: _highlight,
                             pulse: _pulse,
                             collapsedCount: _collapsed.contains(id)
                                 ? state.circuitChildren(id).length
                                 : 0,
-                            dimmed: _pick != null && !_isValidTarget(state, id),
+                            dimmed: _pick != null && !validTargets.contains(id),
                             onTap: _pick != null
-                                ? (_isValidTarget(state, id)
+                                ? (validTargets.contains(id)
                                     ? () => _handlePickTap(id)
                                     : null)
                                 : () => _tapNode(id),
@@ -766,7 +800,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
                         ),
                       if (_pick == null)
                         for (final id in layout.rects.keys)
-                          if (!(state.noteById(id)?.circuitPlaceholder ?? true) &&
+                          if (!(_nodes[id]?.circuitPlaceholder ?? true) &&
                               !_collapsed.contains(id))
                             _plusButton(rects, layout, id),
                     ],

@@ -11,6 +11,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_to_space_sheet.dart';
 import '../widgets/bubble_button.dart';
+import '../widgets/circuit_sheets.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_morph.dart';
@@ -67,6 +68,9 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       onSetArchived: (a) => state.setNoteArchived(note.id, a),
       onMove: (spaceId) => state.moveNoteToSpace(note.id, spaceId),
       onDelete: () => state.deleteNote(note.id),
+      onConfirmAndDelete: note.inCircuit
+          ? () => confirmAndDeleteCircuitNote(context, note)
+          : null,
       allowCrypt: !note.inCircuit,
     );
   }

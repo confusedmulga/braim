@@ -17,6 +17,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/note.dart' show richToPlain;
 
 import '../models/tweet_card.dart';
+import '../services/file_names.dart';
 import '../services/note_markdown.dart';
 import '../services/note_pdf.dart';
 import '../services/wiki_links.dart';
@@ -359,14 +360,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     );
   }
 
-  String _fileBase() {
-    final title =
-        _card.noteTitle.trim().isNotEmpty ? _card.noteTitle.trim() : 'spark';
-    final base = title
-        .replaceAll(RegExp(r'[^\w\s-]'), '')
-        .replaceAll(RegExp(r'\s+'), '-');
-    return base.isEmpty ? 'spark' : base;
-  }
+  String _fileBase() => safeFileBase(_card.noteTitle, fallback: 'spark');
 
   Future<void> _shareMarkdown() async {
     final messenger = ScaffoldMessenger.of(context);

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
+import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
+import 'quick_actions_menu.dart';
 
 /// Where a new circuit note goes, and what kind it is — the result of the
 /// note screen's **+** sheet.
@@ -508,4 +511,64 @@ Future<bool> confirmDeleteCircuit(
     ),
   );
   return ok ?? false;
+}
+
+/// Confirms and deletes a circuit note — the one flow every screen uses. A
+/// first note takes the whole circuit (the dialog names it and counts its
+/// notes); a note with notes below it asks whether to leave a placeholder in
+/// its place; a note with nothing below gets the plain confirmation. Returns
+/// whether anything was deleted.
+Future<bool> confirmAndDeleteCircuitNote(
+    BuildContext context, Note note) async {
+  final state = context.read<AppState>();
+  final t = context.t;
+  final title = note.title.trim();
+  if (note.isCircuitRoot) {
+    final total = state
+        .circuitNodes(note.id)
+        .where((n) => !n.circuitPlaceholder)
+        .length;
+    final ok = await confirmDeleteCircuit(context,
+        title: title.isEmpty ? t.untitledCircuit : title, count: total);
+    if (!ok) return false;
+    await state.deleteCircuit(note.id);
+    return true;
+  }
+  final descendants = state.circuitDescendantCount(note.id);
+  if (descendants == 0) {
+    if (!await confirmDeleteItems(context, 1)) return false;
+    await state.deleteCircuitSubtree(note.id);
+    return true;
+  }
+  final choice = await showCircuitDeleteWithChildrenDialog(context,
+      title: title.isEmpty ? t.untitledNote : title, childCount: descendants);
+  switch (choice) {
+    case CircuitDeleteChoice.all:
+      await state.deleteCircuitSubtree(note.id);
+      return true;
+    case CircuitDeleteChoice.keepSlot:
+      await state.deleteCircuitNodeKeepSlot(note.id,
+          placeholderTitle: t.circuitPlaceholderTitle);
+      return true;
+    case null:
+      return false;
+  }
+}
+
+/// The extra warning for a multi-select delete whose selection holds circuits'
+/// first notes — each takes its whole circuit with it. Null when no selected
+/// first note has any branches (then the plain confirmation says it all).
+String? circuitBulkDeleteWarning(BuildContext context, Iterable<String> ids) {
+  final state = context.read<AppState>();
+  var circuits = 0;
+  var notes = 0;
+  for (final id in ids) {
+    final n = state.noteById(id);
+    if (n == null || !n.isCircuitRoot) continue;
+    final branches = state.circuitBranchCount(id);
+    if (branches == 0) continue;
+    circuits++;
+    notes += branches + 1;
+  }
+  return circuits == 0 ? null : context.t.circuitBulkDeleteBody(circuits, notes);
 }
