@@ -14,7 +14,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../models/note.dart' show richToPlain;
+import '../models/note.dart' show richToPlain, toggleChecklistLine;
 
 import '../models/tweet_card.dart';
 import '../services/file_names.dart';
@@ -33,6 +33,7 @@ import '../widgets/glass_bubble.dart';
 import '../widgets/move_to_space_sheet.dart';
 import '../widgets/note_body_editor.dart';
 import '../widgets/note_links_section.dart';
+import '../widgets/note_read_body.dart';
 import 'note_editor_screen.dart';
 import 'note_open.dart';
 
@@ -83,11 +84,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   bool _editing = false;
   bool get _readOnly => !_editing;
 
-  late final AnimationController _expand = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
-    value: 1,
-  );
+  /// Created in [initState], not lazily: a card only read never touches it
+  /// until [dispose], and creating a controller there looks up the ticker
+  /// mode on an already-deactivated element.
+  late final AnimationController _expand;
 
   void _startEditing() {
     setState(() => _editing = true);
@@ -118,6 +118,11 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   @override
   void initState() {
     super.initState();
+    _expand = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      value: 1,
+    );
     _card = widget.card;
     _titleCtrl = TextEditingController(text: _card.noteTitle);
     _savedFingerprint = _fingerprint();
@@ -445,6 +450,28 @@ class _CardDetailScreenState extends State<CardDetailScreen>
         .push(bouncyRoute(NoteEditorScreen(note: created, isNew: true)));
   }
 
+  /// Follows a `[[Title]]` tapped in the read view: open it, or create it.
+  void _openWikiLink(String title) {
+    final ref = context.read<AppState>().resolveLink(title);
+    if (ref != null) {
+      _openRef(ref);
+    } else {
+      _createAndOpenLinkedNote(title);
+    }
+  }
+
+  /// Ticks a checklist item straight from the read view and saves the card.
+  void _toggleCheck(int blockIndex, int lineIndex, bool nowChecked) {
+    if (blockIndex < 0 || blockIndex >= _card.blocks.length) return;
+    final b = _card.blocks[blockIndex];
+    if (!b.isText) return;
+    final updated = toggleChecklistLine(b.text, lineIndex);
+    if (updated == b.text) return;
+    setState(() => b.text = updated);
+    _savedFingerprint = _fingerprint();
+    context.read<AppState>().updateCard(_card);
+  }
+
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
@@ -513,7 +540,12 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                         ),
                       ),
                     const SizedBox(height: 4),
-                    _CardNoteBody(card: _card),
+                    NoteReadBody(
+                      blocks: _card.blocks,
+                      fontScale: _card.fontScale,
+                      onOpenLink: _openWikiLink,
+                      onToggleCheck: _toggleCheck,
+                    ),
                   ] else ...[
                     TextField(
                       controller: _titleCtrl,
@@ -554,7 +586,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                                   .read<AppState>()
                                   .refreshAfterImageRemoval(path),
                             )
-                          : _CardNoteBody(card: _card),
+                          : NoteReadBody(
+                              blocks: _card.blocks,
+                              fontScale: _card.fontScale,
+                            ),
                     ),
                   ],
                   // The card's place in the graph: outgoing [[links]] and the
@@ -639,35 +674,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
 
 /// The user's own note on a card, rendered as plain text for reading (and
 /// during the open morph, before the editors mount).
-class _CardNoteBody extends StatelessWidget {
-  const _CardNoteBody({required this.card});
-
-  final TweetCard card;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final b in card.blocks)
-          if (b.isText && richToPlain(b.text).isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                richToPlain(b.text),
-                style: TextStyle(
-                  fontFamily: activeBodyFont,
-                  fontSize: 21,
-                  height: 1.35,
-                  color: AppPalette.inkPrimary,
-                ),
-              ),
-            ),
-      ],
-    );
-  }
-}
-
 /// Read-only preview of the fetched tweet/link.
 class _CardPreview extends StatelessWidget {
   const _CardPreview({required this.card});
