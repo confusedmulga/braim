@@ -1,7 +1,11 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart'
+    show HitTestResult, PointerDeviceKind, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show RenderEditable, RenderSemanticsGestureHandler, SemanticsAnnotationsMixin;
 import 'package:flutter/services.dart';
 
 import '../main.dart' show navigatorKey;
@@ -14,8 +18,50 @@ import '../widgets/glass.dart';
 Widget webFrame(BuildContext context, Widget? child) => FocusTraversalGroup(
       policy: _LaidOutReadingOrderPolicy(),
       child: _WebShortcuts(
-          child: DesktopFrame(child: child ?? const SizedBox.shrink())),
+        child: _RightClickAsLongPress(
+            child: DesktopFrame(child: child ?? const SizedBox.shrink())),
+      ),
     );
+
+/// Right-click does what a long-press does on the phone (select, the item
+/// menu…), everywhere a long-press exists, without touching each widget: the
+/// click hit-tests the pointer and runs the innermost long-press handler the
+/// way accessibility would. Pressing and holding the mouse still long-presses
+/// natively. Text fields keep right-click for their own menu.
+class _RightClickAsLongPress extends StatelessWidget {
+  const _RightClickAsLongPress({required this.child});
+
+  final Widget child;
+
+  static void _onDown(PointerDownEvent e) {
+    if (e.kind != PointerDeviceKind.mouse ||
+        e.buttons != kSecondaryMouseButton) {
+      return;
+    }
+    final result = HitTestResult();
+    WidgetsBinding.instance.hitTestInView(result, e.position, e.viewId);
+    for (final entry in result.path) {
+      final target = entry.target;
+      if (target is RenderEditable) return;
+      final VoidCallback? longPress = switch (target) {
+        RenderSemanticsGestureHandler(:final onLongPress) => onLongPress,
+        SemanticsAnnotationsMixin(:final properties) => properties.onLongPress,
+        _ => null,
+      };
+      if (longPress != null) {
+        longPress();
+        return;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _onDown,
+        child: child,
+      );
+}
 
 /// Reading-order traversal that skips focus nodes not laid out yet. When the
 /// browser hands focus back to the page (after a file dialog, or tabbing in
@@ -91,10 +137,27 @@ class DesktopFrame extends StatelessWidget {
 
 /// Esc = back, Ctrl/Cmd+K or / = search, Ctrl/Cmd+N = new, Ctrl/Cmd+Enter =
 /// done in an editor, ←/→ = previous/next tab (when not typing).
-class _WebShortcuts extends StatelessWidget {
+class _WebShortcuts extends StatefulWidget {
   const _WebShortcuts({required this.child});
 
   final Widget child;
+
+  @override
+  State<_WebShortcuts> createState() => _WebShortcutsState();
+}
+
+class _WebShortcutsState extends State<_WebShortcuts> {
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onParkedKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onParkedKey);
+    super.dispose();
+  }
 
   /// Whether the keyboard is feeding a text field right now (then plain keys
   /// like / and the arrows belong to it).
@@ -113,52 +176,61 @@ class _WebShortcuts extends StatelessWidget {
     return typing;
   }
 
-  static void _call(VoidCallback? f) => f?.call();
+  /// Runs the shortcut for [event], if there is one. Returns whether it did.
+  static bool _dispatch(KeyEvent event, {required bool typing}) {
+    if (event is! KeyDownEvent) return false;
+    final k = event.logicalKey;
+    final hw = HardwareKeyboard.instance;
+    final mod = hw.isControlPressed || hw.isMetaPressed;
+    bool run(VoidCallback? f) {
+      if (f == null) return false;
+      f();
+      return true;
+    }
+
+    if (k == LogicalKeyboardKey.escape && !hw.isShiftPressed) {
+      navigatorKey.currentState?.maybePop();
+      return true;
+    }
+    if (mod && !hw.isAltPressed) {
+      if (k == LogicalKeyboardKey.keyK) return run(AppShortcuts.search);
+      if (k == LogicalKeyboardKey.keyN) return run(AppShortcuts.newItem);
+      if (k == LogicalKeyboardKey.enter) return run(AppShortcuts.done);
+      return false;
+    }
+    if (typing || hw.isAltPressed) return false;
+    if (k == LogicalKeyboardKey.slash) return run(AppShortcuts.search);
+    final step = AppShortcuts.stepTab;
+    if (step != null && k == LogicalKeyboardKey.arrowLeft) {
+      step(-1);
+      return true;
+    }
+    if (step != null && k == LogicalKeyboardKey.arrowRight) {
+      step(1);
+      return true;
+    }
+    return false;
+  }
+
+  /// When the page loses DOM focus (a text field closes, a click lands on the
+  /// page margin) the framework parks focus at the root, above this widget,
+  /// and key events stop reaching it. Handle them globally only then, so no
+  /// key is ever acted on twice.
+  bool _onParkedKey(KeyEvent event) {
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null && primary != FocusManager.instance.rootScope) {
+      return false;
+    }
+    return _dispatch(event, typing: false);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            navigatorKey.currentState?.maybePop(),
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () =>
-            _call(AppShortcuts.search),
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
-            _call(AppShortcuts.search),
-        const SingleActivator(LogicalKeyboardKey.keyN, control: true): () =>
-            _call(AppShortcuts.newItem),
-        const SingleActivator(LogicalKeyboardKey.keyN, meta: true): () =>
-            _call(AppShortcuts.newItem),
-        const SingleActivator(LogicalKeyboardKey.enter, control: true): () =>
-            _call(AppShortcuts.done),
-        const SingleActivator(LogicalKeyboardKey.enter, meta: true): () =>
-            _call(AppShortcuts.done),
-      },
-      child: Focus(
-        // Plain keys only when no text field has the keyboard.
-        onKeyEvent: (node, event) {
-          if (event is! KeyDownEvent || _typing()) {
-            return KeyEventResult.ignored;
-          }
-          final k = event.logicalKey;
-          if (k == LogicalKeyboardKey.slash && AppShortcuts.search != null) {
-            AppShortcuts.search!();
-            return KeyEventResult.handled;
-          }
-          if (k == LogicalKeyboardKey.arrowLeft &&
-              AppShortcuts.stepTab != null) {
-            AppShortcuts.stepTab!(-1);
-            return KeyEventResult.handled;
-          }
-          if (k == LogicalKeyboardKey.arrowRight &&
-              AppShortcuts.stepTab != null) {
-            AppShortcuts.stepTab!(1);
-            return KeyEventResult.handled;
-          }
-          return KeyEventResult.ignored;
-        },
-        child: child,
-      ),
+    return Focus(
+      onKeyEvent: (node, event) => _dispatch(event, typing: _typing())
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored,
+      child: widget.child,
     );
   }
 }

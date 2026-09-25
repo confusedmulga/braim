@@ -10,13 +10,13 @@ matches the engine that builds the app. CJK families (hundreds of files, ~60 MB)
 are skipped; see the README.
 
     python3 tool/fetch_web_fonts.py            # uses `flutter` on PATH
+    python3 tool/fetch_web_fonts.py --all      # include CJK (~60 MB more)
     python3 tool/fetch_web_fonts.py --list     # show what would be fetched
 """
 import os
 import pathlib
 import re
 import shutil
-import subprocess
 import sys
 import urllib.request
 
@@ -39,7 +39,9 @@ def manifest() -> list[tuple[str, str]]:
     fonts = re.findall(r"NotoFont\(\s*'([^']+)',\s*'([^']+)'", data)
     roboto = re.search(r"fontFallbackBaseUrl\}(roboto/[^']+\.woff2)",
                        (engine / 'canvaskit' / 'fonts.dart').read_text())
-    out = [(name, path) for name, path in fonts if not SKIP.match(name)]
+    skip_cjk = '--all' not in sys.argv
+    out = [(name, path) for name, path in fonts
+           if not (skip_cjk and SKIP.match(name))]
     if roboto:
         out.insert(0, ('Roboto', roboto.group(1)))
     return out

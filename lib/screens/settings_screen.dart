@@ -16,7 +16,10 @@ import '../widgets/glass.dart';
 import '../widgets/tutorial_dialog.dart';
 import '../platform/braim_image.dart';
 import '../platform/platform_caps.dart';
+import '../services/store/remote_library_store.dart';
+import '../web/remote/remote_boot.dart' show disconnectFromPhone;
 import '../web/web_library_actions.dart';
+import '../widgets/open_on_computer_sheet.dart';
 
 /// Human-readable "last backed up" line for the backup row.
 String _lastBackupText(BuildContext context, DateTime? last) {
@@ -872,6 +875,62 @@ class SettingsScreen extends StatelessWidget {
                                         color: AppPalette.inkSecondary)),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (!caps.isWeb) ...[
+                        _SectionLabel(context.t.computerSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          onTap: () => showOpenOnComputerSheet(context),
+                          child: ListTile(
+                            leading: Icon(Icons.computer_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.openOnComputer,
+                                style:
+                                    TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.openOnComputerSubtitle,
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (caps.isRemote &&
+                          state.store is RemoteLibraryStore) ...[
+                        _SectionLabel(context.t.webPhoneSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            leading: Icon(Icons.phonelink_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.webConnectedTo,
+                                style:
+                                    TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.webConnectedSubtitle,
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          onTap: () => disconnectFromPhone(
+                              state.store as RemoteLibraryStore),
+                          child: ListTile(
+                            leading: Icon(Icons.link_off_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.webDisconnect,
+                                style:
+                                    TextStyle(color: AppPalette.inkPrimary)),
                           ),
                         ),
                         const SizedBox(height: 24),

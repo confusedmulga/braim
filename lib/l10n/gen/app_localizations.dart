@@ -4533,6 +4533,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Forget'**
   String get pairRevoke;
+
+  /// No description provided for @computerSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Computer'**
+  String get computerSection;
+
+  /// No description provided for @noteChangedOnPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'This note changed on your phone.'**
+  String get noteChangedOnPhone;
+
+  /// No description provided for @noteChangedOnComputer.
+  ///
+  /// In en, this message translates to:
+  /// **'This note changed on your computer.'**
+  String get noteChangedOnComputer;
+
+  /// No description provided for @noteLoadOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get noteLoadOther;
 }
 
 class _AppLocalizationsDelegate

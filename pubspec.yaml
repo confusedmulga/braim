@@ -68,6 +68,8 @@ dependencies:
   web: ^1.1.1
   # QR code for the "Open on computer" pairing sheet.
   qr: ^3.0.2
+  # Hashes of remembered computers' session tokens (phone server).
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:

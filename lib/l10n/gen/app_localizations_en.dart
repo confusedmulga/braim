@@ -2519,4 +2519,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pairRevoke => 'Forget';
+
+  @override
+  String get computerSection => 'Computer';
+
+  @override
+  String get noteChangedOnPhone => 'This note changed on your phone.';
+
+  @override
+  String get noteChangedOnComputer => 'This note changed on your computer.';
+
+  @override
+  String get noteLoadOther => 'Load';
 }

@@ -204,7 +204,8 @@ void main() {
         () async {
       final n = Note(title: 'draft');
       await boot(_lib(notes: [n]));
-      state.registerOpenEditor(n.id, () => true);
+      bool editing() => true;
+      state.registerOpenEditor(n.id, editing);
       final seen = <String>[];
       final sub = state.incomingNoteChanges.listen(seen.add);
 
@@ -220,7 +221,18 @@ void main() {
       expect(loaded?.title, 'changed on phone');
       expect(state.noteById(n.id)?.title, 'changed on phone');
       await sub.cancel();
-      state.unregisterOpenEditor(n.id);
+      // A replaced editor unregistering late leaves the new one in place.
+      bool other() => true;
+      state.registerOpenEditor(n.id, other);
+      state.unregisterOpenEditor(n.id, editing);
+      state.applyIncoming(LibraryDelta(rows: [
+        _noteChange(Note.fromJson(remote.toJson())..title = 'again'),
+      ]));
+      expect(state.noteById(n.id)?.title, 'changed on phone',
+          reason: 'the new editor is still writing, so the change is held');
+      expect(state.hasIncomingFor(n.id), isTrue);
+      state.unregisterOpenEditor(n.id, other);
+      expect(state.hasIncomingFor(n.id), isFalse);
     });
 
     test('forgetLocally drops rows without ever deleting them', () async {

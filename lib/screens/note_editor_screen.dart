@@ -41,6 +41,7 @@ import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
 import 'reflexes_screen.dart';
 import '../platform/app_shortcuts.dart';
+import '../platform/platform_caps.dart';
 import '../platform/file_saver.dart';
 
 class NoteEditorScreen extends StatefulWidget {
@@ -384,6 +385,58 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         for (final b in _note.blocks) b.toJson(),
       ]);
 
+  StreamSubscription<String>? _incomingSub;
+  AppState? _appState;
+
+  /// While writing, a change from elsewhere waits for the user to load it.
+  bool _hasUnsavedWork() => _editing;
+
+  void _onChangedElsewhere() {
+    if (!mounted) return;
+    final state = context.read<AppState>();
+    if (state.hasIncomingFor(_note.id)) {
+      // Writing: keep the local text until the user chooses the other one.
+      final t = context.t;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          duration: const Duration(days: 1),
+          content: Text(PlatformCaps.current.isWeb
+              ? t.noteChangedOnPhone
+              : t.noteChangedOnComputer),
+          action: SnackBarAction(
+            label: t.noteLoadOther,
+            onPressed: () => _reopen(state.takeIncomingNote(_note.id)),
+          ),
+        ));
+      return;
+    }
+    // Reading: just show the new version.
+    final fresh = state.noteById(_note.id);
+    if (!identical(fresh, _note)) _reopen(fresh);
+  }
+
+  /// Swaps this screen for one on [note] (or closes it if [note] is gone),
+  /// without the open animation.
+  void _reopen(Note? note) {
+    if (!mounted) return;
+    final nav = Navigator.of(context);
+    if (note == null) {
+      nav.maybePop();
+      return;
+    }
+    _autosave?.cancel();
+    nav.pushReplacement(PageRouteBuilder<void>(
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, _, _) => NoteEditorScreen(
+        note: note,
+        isNew: false,
+        fromCircuitMap: widget.fromCircuitMap,
+      ),
+    ));
+  }
+
   void _shortcutDone() {
     if (!mounted || _readOnly || _route?.isCurrent == false) return;
     _finishEditing();
@@ -422,6 +475,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         const Duration(seconds: 3), (_) => _autosaveTick());
     // Ctrl/Cmd+Enter in a browser: done writing.
     AppShortcuts.done = _shortcutDone;
+    // A change to this note made elsewhere (the phone, or a browser working
+    // on the phone's library) never swaps the note out from under the editor:
+    // while writing, it waits for the user to load it.
+    final state = _appState = context.read<AppState>();
+    state.registerOpenEditor(_note.id, _hasUnsavedWork);
+    _incomingSub = state.incomingNoteChanges
+        .where((id) => id == _note.id)
+        .listen((_) => _onChangedElsewhere());
     // Snapshot a book chapter's pre-edit state when a writing session opens,
     // so a heavy revise stays reversible (throttled inside AppState).
     if (_note.isManuscriptPage && !widget.isNew) {
@@ -467,6 +528,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final route = _route;
     if (route != null) OpenNoteScreens.unregister(_note.id, route);
     AppShortcuts.releaseDone(_shortcutDone);
+    _incomingSub?.cancel();
+    _appState?.unregisterOpenEditor(_note.id, _hasUnsavedWork);
     _autosave?.cancel();
     _expand.dispose();
     _titleCtrl.dispose();

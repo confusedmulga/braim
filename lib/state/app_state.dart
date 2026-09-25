@@ -3740,6 +3740,14 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Typing time a browser spent on this library (it sends what it added, so
+  /// neither side's count overwrites the other's).
+  void addTypingMillis(int ms) {
+    if (ms <= 0 || ms > const Duration(hours: 12).inMilliseconds) return;
+    _typingMillis += ms;
+    _persist();
+  }
+
   /// Whether the Journal / Cortex groups in the side pane are expanded — kept so
   /// they reopen where the user left them.
   bool get journalPaneOpen => _journalPaneOpen;
@@ -4445,13 +4453,18 @@ class AppState extends ChangeNotifier {
   void registerOpenEditor(String noteId, bool Function() hasUnsavedChanges) =>
       _openEditors[noteId] = hasUnsavedChanges;
 
-  void unregisterOpenEditor(String noteId) {
+  /// Drops [noteId]'s registration if it is still [hasUnsavedChanges]'s (an
+  /// editor that replaced this one may already have registered).
+  void unregisterOpenEditor(String noteId, bool Function() hasUnsavedChanges) {
+    if (!identical(_openEditors[noteId], hasUnsavedChanges)) return;
     _openEditors.remove(noteId);
     _heldIncoming.remove(noteId);
   }
 
-  /// Versions of open notes that arrived while their editor had unsaved work.
-  final Map<String, Note?> _heldIncoming = {};
+  /// Versions of open notes that arrived while their editor had unsaved work,
+  /// and whether they came to be persisted here (a browser's edit reaching the
+  /// phone) or are already held by the store (the phone's edit in a browser).
+  final Map<String, ({Note? note, bool persist})> _heldIncoming = {};
 
   bool hasIncomingFor(String noteId) => _heldIncoming.containsKey(noteId);
 
@@ -4459,14 +4472,23 @@ class AppState extends ChangeNotifier {
   /// arrived from elsewhere while it was being edited. Returns the note now in
   /// the library (null if the other side deleted it).
   Note? takeIncomingNote(String noteId) {
-    if (!_heldIncoming.containsKey(noteId)) return noteById(noteId);
-    final note = _heldIncoming.remove(noteId);
+    final held = _heldIncoming.remove(noteId);
+    if (held == null) return noteById(noteId);
+    final note = held.note;
     _replaceById(_notes, noteId, note, (n) => n.id);
-    _rev++;
-    _store.adopt(LibraryDelta(rows: [
-      (table: 'notes', id: noteId, row: note == null ? null : noteRow(note)),
-    ]));
-    notifyListeners();
+    final row = (
+      table: 'notes',
+      id: noteId,
+      row: note == null ? null : noteRow(note),
+    );
+    if (held.persist) {
+      _syncSideEffects([row]);
+      _persist();
+    } else {
+      _rev++;
+      _store.adopt(LibraryDelta(rows: [row]));
+      notifyListeners();
+    }
     return note;
   }
 
@@ -4495,7 +4517,8 @@ class AppState extends ChangeNotifier {
           if (open != null && open()) {
             // Unsaved work here wins for now; the editor offers to load the
             // other version (see [takeIncomingNote]).
-            _heldIncoming[r.id] = b == null ? null : Note.fromJson(b);
+            _heldIncoming[r.id] =
+                (note: b == null ? null : Note.fromJson(b), persist: persist);
             changedNotes.add(r.id);
             continue;
           }

@@ -71,3 +71,5 @@ ios/Runner/GoogleService-Info.plist
 
 # Web fallback fonts, fetched at build time by tool/fetch_web_fonts.py.
 /web/fonts/
+# The web app bundled into the APK (tool/build_web_bundle.sh).
+/android/app/src/main/assets/web/

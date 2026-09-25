@@ -1066,5 +1066,9 @@
   "pairDeny": "Don't allow",
   "pairedDevices": "Paired computers",
   "pairedDevicesNone": "No computers paired",
-  "pairRevoke": "Forget"
+  "pairRevoke": "Forget",
+  "computerSection": "Computer",
+  "noteChangedOnPhone": "This note changed on your phone.",
+  "noteChangedOnComputer": "This note changed on your computer.",
+  "noteLoadOther": "Load"
 }

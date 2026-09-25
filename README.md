@@ -244,6 +244,41 @@ Recently Deleted, and are never placed in the Crypt.
 shows the circuit notes as ordinary loose notes in the feed. Nothing is lost;
 reopening that backup in a current build restores the tree.
 
+### 3-11. ON A COMPUTER (WEB APP)
+
+The same app, same screens, runs in Chrome, Edge or Firefox on a PC, in a
+phone-width column over the blurred wallpaper. It works two ways from one build.
+
+- **Open on computer (the phone's library, live).** On the phone, Settings →
+  **Open on computer** starts a small server inside Braim and shows an address
+  and a QR code. On a computer joined to the same Wi-Fi, or to the phone's own
+  hotspot, open that address. The phone asks whether to allow the computer; once
+  allowed, the browser shows the phone's library and every edit on either side
+  appears on the other within a second. The browser keeps no copy: the phone
+  stays the only library. **Remember this computer** skips the question next
+  time; the phone lists paired computers with **Forget**. The server stops from
+  the same sheet, when Braim closes, or after 15 minutes with no computer
+  connected, and keeps the phone's screen on while it runs.
+- **In the browser alone (its own library).** Served from anywhere else (a
+  static host, or with `?mode=local`), the browser keeps its own library in its
+  storage. Bring the phone's notes over with **Import backup from phone** (a
+  backup zip from 3-7), and take them back with **Export backup (.zip)**, which
+  the phone restores with its normal restore.
+
+The **Crypt** never leaves the phone's lock. A phone-served browser asks the
+phone, which unlocks with its own biometrics; the Crypt then stays open there
+until 10 minutes pass without activity. A browser-only library never holds it.
+Theme, wallpaper, sort and similar choices belong to each computer and never
+change the phone's.
+
+On a computer: **right-click** does what a long-press does; **Esc** goes back;
+**Ctrl+K** or **/** searches; **Ctrl+N** creates on the current tab;
+**Ctrl+Enter** finishes editing; **← →** switch tabs. The mouse can drag between
+tabs.
+
+> **CAUTION.** A browser-only library lives in the browser's storage. Clearing
+> site data erases it; export a backup now and then.
+
 ---
 
 ## SECTION IV. NORMAL OPERATION
@@ -265,6 +300,34 @@ flutter pub get
 flutter run                 # with an emulator or device attached
 flutter build apk --debug   # produce an installable debug APK
 ```
+
+### 4-4. Build the web app
+
+```bash
+python3 tool/fetch_web_fonts.py     # fallback fonts, served from the app's own origin
+flutter build web --release --no-web-resources-cdn
+
+tool/build_web_bundle.sh            # put the web app inside the APK for "Open on computer"
+flutter build appbundle             # (run the line above first, every release)
+```
+
+`--no-web-resources-cdn` keeps the rendering engine in the build instead of
+loading it from Google's CDN, and the fetched fonts replace Google Fonts, so
+nothing is requested from the internet when a computer uses the phone's hotspot.
+The bundle adds about 11 MB to the APK. Without it, "Open on computer" serves a
+page saying the web app is missing; everything else is unaffected.
+
+### 4-5. Check the web app
+
+```bash
+flutter test                                      # includes the phone server tests
+node tool/web_smoke.mjs build/web                 # browser-only library, in Chromium
+node tool/remote_smoke.mjs build/web              # phone-served, against a stand-in phone
+```
+
+Both scripts need Playwright with Chromium. They import a fixture backup built
+from `test_data/`, take screenshots of every main screen in light and dark, and
+fail if any request leaves the machine.
 
 ---
 
@@ -330,6 +393,27 @@ reason for `kotlin.jvm.target.validation.mode=warning` in
 
 6-4. **`palette_generator` is marked discontinued upstream** but still works. It
 may be replaced with a manual luminance sampler later.
+
+6-5. **The phone-served web app is plain HTTP.** Anyone on the same network can
+read the traffic. Use the phone's hotspot or a Wi-Fi you trust. Pairing needs a
+single-use code from the phone's screen and the owner's approval on the phone.
+
+6-6. **Open on computer works while Braim is open on the phone.** The screen is
+kept on while the server runs; Android may stop the server if Braim is closed or
+the phone is put away for long.
+
+6-7. **After a minute out of reach of the phone, the browser stops taking
+edits** until the phone is back (it holds no durable copy). Changes made before
+that are sent when it reconnects.
+
+6-8. **In a browser-only library, link previews wait for the phone.** Browsers
+can't read other sites, so a link saved there shows as a plain link until the
+library is restored on the phone. Phone-served browsers ask the phone to fetch.
+
+6-9. **Chinese, Japanese and Korean text** isn't bundled (those fonts are about
+60 MB). The phone-served app fetches them from Google when the computer is
+online. For a browser-only build that must show them, fetch them into the build
+with `python3 tool/fetch_web_fonts.py --all`.
 
 > **WARNING.** Release signing secrets (`android/key.properties`,
 > `android/key.properties.ready`, and `android/upload-keystore.jks`) are git

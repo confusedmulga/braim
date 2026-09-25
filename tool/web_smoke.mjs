@@ -100,6 +100,16 @@ async function runTheme(scheme) {
   await page.getByRole('button', { name: /^Home/ }).first().click();
   await page.waitForTimeout(2500);
 
+  // Right-click does what a long-press does: the note's quick actions.
+  await page.getByRole('button', { name: /^Groceries/ }).first().click({ button: 'right' });
+  await page.waitForTimeout(1500);
+  await shot(page, `${scheme}-05a-right-click`);
+  if (!(await page.getByText('Archive', { exact: false }).count())) {
+    failures.push('right-click did not open the quick actions');
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(1200);
+
   // Open a note and come back with Escape.
   await shot(page, `${scheme}-05b-back-home`);
   await page.getByRole('button', { name: /^Groceries/ }).first().click({ timeout: 15000 });

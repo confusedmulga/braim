@@ -52,6 +52,8 @@ class NotificationService {
     // a test), every later call quietly no-ops instead of retrying.
     if (_ready || _tried) return;
     _tried = true;
+    // A browser has no local notifications; the phone fires the reminders.
+    if (kIsWeb) return;
     try {
       tzdata.initializeTimeZones();
       final name = await FlutterTimezone.getLocalTimezone();
