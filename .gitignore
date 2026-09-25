@@ -68,3 +68,6 @@ ios/Runner/GoogleService-Info.plist
 
 # Affinity Designer keeps a lock file beside a design while it is open.
 *~lock~
+
+# Web fallback fonts, fetched at build time by tool/fetch_web_fonts.py.
+/web/fonts/

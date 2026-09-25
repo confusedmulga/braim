@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart' show ConflictAlgorithm, DatabaseFactory;
 import '../../models/note.dart';
 import '../../models/tweet_card.dart';
 import '../storage_service.dart' show AppData;
+import '../store/library_delta.dart';
 import 'braim_database.dart';
 import 'db_migrator.dart';
 import 'db_snapshot.dart';
@@ -54,9 +55,7 @@ class DbStore {
   static const ftsBuiltTag = '1';
 
   // What the DB currently holds, so each sync writes only the delta.
-  // key = "<table>:<id>".
-  final Map<String, ({String table, String body})> _baseline = {};
-  Map<String, String> _baselineSettings = {};
+  final _differ = SnapshotDiffer();
 
   bool get enabled => _db != null;
 
@@ -64,15 +63,6 @@ class DbStore {
   /// one-time import finished cleanly (not a fallback-to-JSON). When false the
   /// caller must stay on the JSON load path.
   bool get usableForReads => _db != null && (lastImport?.dbUsable ?? false);
-
-  static List<(String, List<Map<String, Object?>>)> _tablesOf(AppSnapshot s) =>
-      [
-        ('notes', s.notes),
-        ('cards', s.cards),
-        ('books', s.books),
-        ('impulses', s.impulses),
-        ('spaces', s.spaces),
-      ];
 
   /// Opens the DB and runs the one-time JSON import. [loadLegacy] returns the
   /// current JSON library (the migration source). Never throws.
@@ -104,15 +94,7 @@ class DbStore {
   }
 
   Future<void> _seedBaseline() async {
-    final snap = await _db!.readSnapshot();
-    _baseline.clear();
-    for (final (table, rows) in _tablesOf(snap)) {
-      for (final row in rows) {
-        _baseline['$table:${row['id']}'] =
-            (table: table, body: row['body'] as String);
-      }
-    }
-    _baselineSettings = Map.of(snap.settings);
+    _differ.reseed(await _db!.readSnapshot());
   }
 
   /// Mirrors [data] into the DB, writing only rows/settings that changed since
@@ -124,36 +106,8 @@ class DbStore {
     final db = _db;
     if (db == null) return false;
     try {
-      final snap = snapshotFromAppData(data);
-
-      final current = <String, ({String table, Map<String, Object?> row})>{};
-      for (final (table, rows) in _tablesOf(snap)) {
-        for (final row in rows) {
-          current['$table:${row['id']}'] = (table: table, row: row);
-        }
-      }
-
-      final upserts = <({String table, Map<String, Object?> row})>[];
-      current.forEach((key, v) {
-        final base = _baseline[key];
-        if (base == null || base.body != v.row['body']) upserts.add(v);
-      });
-
-      final deletes = <({String table, String id})>[];
-      _baseline.forEach((key, v) {
-        if (!current.containsKey(key)) {
-          deletes.add((table: v.table, id: key.substring(v.table.length + 1)));
-        }
-      });
-
-      final settingsUpserts = <MapEntry<String, String>>[];
-      snap.settings.forEach((k, val) {
-        if (_baselineSettings[k] != val) settingsUpserts.add(MapEntry(k, val));
-      });
-
-      if (upserts.isEmpty && deletes.isEmpty && settingsUpserts.isEmpty) {
-        return true;
-      }
+      final delta = _differ.diff(snapshotFromAppData(data));
+      if (delta.isEmpty) return true;
 
       // Search docs only for the rows that changed (the index mirrors the
       // notes and cards tables; nothing else is searchable).
@@ -175,41 +129,36 @@ class DbStore {
       }
 
       await db.db.transaction((txn) async {
-        for (final u in upserts) {
-          await txn.insert(u.table, u.row,
+        // Upserts first, then hard deletes, then settings — the order the
+        // store has always written in.
+        for (final u in delta.rows) {
+          final row = u.row;
+          if (row == null) continue;
+          await txn.insert(u.table, row,
               conflictAlgorithm: ConflictAlgorithm.replace);
           if (!ftsOn) continue;
-          final id = u.row['id'] as String;
-          final doc = docFor(u.table, id);
+          final doc = docFor(u.table, u.id);
           if (doc == null) continue;
           await txn.delete(BraimDatabase.ftsTable,
-              where: 'id = ?', whereArgs: [id]);
+              where: 'id = ?', whereArgs: [u.id]);
           await txn.insert(
-              BraimDatabase.ftsTable, BraimDatabase.ftsRow(id, doc));
+              BraimDatabase.ftsTable, BraimDatabase.ftsRow(u.id, doc));
         }
-        for (final d in deletes) {
+        for (final d in delta.rows) {
+          if (d.row != null) continue;
           await txn.delete(d.table, where: 'id = ?', whereArgs: [d.id]);
           if (ftsOn && (d.table == 'notes' || d.table == 'cards')) {
             await txn.delete(BraimDatabase.ftsTable,
                 where: 'id = ?', whereArgs: [d.id]);
           }
         }
-        for (final s in settingsUpserts) {
+        for (final s in delta.settings.entries) {
           await txn.insert('settings', {'key': s.key, 'value': s.value},
               conflictAlgorithm: ConflictAlgorithm.replace);
         }
       });
 
-      for (final u in upserts) {
-        _baseline['${u.table}:${u.row['id']}'] =
-            (table: u.table, body: u.row['body'] as String);
-      }
-      for (final d in deletes) {
-        _baseline.remove('${d.table}:${d.id}');
-      }
-      for (final s in settingsUpserts) {
-        _baselineSettings[s.key] = s.value;
-      }
+      _differ.commit(delta);
       return true;
     } catch (_) {
       // Shadow write failed; drop the baseline so the next sync re-diffs from

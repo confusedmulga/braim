@@ -2356,4 +2356,167 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get webWelcomeTitle => 'Braim on this computer';
+
+  @override
+  String get webWelcomeBody =>
+      'This browser keeps its own copy of your library, on this computer only. Bring your notes over with a backup from your phone, or start fresh here.';
+
+  @override
+  String get webImportBackup => 'Import backup from phone';
+
+  @override
+  String get webImportBackupSubtitle =>
+      'Replace this browser\'s library with a backup .zip from your phone';
+
+  @override
+  String get webImportHint =>
+      'On your phone, open Settings, then Backup, and send a backup copy to this computer. Then choose the .zip here.';
+
+  @override
+  String get webStartEmpty => 'Start with an empty library';
+
+  @override
+  String get webImporting => 'Importing your library…';
+
+  @override
+  String get webImportFailed => 'That file isn\'t a Braim backup.';
+
+  @override
+  String get webImportDone => 'Library imported';
+
+  @override
+  String get webReplaceTitle => 'Replace everything on this computer?';
+
+  @override
+  String get webReplaceBody =>
+      'The library in this browser will be replaced by the backup. Your phone isn\'t touched.';
+
+  @override
+  String get webReplace => 'Replace';
+
+  @override
+  String get webExportBackup => 'Export backup (.zip)';
+
+  @override
+  String get webExportBackupSubtitle =>
+      'Download this browser\'s library in the format your phone restores';
+
+  @override
+  String get webExportDone => 'Backup downloaded';
+
+  @override
+  String get webThisComputerSection => 'This computer';
+
+  @override
+  String get webStorageNote =>
+      'The library lives in this browser\'s storage. Clearing site data erases it, so export a backup now and then.';
+
+  @override
+  String get webCryptUnavailable =>
+      'Crypt stays on your phone. Locked notes never leave its lock, so they aren\'t in this browser.';
+
+  @override
+  String get webPhoneSection => 'Your phone';
+
+  @override
+  String get webConnectedTo => 'Connected to your phone';
+
+  @override
+  String get webConnectedSubtitle =>
+      'Edits here save straight to your phone\'s library.';
+
+  @override
+  String get webDisconnect => 'Disconnect this computer';
+
+  @override
+  String get webReconnecting => 'Reconnecting to phone…';
+
+  @override
+  String get webOfflineReadOnly =>
+      'Your phone is out of reach. Changes are paused until it\'s back.';
+
+  @override
+  String get webPairTitle => 'Open Braim from your phone';
+
+  @override
+  String get webPairBody =>
+      'On your phone, open Braim → Settings → Open on computer, and scan the code or type the address it shows.';
+
+  @override
+  String get webPairWaiting => 'Confirm on your phone to open Braim here…';
+
+  @override
+  String get webPairDenied =>
+      'Your phone didn\'t allow this computer. Try again from the phone.';
+
+  @override
+  String get webPairExpired =>
+      'That link has expired. Open a fresh one from your phone.';
+
+  @override
+  String get webPairRemember => 'Remember this computer';
+
+  @override
+  String get webCryptAskPhone => 'Unlock on your phone to open Crypt here.';
+
+  @override
+  String get webCryptDenied => 'Crypt stayed locked on your phone.';
+
+  @override
+  String get webFetchUnavailable =>
+      'Link previews load once this library reaches your phone.';
+
+  @override
+  String get openOnComputer => 'Open on computer';
+
+  @override
+  String get openOnComputerSubtitle =>
+      'Use Braim in a browser on the same Wi-Fi or hotspot';
+
+  @override
+  String get openOnComputerSheetTitle => 'Open Braim on a computer';
+
+  @override
+  String get openOnComputerSheetBody =>
+      'On a computer connected to the same Wi-Fi or to this phone\'s hotspot, scan this code or type the address into a browser.';
+
+  @override
+  String get openOnComputerTrusted =>
+      'Use your hotspot or a Wi-Fi you trust: the connection isn\'t encrypted.';
+
+  @override
+  String get openOnComputerNoNetwork =>
+      'No Wi-Fi or hotspot connection found. Join a Wi-Fi network or turn on the hotspot, then try again.';
+
+  @override
+  String get openOnComputerStop => 'Stop';
+
+  @override
+  String get openOnComputerRunning => 'Braim is open on a computer';
+
+  @override
+  String get pairConfirmTitle => 'Allow this computer?';
+
+  @override
+  String pairConfirmBody(String device) {
+    return '$device wants to open your Braim library. Only allow a computer you\'re using.';
+  }
+
+  @override
+  String get pairAllow => 'Allow';
+
+  @override
+  String get pairDeny => 'Don\'t allow';
+
+  @override
+  String get pairedDevices => 'Paired computers';
+
+  @override
+  String get pairedDevicesNone => 'No computers paired';
+
+  @override
+  String get pairRevoke => 'Forget';
 }

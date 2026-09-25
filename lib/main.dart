@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'l10n/l10n.dart';
@@ -5,14 +6,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:provider/provider.dart';
 
+import 'platform/image_store_device.dart';
 import 'screens/pomodoro_screen.dart';
 import 'screens/root_shell.dart';
 import 'screens/share_popup.dart';
 import 'services/dnd_service.dart';
 import 'services/notification_service.dart';
+import 'services/store/library_store.dart';
 import 'state/app_state.dart';
 import 'state/pomodoro_controller.dart';
 import 'theme/app_theme.dart';
+import 'web/web_boot.dart';
 
 /// Root navigator, so a tapped notification can open a screen without a
 /// BuildContext.
@@ -33,6 +37,14 @@ void _onNotificationTap(String? payload, String? actionId) {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // In a browser: work out whether a phone is serving this page (remote mode)
+  // or the browser keeps its own library (local mode), and start from there.
+  if (kIsWeb) {
+    await runWebApp();
+    return;
+  }
+  // Resolve web-created (relative) image paths against the images folder.
+  await DeviceImagePaths.init();
   // Best-effort; reminders simply don't fire if this fails.
   NotificationService.onSelect = _onNotificationTap;
   await NotificationService.instance.init();
@@ -59,19 +71,32 @@ void shareMain() {
 }
 
 class BraimApp extends StatelessWidget {
-  const BraimApp({super.key});
+  const BraimApp({super.key, this.store, this.frame, this.home});
+
+  /// Where the library lives; the phone's own store when null.
+  final LibraryStore? store;
+
+  /// Wraps every route (the web's desktop frame and shortcuts).
+  final TransitionBuilder? frame;
+
+  /// Replaces the main shell once the library is loaded (the web decides
+  /// between its welcome screen and the shell).
+  final WidgetBuilder? home;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AppState()..init(),
-      child: const _ThemedApp(),
+      create: (_) => AppState(store: store)..init(),
+      child: _ThemedApp(frame: frame, home: home),
     );
   }
 }
 
 class _ThemedApp extends StatelessWidget {
-  const _ThemedApp();
+  const _ThemedApp({this.frame, this.home});
+
+  final TransitionBuilder? frame;
+  final WidgetBuilder? home;
 
   /// One ThemeData per mode, built lazily and reused. Rebuilding the theme
   /// on every AppState notification handed the whole app a new Theme — an
@@ -100,15 +125,18 @@ class _ThemedApp extends StatelessWidget {
       // uncoloured, which flashed white for a frame during route push/pop in
       // dark mode. Fill it with the same base surface every screen sits on so
       // transitions never reveal white.
-      builder: (context, child) => ColoredBox(
-        color: AppPalette.scheme.surface,
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final page = ColoredBox(
+          color: AppPalette.scheme.surface,
+          child: child ?? const SizedBox.shrink(),
+        );
+        return frame == null ? page : frame!(context, page);
+      },
       // Remount the tree when the theme flips so every widget re-reads
       // the mode-aware palette.
       home: KeyedSubtree(
         key: ValueKey(dark),
-        child: const _Root(),
+        child: _Root(home: home),
       ),
     );
   }
@@ -132,7 +160,9 @@ class _NoStretchScrollBehavior extends MaterialScrollBehavior {
 }
 
 class _Root extends StatelessWidget {
-  const _Root();
+  const _Root({this.home});
+
+  final WidgetBuilder? home;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +172,6 @@ class _Root extends StatelessWidget {
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    return const RootShell();
+    return home?.call(context) ?? const RootShell();
   }
 }

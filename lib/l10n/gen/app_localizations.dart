@@ -4245,6 +4245,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{circuits, plural, =1{This includes a circuit, so all {notes} of its notes will move to Recently deleted, where they stay for 30 days.} other{This includes {circuits} circuits, so all {notes} of their notes will move to Recently deleted, where they stay for 30 days.}}'**
   String circuitBulkDeleteBody(int circuits, int notes);
+
+  /// No description provided for @webWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim on this computer'**
+  String get webWelcomeTitle;
+
+  /// No description provided for @webWelcomeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This browser keeps its own copy of your library, on this computer only. Bring your notes over with a backup from your phone, or start fresh here.'**
+  String get webWelcomeBody;
+
+  /// No description provided for @webImportBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Import backup from phone'**
+  String get webImportBackup;
+
+  /// No description provided for @webImportBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace this browser\'s library with a backup .zip from your phone'**
+  String get webImportBackupSubtitle;
+
+  /// No description provided for @webImportHint.
+  ///
+  /// In en, this message translates to:
+  /// **'On your phone, open Settings, then Backup, and send a backup copy to this computer. Then choose the .zip here.'**
+  String get webImportHint;
+
+  /// No description provided for @webStartEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with an empty library'**
+  String get webStartEmpty;
+
+  /// No description provided for @webImporting.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing your library…'**
+  String get webImporting;
+
+  /// No description provided for @webImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That file isn\'t a Braim backup.'**
+  String get webImportFailed;
+
+  /// No description provided for @webImportDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Library imported'**
+  String get webImportDone;
+
+  /// No description provided for @webReplaceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace everything on this computer?'**
+  String get webReplaceTitle;
+
+  /// No description provided for @webReplaceBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The library in this browser will be replaced by the backup. Your phone isn\'t touched.'**
+  String get webReplaceBody;
+
+  /// No description provided for @webReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get webReplace;
+
+  /// No description provided for @webExportBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Export backup (.zip)'**
+  String get webExportBackup;
+
+  /// No description provided for @webExportBackupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download this browser\'s library in the format your phone restores'**
+  String get webExportBackupSubtitle;
+
+  /// No description provided for @webExportDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup downloaded'**
+  String get webExportDone;
+
+  /// No description provided for @webThisComputerSection.
+  ///
+  /// In en, this message translates to:
+  /// **'This computer'**
+  String get webThisComputerSection;
+
+  /// No description provided for @webStorageNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The library lives in this browser\'s storage. Clearing site data erases it, so export a backup now and then.'**
+  String get webStorageNote;
+
+  /// No description provided for @webCryptUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Crypt stays on your phone. Locked notes never leave its lock, so they aren\'t in this browser.'**
+  String get webCryptUnavailable;
+
+  /// No description provided for @webPhoneSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Your phone'**
+  String get webPhoneSection;
+
+  /// No description provided for @webConnectedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to your phone'**
+  String get webConnectedTo;
+
+  /// No description provided for @webConnectedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edits here save straight to your phone\'s library.'**
+  String get webConnectedSubtitle;
+
+  /// No description provided for @webDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect this computer'**
+  String get webDisconnect;
+
+  /// No description provided for @webReconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting to phone…'**
+  String get webReconnecting;
+
+  /// No description provided for @webOfflineReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Your phone is out of reach. Changes are paused until it\'s back.'**
+  String get webOfflineReadOnly;
+
+  /// No description provided for @webPairTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Braim from your phone'**
+  String get webPairTitle;
+
+  /// No description provided for @webPairBody.
+  ///
+  /// In en, this message translates to:
+  /// **'On your phone, open Braim → Settings → Open on computer, and scan the code or type the address it shows.'**
+  String get webPairBody;
+
+  /// No description provided for @webPairWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm on your phone to open Braim here…'**
+  String get webPairWaiting;
+
+  /// No description provided for @webPairDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Your phone didn\'t allow this computer. Try again from the phone.'**
+  String get webPairDenied;
+
+  /// No description provided for @webPairExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'That link has expired. Open a fresh one from your phone.'**
+  String get webPairExpired;
+
+  /// No description provided for @webPairRemember.
+  ///
+  /// In en, this message translates to:
+  /// **'Remember this computer'**
+  String get webPairRemember;
+
+  /// No description provided for @webCryptAskPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock on your phone to open Crypt here.'**
+  String get webCryptAskPhone;
+
+  /// No description provided for @webCryptDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Crypt stayed locked on your phone.'**
+  String get webCryptDenied;
+
+  /// No description provided for @webFetchUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Link previews load once this library reaches your phone.'**
+  String get webFetchUnavailable;
+
+  /// No description provided for @openOnComputer.
+  ///
+  /// In en, this message translates to:
+  /// **'Open on computer'**
+  String get openOnComputer;
+
+  /// No description provided for @openOnComputerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Braim in a browser on the same Wi-Fi or hotspot'**
+  String get openOnComputerSubtitle;
+
+  /// No description provided for @openOnComputerSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Braim on a computer'**
+  String get openOnComputerSheetTitle;
+
+  /// No description provided for @openOnComputerSheetBody.
+  ///
+  /// In en, this message translates to:
+  /// **'On a computer connected to the same Wi-Fi or to this phone\'s hotspot, scan this code or type the address into a browser.'**
+  String get openOnComputerSheetBody;
+
+  /// No description provided for @openOnComputerTrusted.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your hotspot or a Wi-Fi you trust: the connection isn\'t encrypted.'**
+  String get openOnComputerTrusted;
+
+  /// No description provided for @openOnComputerNoNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'No Wi-Fi or hotspot connection found. Join a Wi-Fi network or turn on the hotspot, then try again.'**
+  String get openOnComputerNoNetwork;
+
+  /// No description provided for @openOnComputerStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get openOnComputerStop;
+
+  /// No description provided for @openOnComputerRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim is open on a computer'**
+  String get openOnComputerRunning;
+
+  /// No description provided for @pairConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this computer?'**
+  String get pairConfirmTitle;
+
+  /// No description provided for @pairConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'{device} wants to open your Braim library. Only allow a computer you\'re using.'**
+  String pairConfirmBody(String device);
+
+  /// No description provided for @pairAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get pairAllow;
+
+  /// No description provided for @pairDeny.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t allow'**
+  String get pairDeny;
+
+  /// No description provided for @pairedDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Paired computers'**
+  String get pairedDevices;
+
+  /// No description provided for @pairedDevicesNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No computers paired'**
+  String get pairedDevicesNone;
+
+  /// No description provided for @pairRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get pairRevoke;
 }
 
 class _AppLocalizationsDelegate

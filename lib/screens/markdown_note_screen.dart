@@ -1,11 +1,8 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
@@ -27,6 +24,7 @@ import '../widgets/quick_actions_menu.dart';
 import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
 import 'note_open.dart';
+import '../platform/file_saver.dart';
 
 /// A GitHub-flavored Markdown node. Reading renders the raw markdown like a
 /// committed README; editing swaps to a monospace source editor (with a live
@@ -315,11 +313,8 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final md = _ctrl.text.trim().isEmpty ? _note.markdownSource : _ctrl.text;
-      final dir = await getTemporaryDirectory();
       final base = safeFileBase(_note.title, fallback: 'note');
-      final file = File('${dir.path}/$base.md');
-      await file.writeAsString(md);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+      await FileSaver.saveText(md, '$base.md');
     } catch (_) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));

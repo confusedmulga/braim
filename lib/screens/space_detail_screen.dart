@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +20,7 @@ import '../widgets/tweet_card_widget.dart';
 import 'card_detail_screen.dart';
 import 'note_editor_screen.dart';
 import 'note_open.dart';
+import '../platform/braim_image.dart';
 
 class SpaceDetailScreen extends StatefulWidget {
   const SpaceDetailScreen({super.key, required this.spaceId});
@@ -434,8 +433,8 @@ class _CoverHeader extends StatelessWidget {
         background: Stack(
           fit: StackFit.expand,
           children: [
-            Image.file(
-              File(imagePath),
+            BraimImage(
+              imagePath,
               fit: BoxFit.cover,
               cacheWidth: 1080,
               errorBuilder: (_, _, _) =>

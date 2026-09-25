@@ -1,16 +1,21 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../models/note.dart';
-import '../services/storage_service.dart';
+import '../platform/app_shortcuts.dart';
+import '../platform/file_open.dart';
+import '../platform/image_store.dart';
+import '../platform/platform_caps.dart';
+import '../platform/shared_files.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_button.dart';
@@ -97,7 +102,10 @@ class _RootShellState extends State<RootShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initShareIntent();
+    if (PlatformCaps.current.canShareIntent) _initShareIntent();
+    AppShortcuts.search = _shortcutSearch;
+    AppShortcuts.newItem = _shortcutNew;
+    AppShortcuts.stepTab = _shortcutStepTab;
     // First launch: walk through the basics once.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -112,6 +120,11 @@ class _RootShellState extends State<RootShell>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (identical(AppShortcuts.search, _shortcutSearch)) {
+      AppShortcuts.search = null;
+      AppShortcuts.newItem = null;
+      AppShortcuts.stepTab = null;
+    }
     _shareSub?.cancel();
     _searchDebounce?.cancel();
     _searchFocus.dispose();
@@ -145,7 +158,9 @@ class _RootShellState extends State<RootShell>
     if (state == AppLifecycleState.resumed) {
       context.read<AppState>().resume();
     } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
+        state == AppLifecycleState.detached ||
+        // A browser tab only goes as far as hidden.
+        (state == AppLifecycleState.hidden && PlatformCaps.current.isWeb)) {
       // Backgrounding: make sure coalesced edits reach disk.
       final app = context.read<AppState>();
       app.flushNow();
@@ -180,7 +195,8 @@ class _RootShellState extends State<RootShell>
     for (final f in files) {
       if (f.type == SharedMediaType.image) {
         try {
-          imagePaths.add(await StorageService.instance.saveImage(f.path));
+          imagePaths.add(
+              await ImageStore.instance.savePicked(XFile(f.path)));
         } catch (_) {
           // Skip an image we couldn't copy.
         }
@@ -190,16 +206,9 @@ class _RootShellState extends State<RootShell>
       // receive_sharing_intent hands us a real cached path for file shares and
       // the display-name extension isn't guaranteed, so probe f.path as a file
       // and parse its contents as Markdown rather than trusting the suffix.
-      File? doc;
-      try {
-        final file = File(f.path);
-        if (await file.exists()) doc = file;
-      } catch (_) {
-        doc = null;
-      }
-      if (doc != null) {
+      final content = await readSharedFileText(f.path);
+      if (content != null) {
         try {
-          final content = await doc.readAsString();
           if (content.trim().isNotEmpty) {
             // A shared document keeps its raw markdown as a full GitHub-style
             // Markdown node, rather than being flattened into a rich note.
@@ -274,6 +283,49 @@ class _RootShellState extends State<RootShell>
     } else {
       _openPane();
     }
+  }
+
+  // ---- Keyboard shortcuts (browser) ---------------------------------------
+
+  /// Shortcuts act on the shell only while nothing is pushed over it.
+  bool get _shellOnTop => ModalRoute.of(context)?.isCurrent ?? true;
+
+  void _shortcutSearch() {
+    if (!mounted || !_shellOnTop) return;
+    _closePane();
+    _searchFocus.requestFocus();
+  }
+
+  /// The current tab's + / pencil action.
+  void _shortcutNew() {
+    if (!mounted || !_shellOnTop) return;
+    switch (_index) {
+      case 0:
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => NoteEditorScreen(note: Note(), isNew: true),
+        ));
+      case 1:
+        _addLink();
+      case 2:
+        showCreateBook(context);
+      case 3:
+        _openNewJournalEntry();
+      default:
+        _createFolder();
+    }
+  }
+
+  /// The tab a keyboard step is heading to while the pager is still sliding,
+  /// so quick repeated presses each move one more tab.
+  int? _steppingTo;
+
+  void _shortcutStepTab(int delta) {
+    if (!mounted || !_shellOnTop) return;
+    final from = _steppingTo ?? _index;
+    final i = (from + delta).clamp(0, 4);
+    if (i == from) return;
+    _steppingTo = i;
+    _selectTab(i);
   }
 
   void _selectTab(int i) {
@@ -496,21 +548,12 @@ class _RootShellState extends State<RootShell>
   /// Picks a `.md`/`.txt` file and imports it as a Markdown node, keeping the
   /// raw markdown as-is, then opens the rendered result.
   Future<void> _importFile() async {
-    FilePickerResult? result;
-    try {
-      result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['md', 'markdown', 'txt', 'text'],
-      );
-    } catch (_) {
-      return;
-    }
-    if (result == null || result.files.isEmpty) return;
-    final path = result.files.first.path;
-    if (path == null) return;
+    final picked = await pickOneFile(
+        extensions: const ['md', 'markdown', 'txt', 'text']);
+    if (picked == null) return;
     String content;
     try {
-      content = await File(path).readAsString();
+      content = utf8.decode(picked.bytes);
     } catch (_) {
       return; // Not a readable text file.
     }
@@ -873,7 +916,15 @@ class _RootShellState extends State<RootShell>
                       PageView(
                         controller: _pageController,
                         physics: const _SpringPagePhysics(),
-                        onPageChanged: (i) => setState(() => _index = i),
+                        // In a browser the mouse can swipe between tabs too.
+                        scrollBehavior: PlatformCaps.current.isWeb
+                            ? ScrollConfiguration.of(context).copyWith(
+                                dragDevices: PointerDeviceKind.values.toSet())
+                            : null,
+                        onPageChanged: (i) => setState(() {
+                          _index = i;
+                          if (_steppingTo == i) _steppingTo = null;
+                        }),
                         children: [
                           _KeepAlive(
                               child:

@@ -1,11 +1,8 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
@@ -20,6 +17,7 @@ import '../widgets/glass.dart';
 import '../widgets/note_background.dart';
 import '../widgets/text_prompt.dart';
 import 'note_open.dart';
+import '../platform/file_saver.dart';
 
 /// The pop result a note screen hands back to the map: re-centre on [nodeId],
 /// and pulse it when [highlight] is set.
@@ -564,10 +562,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
   Future<void> _shareOutline() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_circuitFileBase()}.md');
-      await file.writeAsString(_circuitOutline());
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+      await FileSaver.saveText(
+          _circuitOutline(), '${_circuitFileBase()}.md');
     } catch (_) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));

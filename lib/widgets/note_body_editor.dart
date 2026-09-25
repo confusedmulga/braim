@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,10 +14,11 @@ import '../models/note_block.dart';
 import '../screens/crop_screen.dart';
 import '../services/image_service.dart';
 import '../services/link_preview_service.dart';
-import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'frosted_glass.dart';
+import '../platform/braim_image.dart';
+import '../platform/image_store.dart';
 
 /// The highlighter's paint: a light background with a fixed dark ink so
 /// highlighted text stays legible in both light and dark themes (the default
@@ -498,7 +498,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       final cropped = await cropImageFile(context, picked.single);
       if (cropped != null && cropped != picked.single) {
         paths[0] = cropped;
-        unawaited(StorageService.instance.deleteImage(picked.single));
+        unawaited(ImageStore.instance.delete(picked.single));
       }
     }
     if (!mounted) return;
@@ -732,6 +732,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
                   aspectRatio: 1,
                   child: block.linkImage.isNotEmpty
                       ? Image.network(block.linkImage,
+                          webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                           fit: BoxFit.cover,
                           cacheWidth: 300,
                           gaplessPlayback: true,
@@ -810,7 +811,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
           borderRadius: BorderRadius.circular(16),
           child: Stack(
             children: [
-              Image.file(File(block.imagePath),
+              BraimImage(block.imagePath,
                   fit: BoxFit.cover,
                   width: double.infinity,
                   // Bound the decode: older notes may hold full-res photos.

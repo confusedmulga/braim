@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -18,6 +17,7 @@ import 'daily_day_screen.dart';
 import 'journal_year_screen.dart';
 import 'note_editor_screen.dart';
 import 'reflexes_screen.dart';
+import '../platform/braim_image.dart';
 
 /// The Narrative tab: a swipeable week strip on top (hold it for the month
 /// calendar), then The Books / Journal tabs — the journal day view lives in
@@ -872,7 +872,7 @@ class JournalEntryTile extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.file(File(thumb), fit: BoxFit.cover, cacheWidth: 900),
+              BraimImage(thumb, fit: BoxFit.cover, cacheWidth: 900),
               // Bottom scrim so the text reads over any photo while the
               // picture stays mostly visible.
               const DecoratedBox(

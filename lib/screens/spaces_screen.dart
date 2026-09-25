@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
@@ -15,6 +13,8 @@ import '../widgets/feed_greeting.dart';
 import '../widgets/glass.dart';
 import '../widgets/space_tile.dart';
 import 'space_detail_screen.dart';
+import '../platform/braim_image.dart';
+import '../platform/platform_caps.dart';
 
 class SpacesScreen extends StatefulWidget {
   const SpacesScreen({super.key, this.controller});
@@ -36,14 +36,29 @@ class _SpacesScreenState extends State<SpacesScreen> {
   Future<void> _openCrypt() async {
     final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
+    final unlock = PlatformCaps.current.cryptUnlock;
+    if (unlock == CryptUnlock.unavailable) {
+      // A browser-only library never holds the Crypt.
+      messenger.showSnackBar(
+          SnackBar(content: Text(context.t.webCryptUnavailable)));
+      return;
+    }
+    if (unlock == CryptUnlock.phoneApproval) {
+      messenger.showSnackBar(
+          SnackBar(content: Text(context.t.webCryptAskPhone)));
+    }
     final ok = await authenticateForCrypt(reason: context.t.unlockCrypt);
     if (!mounted) return;
+    messenger.hideCurrentSnackBar();
     if (ok) {
       nav.push(MaterialPageRoute(
           builder: (_) => const SpaceDetailScreen(spaceId: kCryptSpaceId)));
     } else {
       messenger.showSnackBar(
-        SnackBar(content: Text(context.t.unlockFailed)),
+        SnackBar(
+            content: Text(unlock == CryptUnlock.phoneApproval
+                ? context.t.webCryptDenied
+                : context.t.unlockFailed)),
       );
     }
   }
@@ -300,7 +315,7 @@ class _SpaceEditorDialogState extends State<_SpaceEditorDialog> {
                   width: double.infinity,
                   color: Colors.white.withValues(alpha: 0.08),
                   child: _thumb != null
-                      ? Image.file(File(_thumb!),
+                      ? BraimImage(_thumb!,
                           fit: BoxFit.cover, cacheWidth: 720)
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,

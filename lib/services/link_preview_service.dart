@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:html/parser.dart' as html_parser;
-import 'package:http/http.dart' as http;
+import '../platform/fetcher.dart';
+import '../platform/platform_caps.dart';
 
 import '../models/tweet_card.dart';
 import 'article_extractor.dart';
@@ -77,14 +77,15 @@ class LinkPreviewService {
   /// Returns null when the page can't be fetched (the card shows the bare
   /// domain instead).
   static Future<BasicLinkPreview?> fetchBasicPreview(String url) async {
+    if (!PlatformCaps.current.canFetchPreviews) return null;
     try {
-      final res = await http
+      final res = await Fetcher.instance
           .get(Uri.parse(url), headers: {'User-Agent': _userAgent})
           .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;
       final bytes = res.bodyBytes;
       final page =
-          await Isolate.run(() => _parsePage(bytes, withArticle: false));
+          await runOffThread(() => _parsePage(bytes, withArticle: false));
       return BasicLinkPreview(
         title: page.title,
         imageUrl: page.imageUrl,
@@ -105,20 +106,10 @@ class LinkPreviewService {
       final h = card.authorHandle.replaceFirst('@', '');
       card.avatarUrl = 'https://unavatar.io/twitter/$h';
     }
-    try {
-      if (card.isTweet) {
-        final ok = await _fetchTweetOembed(card);
-        if (ok) {
-          card.fetched = true;
-          // oEmbed gives no image; try OG for media but don't fail if blocked.
-          await _tryOpenGraph(card, imageOnly: true);
-          return card;
-        }
-      }
-      final ok = await _tryOpenGraph(card);
-      card.fetched = ok || card.text.isNotEmpty;
-    } catch (_) {
-      // Leave card as-is; the UI shows the raw link.
+    // A browser-only library can't read other sites: leave the card unfetched
+    // (it shows the plain link) until the library reaches the phone.
+    if (PlatformCaps.current.canFetchPreviews) {
+      await _fetchPreview(card);
     }
     // A YouTube link always has a cover derivable from its id, so guarantee one
     // even if the OG image fetch was blocked or missing.
@@ -127,6 +118,24 @@ class LinkPreviewService {
       card.imageUrl = YouTubeService.thumbnailUrl(vid);
     }
     return card;
+  }
+
+  Future<void> _fetchPreview(TweetCard card) async {
+    try {
+      if (card.isTweet) {
+        final ok = await _fetchTweetOembed(card);
+        if (ok) {
+          card.fetched = true;
+          // oEmbed gives no image; try OG for media but don't fail if blocked.
+          await _tryOpenGraph(card, imageOnly: true);
+          return;
+        }
+      }
+      final ok = await _tryOpenGraph(card);
+      card.fetched = ok || card.text.isNotEmpty;
+    } catch (_) {
+      // Leave card as-is; the UI shows the raw link.
+    }
   }
 
   String _handleFromUrl(String url) {
@@ -142,7 +151,7 @@ class LinkPreviewService {
   Future<bool> _fetchTweetOembed(TweetCard card) async {
     final endpoint = Uri.parse(
         'https://publish.twitter.com/oembed?omit_script=true&dnt=true&url=${Uri.encodeComponent(card.url)}');
-    final res = await http
+    final res = await Fetcher.instance
         .get(endpoint, headers: {'User-Agent': _userAgent})
         .timeout(const Duration(seconds: 8));
     if (res.statusCode != 200) return false;
@@ -163,12 +172,12 @@ class LinkPreviewService {
   }
 
   Future<bool> _tryOpenGraph(TweetCard card, {bool imageOnly = false}) async {
-    final res = await http
+    final res = await Fetcher.instance
         .get(Uri.parse(card.url), headers: {'User-Agent': _userAgent})
         .timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) return false;
     final bytes = res.bodyBytes;
-    final page = await Isolate.run(
+    final page = await runOffThread(
         () => _parsePage(bytes, withArticle: !imageOnly));
 
     // A tweet with no photo still has an og:image — X falls back to the

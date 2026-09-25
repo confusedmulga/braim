@@ -1,17 +1,17 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/book.dart';
 import '../models/note.dart';
 import 'file_names.dart';
+import '../platform/file_saver.dart';
+import '../platform/image_store.dart';
 
 /// Turns a book into something shareable: a typeset PDF, a Markdown file, or
 /// a real ePub. Everything here is pure data work, so it stays off the UI's
@@ -56,16 +56,15 @@ class BookExport {
         : pw.Document(title: title, author: author, theme: theme);
 
     // 1. Cover.
-    final coverFile =
-        book.coverPath != null ? File(book.coverPath!) : null;
-    final hasCover = coverFile != null && coverFile.existsSync();
+    final coverBytes = book.coverPath != null
+        ? await ImageStore.instance.load(book.coverPath!)
+        : null;
     doc.addPage(pw.Page(
       build: (_) => pw.FullPage(
         ignoreMargins: true,
         child: pw.Stack(fit: pw.StackFit.expand, children: [
-          if (hasCover)
-            pw.Image(pw.MemoryImage(coverFile.readAsBytesSync()),
-                fit: pw.BoxFit.cover)
+          if (coverBytes != null)
+            pw.Image(pw.MemoryImage(coverBytes), fit: pw.BoxFit.cover)
           else
             pw.Container(color: PdfColor.fromInt(0xFF432B54)),
           pw.Container(
@@ -234,11 +233,8 @@ class BookExport {
       buffer.writeln(page.textPreview.trim());
     }
 
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/${_safeName(title)}.md');
-    await file.writeAsString(buffer.toString());
-    await SharePlus.instance
-        .share(ShareParams(files: [XFile(file.path)], title: title));
+    await FileSaver.saveText(buffer.toString(), '${_safeName(title)}.md',
+        title: title);
   }
 
   // ---- ePub ----------------------------------------------------------------
@@ -279,10 +275,11 @@ class BookExport {
     // Cover image, when there is one.
     var coverItem = '';
     var coverMeta = '';
-    final coverFile = book.coverPath != null ? File(book.coverPath!) : null;
-    if (coverFile != null && coverFile.existsSync()) {
-      final bytes = coverFile.readAsBytesSync();
-      final ext = coverFile.path.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+    final coverPath = book.coverPath;
+    final bytes =
+        coverPath != null ? await ImageStore.instance.load(coverPath) : null;
+    if (coverPath != null && bytes != null) {
+      final ext = coverPath.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
       archive.addFile(
           ArchiveFile('OEBPS/cover.$ext', bytes.length, bytes));
       coverItem =
@@ -394,11 +391,9 @@ $nav  </navMap>
 </ncx>''');
 
     final zipped = ZipEncoder().encode(archive);
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/${_safeName(title)}.epub');
-    await file.writeAsBytes(zipped);
-    await SharePlus.instance
-        .share(ShareParams(files: [XFile(file.path)], title: title));
+    await FileSaver.saveBytes(
+        Uint8List.fromList(zipped), '${_safeName(title)}.epub',
+        mime: 'application/epub+zip', title: title);
   }
 
   static String _escape(String s) => s

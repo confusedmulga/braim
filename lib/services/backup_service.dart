@@ -100,6 +100,22 @@ class BackupService {
     }
   }
 
+  /// The scheduled on-device backup: builds a zip and places it in the Backups
+  /// folder (see [placeInBackupsDir]), cleaning up the temp copy either way.
+  /// Returns when the zip was built; throws if it couldn't be built or placed.
+  Future<DateTime> backupIntoBackupsDir({int keep = 5}) async {
+    final tmp = await exportToTempFile();
+    final builtAt = DateTime.now();
+    try {
+      await placeInBackupsDir(tmp, keep: keep);
+    } finally {
+      try {
+        await tmp.delete();
+      } catch (_) {}
+    }
+    return builtAt;
+  }
+
   /// The on-device Backups folder: the app-specific external directory (visible
   /// to a file manager, no permission needed) when available, else the documents
   /// directory. This storage is app-private — Android clears it on uninstall and

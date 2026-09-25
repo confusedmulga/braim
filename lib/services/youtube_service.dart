@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import '../platform/fetcher.dart';
 
 /// A YouTube video's scraped metadata: title, channel, description, and caption
 /// transcript. Any field may be empty when unavailable.
@@ -69,7 +69,7 @@ class YouTubeService {
   static Future<YouTubeData> fetch(String id) async {
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
-        final res = await http
+        final res = await Fetcher.instance
             .get(Uri.parse('https://www.youtube.com/watch?v=$id&hl=en'),
                 headers: _headers)
             .timeout(const Duration(seconds: 12));
@@ -168,7 +168,7 @@ class YouTubeService {
     ];
     for (final url in urls) {
       try {
-        final res = await http
+        final res = await Fetcher.instance
             .get(Uri.parse(url), headers: _headers)
             .timeout(const Duration(seconds: 12));
         if (res.statusCode != 200) continue;

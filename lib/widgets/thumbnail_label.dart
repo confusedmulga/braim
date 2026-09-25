@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../services/contrast_service.dart';
 import '../theme/app_theme.dart';
+import '../platform/braim_image.dart';
 
 /// An image thumbnail with a folder/space name overlaid on top. The label color
 /// flips between black and white depending on the image so it stays readable.
@@ -33,10 +32,11 @@ class ThumbnailWithLabel extends StatelessWidget {
 
   ImageProvider? get _baseProvider {
     if (imagePath != null && imagePath!.isNotEmpty) {
-      return FileImage(File(imagePath!));
+      return braimImageProvider(imagePath!);
     }
     if (imageUrl != null && imageUrl!.isNotEmpty) {
-      return NetworkImage(imageUrl!);
+      return NetworkImage(imageUrl!,
+          webHtmlElementStrategy: WebHtmlElementStrategy.fallback);
     }
     return null;
   }

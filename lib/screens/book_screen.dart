@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +21,7 @@ import 'book_read_screen.dart';
 import 'chapter_history_screen.dart';
 import 'crop_screen.dart';
 import 'note_editor_screen.dart';
+import '../platform/braim_image.dart';
 
 /// Prompts for a book title and creates it (with its default pages).
 Future<void> showCreateBook(BuildContext context) async {
@@ -69,7 +69,7 @@ class BookTile extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (book.coverPath != null)
-                Image.file(File(book.coverPath!),
+                BraimImage(book.coverPath!,
                     fit: BoxFit.cover,
                     cacheWidth: 400,
                     errorBuilder: (_, _, _) =>
@@ -481,7 +481,7 @@ class _CoverStage extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     if (book.coverPath != null)
-                      Image.file(File(book.coverPath!),
+                      BraimImage(book.coverPath!,
                           fit: BoxFit.cover,
                           cacheWidth: 720,
                           errorBuilder: (_, _, _) => BookCoverArt(book: book))

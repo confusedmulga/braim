@@ -1,11 +1,10 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crop_your_image/crop_your_image.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
-import '../services/storage_service.dart';
+import '../platform/image_store.dart';
 import '../theme/app_theme.dart';
 
 /// Opens the in-app cropper for the image at [sourcePath] and returns the path
@@ -17,12 +16,8 @@ Future<String?> cropImageFile(
   String sourcePath, {
   double? aspectRatio,
 }) async {
-  Uint8List bytes;
-  try {
-    bytes = await File(sourcePath).readAsBytes();
-  } catch (_) {
-    return null;
-  }
+  final bytes = await ImageStore.instance.load(sourcePath);
+  if (bytes == null) return null;
   if (!context.mounted) return null;
   final cropped = await Navigator.of(context).push<Uint8List>(
     MaterialPageRoute(
@@ -31,7 +26,7 @@ Future<String?> cropImageFile(
     ),
   );
   if (cropped == null) return null;
-  return StorageService.instance.saveImageBytes(cropped);
+  return ImageStore.instance.saveBytes(cropped);
 }
 
 /// A full-screen, in-app image cropper. Pop returns the cropped bytes

@@ -63,6 +63,11 @@ dependencies:
   markdown_widget: ^2.3.2+8
   flutter_highlight: ^0.7.0
   markdown: ^7.3.1
+  # Browser APIs (IndexedDB, downloads, WebSocket) for the web build; only
+  # imported behind a conditional import in lib/platform/.
+  web: ^1.1.1
+  # QR code for the "Open on computer" pairing sheet.
+  qr: ^3.0.2
 
 dev_dependencies:
   flutter_test:

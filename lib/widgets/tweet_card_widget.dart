@@ -137,6 +137,7 @@ class TweetCardWidget extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 child: Image.network(
                   card.coverImageUrl,
+                  webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                   width: 56,
                   height: 56,
                   fit: BoxFit.cover,
@@ -243,6 +244,7 @@ class TweetCardWidget extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Image.network(
         card.coverImageUrl,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         fit: BoxFit.cover,
         width: double.infinity,
         height: height,
@@ -388,6 +390,7 @@ class CompactCardTile extends StatelessWidget {
                       top: Radius.circular(16.5)),
                   child: Image.network(
                     card.coverImageUrl,
+                    webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                     height: 86,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -517,6 +520,7 @@ class _Avatar extends StatelessWidget {
     return ClipOval(
       child: Image.network(
         card.avatarUrl,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         width: size,
         height: size,
         fit: BoxFit.cover,

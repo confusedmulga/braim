@@ -5,13 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
-import 'dart:io';
 
 import 'package:flutter_quill/flutter_quill.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/note.dart' show richToPlain, toggleChecklistLine;
@@ -36,6 +33,7 @@ import '../widgets/note_links_section.dart';
 import '../widgets/note_read_body.dart';
 import 'note_editor_screen.dart';
 import 'note_open.dart';
+import '../platform/file_saver.dart';
 
 /// Opens a saved card/tweet/link as a note: the fetched preview and the link
 /// (with copy) are pinned at the top, with an editable note body below.
@@ -371,10 +369,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     final messenger = ScaffoldMessenger.of(context);
     try {
       final md = cardToMarkdown(_card);
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_fileBase()}.md');
-      await file.writeAsString(md);
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+      await FileSaver.saveText(md, '${_fileBase()}.md');
     } catch (_) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
@@ -739,6 +734,7 @@ class _CardPreview extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               child: Image.network(
                 card.coverImageUrl,
+                webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 // Matches the feed tiles' cacheWidth, so this is a cache hit
@@ -773,6 +769,7 @@ class _CardPreview extends StatelessWidget {
     return ClipOval(
       child: Image.network(
         card.avatarUrl,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         width: size,
         height: size,
         fit: BoxFit.cover,

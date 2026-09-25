@@ -1,6 +1,6 @@
 import 'package:image_picker/image_picker.dart';
 
-import 'storage_service.dart';
+import '../platform/image_store.dart';
 
 /// Thin wrapper over image_picker that immediately copies picks into app
 /// storage and returns the persistent paths.
@@ -25,7 +25,7 @@ class ImageService {
     );
     final paths = <String>[];
     for (final f in files) {
-      paths.add(await StorageService.instance.saveImage(f.path));
+      paths.add(await ImageStore.instance.savePicked(f));
     }
     return paths;
   }
@@ -38,7 +38,7 @@ class ImageService {
       imageQuality: 88,
     );
     if (file == null) return null;
-    return StorageService.instance.saveImage(file.path);
+    return ImageStore.instance.savePicked(file);
   }
 
   /// Picks a small image for folder thumbnails.
@@ -50,6 +50,6 @@ class ImageService {
       imageQuality: 82,
     );
     if (file == null) return null;
-    return StorageService.instance.saveImage(file.path);
+    return ImageStore.instance.savePicked(file);
   }
 }

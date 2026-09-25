@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../platform/braim_image.dart';
 
 /// The app background: a plain Material 3 surface everywhere, plus, on the main
 /// feed shell only ([wallpaper] true), a backdrop. That backdrop is the user's
@@ -20,7 +19,7 @@ class AppBackground extends StatelessWidget {
     final custom = wallpaper
         ? context.watch<AppState>().feedBackgroundForTheme
         : '';
-    final hasCustom = custom.isNotEmpty && File(custom).existsSync();
+    final hasCustom = storedImageExists(custom);
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -29,25 +28,28 @@ class AppBackground extends StatelessWidget {
           Positioned.fill(
             child: RepaintBoundary(
               child: hasCustom
-                  ? Image.file(
-                      File(custom),
+                  ? BraimImage(
+                      custom,
                       fit: BoxFit.cover,
                       cacheWidth: 1440,
                       gaplessPlayback: true,
+                      errorBuilder: (_, _, _) => _builtIn(),
                     )
-                  : Image.asset(
-                      AppPalette.dark
-                          ? 'assets/wallpapers/bg_dark.jpg'
-                          : 'assets/wallpapers/bg_light.jpg',
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                    ),
+                  : _builtIn(),
             ),
           ),
         if (child != null) Positioned.fill(child: child!),
       ],
     );
   }
+
+  static Widget _builtIn() => Image.asset(
+        AppPalette.dark
+            ? 'assets/wallpapers/bg_dark.jpg'
+            : 'assets/wallpapers/bg_light.jpg',
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
 }
 
 /// A solid surface colour that fades downward from the top edge. Used as a

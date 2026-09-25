@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../models/note.dart';
 import '../models/note_block.dart';
 import '../theme/app_theme.dart';
 import 'wiki_text.dart';
+import '../platform/braim_image.dart';
 
 /// The read view of a rich-text body — a note's, or the note on a spark. It
 /// draws the saved Quill blocks without building any editor: every inline mark
@@ -59,7 +58,7 @@ class NoteReadBody extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: Image.file(File(b.imagePath),
+            child: BraimImage(b.imagePath,
                 fit: BoxFit.cover, width: double.infinity, cacheWidth: 1440),
           ),
         ));

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -9,10 +8,8 @@ import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/note.dart';
 import 'note_open.dart';
@@ -43,6 +40,8 @@ import '../widgets/note_tags_editor.dart';
 import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
 import 'reflexes_screen.dart';
+import '../platform/app_shortcuts.dart';
+import '../platform/file_saver.dart';
 
 class NoteEditorScreen extends StatefulWidget {
   const NoteEditorScreen({
@@ -343,11 +342,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final messenger = ScaffoldMessenger.of(context);
     try {
       final md = noteToMarkdown(_note);
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_fileBase()}.md');
-      await file.writeAsString(md);
-      await SharePlus.instance
-          .share(ShareParams(files: [XFile(file.path)]));
+      await FileSaver.saveText(md, '${_fileBase()}.md');
     } catch (_) {
       if (mounted) {
         messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
@@ -389,6 +384,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         for (final b in _note.blocks) b.toJson(),
       ]);
 
+  void _shortcutDone() {
+    if (!mounted || _readOnly || _route?.isCurrent == false) return;
+    _finishEditing();
+  }
+
   void _autosaveTick() {
     // A saved article is being read, not written — nothing to autosave.
     if (_closing || _readOnly || !mounted) return;
@@ -420,6 +420,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     _editing = widget.isNew || widget.startEditing;
     _autosave = Timer.periodic(
         const Duration(seconds: 3), (_) => _autosaveTick());
+    // Ctrl/Cmd+Enter in a browser: done writing.
+    AppShortcuts.done = _shortcutDone;
     // Snapshot a book chapter's pre-edit state when a writing session opens,
     // so a heavy revise stays reversible (throttled inside AppState).
     if (_note.isManuscriptPage && !widget.isNew) {
@@ -464,6 +466,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   void dispose() {
     final route = _route;
     if (route != null) OpenNoteScreens.unregister(_note.id, route);
+    AppShortcuts.releaseDone(_shortcutDone);
     _autosave?.cancel();
     _expand.dispose();
     _titleCtrl.dispose();

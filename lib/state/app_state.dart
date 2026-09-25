@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -19,8 +18,14 @@ import '../services/youtube_service.dart';
 import '../services/note_markdown.dart';
 import '../services/notification_service.dart';
 import '../services/seed_data.dart';
+import '../platform/image_store.dart';
+import '../platform/platform_caps.dart';
+import '../services/db/db_snapshot.dart';
 import '../services/db/db_store.dart';
 import '../services/storage_service.dart';
+import '../services/store/device_library_store.dart';
+import '../services/store/library_delta.dart';
+import '../services/store/library_store.dart';
 import '../services/wiki_links.dart';
 import '../theme/app_theme.dart';
 
@@ -90,18 +95,19 @@ class MentionTarget {
 }
 
 class AppState extends ChangeNotifier {
-  /// [dbStore] lets tests hand in a store on an FFI / temp-file database; the
-  /// app uses the default (the device's `braim.db`).
-  AppState({DbStore? dbStore}) : _dbStore = dbStore ?? DbStore();
+  /// [store] is where the library lives: the phone's SQLite + JSON store by
+  /// default, or a browser store on the web. [dbStore] lets tests hand the
+  /// default store a database on an FFI / temp-file engine.
+  AppState({DbStore? dbStore, LibraryStore? store})
+      : _store = store ?? DeviceLibraryStore(dbStore: dbStore);
 
   final _storage = StorageService.instance;
 
-  /// SQLite store of the library (migration Phase 2): the app loads from here at
-  /// startup and mirrors every save into it, while the JSON file is still
-  /// written alongside as a belt-and-suspenders copy and the instant-revert
-  /// path. Disabled where sqflite is unavailable (unit tests), where the app
-  /// simply stays on the JSON store.
-  final DbStore _dbStore;
+  /// Where the library is loaded from and saved to. [AppState] keeps the whole
+  /// library in memory; the store only persists (or sends) what changed.
+  final LibraryStore _store;
+  StreamSubscription<LibraryDelta>? _incomingSub;
+  LibraryStore get store => _store;
   final _linkPreview = LinkPreviewService();
 
   final List<Note> _notes = [];
@@ -302,6 +308,8 @@ class AppState extends ChangeNotifier {
   /// a cross-dismiss keeps it away for the next seven days. Never shown while
   /// auto-backup is on: backups are already being taken, so it would only nag.
   bool get showBackupReminder {
+    // The phone owns backups when a browser is working on its library.
+    if (PlatformCaps.current.isRemote) return false;
     if (_localAutoBackup) return false;
     if (!backupOverdue) return false;
     final dismissed = _backupReminderDismissedAt;
@@ -366,7 +374,9 @@ class AppState extends ChangeNotifier {
   /// otherwise keep the weekly/monthly interval from ever elapsing. The actual
   /// run is coordinated by [maybeBackupOnPause].
   bool _localAutoBackupDue() {
-    if (!_localAutoBackup) return false;
+    if (!_localAutoBackup || !PlatformCaps.current.canBackupToDevice) {
+      return false;
+    }
     if (_notes.isEmpty && _cards.isEmpty && _spaces.isEmpty) return false;
     if (_rev == _revAtLocalBackup) return false; // nothing changed since last
     final last = _lastLocalAutoBackupAt;
@@ -394,34 +404,20 @@ class AppState extends ChangeNotifier {
     if (!_localAutoBackupDue()) return;
 
     await flushNow();
-    final File zip;
+    final DateTime now;
     try {
-      zip = await BackupService.instance.exportToTempFile();
+      now = await BackupService.instance.backupIntoBackupsDir();
     } catch (_) {
-      return; // couldn't build the zip; retries next pause
+      return; // couldn't build or place the zip; retries next pause
     }
-    final now = DateTime.now();
-    var localOk = false;
-    try {
-      await BackupService.instance.placeInBackupsDir(zip);
-      _lastLocalAutoBackupAt = now;
-      localOk = true;
-    } catch (_) {
-      // On-device copy failed; retries on the next pause.
-    }
-    try {
-      await zip.delete();
-    } catch (_) {}
-
-    if (localOk) {
-      _lastBackupAt = now; // counts against the stale-backup nudge
-      _backupReminderDismissedAt = null;
-      await _persist();
-      // Capture the rev *after* the persist bump, so "nothing changed since"
-      // stays accurate for the next pause.
-      _revAtLocalBackup = _rev;
-      notifyListeners();
-    }
+    _lastLocalAutoBackupAt = now;
+    _lastBackupAt = now; // counts against the stale-backup nudge
+    _backupReminderDismissedAt = null;
+    await _persist();
+    // Capture the rev *after* the persist bump, so "nothing changed since"
+    // stays accurate for the next pause.
+    _revAtLocalBackup = _rev;
+    notifyListeners();
   }
 
   Future<void> setDarkMode(bool value) async {
@@ -440,78 +436,15 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
-  /// Loads the library into memory and gets the app running.
-  ///
-  /// Migration Phase 2: SQLite is the source of truth once it has imported
-  /// cleanly and [DbStore.readFromDb] is on; otherwise we fall back to the JSON
-  /// store. Pass [restored] after a backup has overwritten the JSON on disk —
-  /// then we reload that JSON and fold it back into the DB (which the restore
-  /// didn't touch) so the next launch, reading from the DB, sees it.
+  /// Loads the library into memory and gets the app running. The store picks
+  /// this launch's source of truth (on the phone: SQLite once it has imported
+  /// cleanly, else the JSON file). Pass [restored] after a backup has
+  /// overwritten the store's files, so the store reloads and reconciles them.
   Future<void> init({bool restored = false}) async {
-    // Lazily load the legacy JSON: it's the one-time import source, the fallback
-    // when the DB isn't usable, and the authoritative copy right after a
-    // restore. On a normal launch with the DB in charge it isn't read at all.
-    AppData? legacyCache;
-    // The importer's view of the JSON: null = no legacy store at all (a fresh
-    // install), throws = a store exists but can't be read. The importer must
-    // not mark done on a throw, or the intact library would sit hidden behind
-    // an empty DB.
-    Future<AppData?> loadForImport() async =>
-        legacyCache ??= await _storage.loadLegacyForImport();
-    // The app's own view: always yields a library (empty at worst).
-    Future<AppData> loadLegacy() async =>
-        legacyCache ??= await _storage.load();
-
-    // Bring up the SQLite store and run the one-time import. Idempotent (a
-    // no-op once open), never throws, and disables itself where sqflite is
-    // missing (unit tests) so we transparently stay on JSON there.
-    await _dbStore.init(loadLegacy: loadForImport);
-
-    // Whether the on-disk JSON is the freshest copy of the library: right after
-    // a restore, or when an earlier launch had to save to JSON because the DB
-    // wasn't usable then (see StorageService.markJsonAhead). Either way the
-    // JSON is read and folded back into the DB below.
-    final jsonAhead = restored || await _storage.jsonAhead;
-
-    // Pick this launch's source of truth.
-    final AppData data;
-    if (!jsonAhead && DbStore.readFromDb && _dbStore.usableForReads) {
-      data = (await _dbStore.readAppData()) ?? await loadLegacy();
-    } else {
-      data = await loadLegacy();
-    }
-
+    final data = await _store.load(restored: restored);
     await _applyData(data);
-
-    if (jsonAhead && _dbStore.enabled) {
-      // The JSON is ahead of the DB (a restore, or JSON-only edits from a
-      // launch where the DB was down); reconcile the DB from it. The dirty-diff
-      // handles both added and removed items, so a smaller restored library
-      // correctly drops the extra DB rows. Routed through the same write chain
-      // as _flush so it can't overlap a debounced save firing right after, then
-      // awaited so the DB is consistent on return. The flag is lowered only
-      // once the DB really holds the library.
-      final snapshot = _snapshot();
-      var synced = false;
-      _dbWriteChain = _dbWriteChain.then((_) async {
-        synced = await _dbStore.syncFromAppData(snapshot);
-      }).catchError((_) {});
-      await _dbWriteChain;
-      if (synced) {
-        await _storage.clearJsonAhead();
-        _jsonAheadMarked = false;
-      }
-    }
-
-    // First launch with full-text search available (or after an index bump):
-    // index the library the app just loaded. Chained after any reconcile above
-    // and ahead of any later save, so the index never lags a newer row.
-    if (_dbStore.enabled) {
-      final snapshot = _snapshot();
-      _dbWriteChain = _dbWriteChain
-          .then((_) => _dbStore.ensureSearchIndex(snapshot))
-          .catchError((_) {});
-    }
+    await _store.afterLoad(_snapshot);
+    _incomingSub ??= _store.incoming.listen(applyIncoming);
   }
 
   /// The app came back to the foreground. Only the share popup (a separate
@@ -527,8 +460,7 @@ class AppState extends ChangeNotifier {
   /// Ranked full-text hits (best first) for [query] from the SQLite index, or
   /// null when the index isn't available, in which case the caller keeps its
   /// in-memory substring search.
-  Future<List<SearchHit>?> searchIndex(String query) =>
-      _dbStore.search(query);
+  Future<List<SearchHit>?> searchIndex(String query) => _store.search(query);
 
   /// Populates the in-memory library and settings from [data] and finishes
   /// bringing the app up (trash purge, shared-inbox drain, reminder rescheduling
@@ -556,6 +488,56 @@ class AppState extends ChangeNotifier {
     if (existingDaily != null && existingDaily.colorValue == null) {
       existingDaily.colorValue = dailyDayColorValue;
     }
+    _applySettings(data);
+    _rev++;
+    AppPalette.dark = effectiveDark;
+    await _purgeExpiredTrash();
+    await _repairCircuits();
+    await _importSharedInbox();
+    _loaded = true;
+    notifyListeners();
+    // Make sure any pending reminders are (re)scheduled with the OS.
+    for (final n in _notes) {
+      if (n.reminderAt != null && n.deletedAt == null) {
+        unawaited(NotificationService.instance.syncNote(n));
+      }
+    }
+    // …and the gentle daily-task reminders on live reflexes.
+    for (final i in _impulses) {
+      if (i.deletedAt != null || i.archived) continue;
+      for (final t in i.allThreads) {
+        final m = t.reminderMinutes;
+        if (!t.notify || m == null) continue;
+        unawaited(NotificationService.instance.scheduleThreadReminder(
+          threadId: t.id,
+          title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
+          body: 'From your daily day',
+          hour: m ~/ 60,
+          minute: m % 60,
+          weekdays: t.days,
+        ));
+      }
+    }
+    unawaited(_syncJournalReminder());
+
+    // Cards saved by the share popup arrive without a preview; enrich them in
+    // the background now. Capped so a dead link doesn't refetch every launch.
+    // Skipped where pages can't be fetched (a browser-only library): the
+    // attempts would all fail and burn the cap before the phone could try.
+    if (!PlatformCaps.current.canFetchPreviews) return;
+    for (final c in _cards
+        .where((c) => !c.fetched && c.enrichAttempts < 3)
+        .toList()) {
+      c.enrichAttempts++;
+      _linkPreview.enrich(c).then((_) {
+        _persist();
+      });
+    }
+  }
+
+  /// Takes every app-level setting from [data] (the non-entity half of
+  /// [_applyData], also used when settings change elsewhere).
+  void _applySettings(AppData data) {
     _cardsCompact = data.cardsCompact;
     _darkMode = data.darkMode;
     _darkFollowSystem = data.darkFollowSystem;
@@ -598,47 +580,6 @@ class AppState extends ChangeNotifier {
     _readerBookmarks
       ..clear()
       ..addAll(data.readerBookmarks);
-    _rev++;
-    AppPalette.dark = effectiveDark;
-    await _purgeExpiredTrash();
-    await _repairCircuits();
-    await _importSharedInbox();
-    _loaded = true;
-    notifyListeners();
-    // Make sure any pending reminders are (re)scheduled with the OS.
-    for (final n in _notes) {
-      if (n.reminderAt != null && n.deletedAt == null) {
-        unawaited(NotificationService.instance.syncNote(n));
-      }
-    }
-    // …and the gentle daily-task reminders on live reflexes.
-    for (final i in _impulses) {
-      if (i.deletedAt != null || i.archived) continue;
-      for (final t in i.allThreads) {
-        final m = t.reminderMinutes;
-        if (!t.notify || m == null) continue;
-        unawaited(NotificationService.instance.scheduleThreadReminder(
-          threadId: t.id,
-          title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
-          body: 'From your daily day',
-          hour: m ~/ 60,
-          minute: m % 60,
-          weekdays: t.days,
-        ));
-      }
-    }
-    unawaited(_syncJournalReminder());
-
-    // Cards saved by the share popup arrive without a preview; enrich them in
-    // the background now. Capped so a dead link doesn't refetch every launch.
-    for (final c in _cards
-        .where((c) => !c.fetched && c.enrichAttempts < 3)
-        .toList()) {
-      c.enrichAttempts++;
-      _linkPreview.enrich(c).then((_) {
-        _persist();
-      });
-    }
   }
 
   // ---- Reads -------------------------------------------------------------
@@ -1524,7 +1465,7 @@ class AppState extends ChangeNotifier {
     if (_childrenOf(id).isNotEmpty) return;
     _notes.remove(note);
     for (final path in note.imagePaths) {
-      await _storage.deleteImage(path);
+      await ImageStore.instance.delete(path);
     }
     final parentId = note.circuitParentId;
     if (parentId != null) _renumber(_childrenOf(parentId));
@@ -1536,13 +1477,13 @@ class AppState extends ChangeNotifier {
     for (final n in _notes.where((n) => n.deletedAt != null).toList()) {
       _notes.remove(n);
       for (final path in n.imagePaths) {
-        await _storage.deleteImage(path);
+        await ImageStore.instance.delete(path);
       }
     }
     for (final c in _cards.where((c) => c.deletedAt != null).toList()) {
       _cards.remove(c);
       for (final path in c.imagePaths) {
-        await _storage.deleteImage(path);
+        await ImageStore.instance.delete(path);
       }
     }
     for (final sp in _spaces.where((s) => s.deletedAt != null).toList()) {
@@ -1570,13 +1511,13 @@ class AppState extends ChangeNotifier {
     for (final n in expiredNotes) {
       _notes.remove(n);
       for (final path in n.imagePaths) {
-        await _storage.deleteImage(path);
+        await ImageStore.instance.delete(path);
       }
     }
     for (final c in expiredCards) {
       _cards.remove(c);
       for (final path in c.imagePaths) {
-        await _storage.deleteImage(path);
+        await ImageStore.instance.delete(path);
       }
     }
     for (final sp in expiredSpaces) {
@@ -2369,7 +2310,7 @@ class AppState extends ChangeNotifier {
     final ids = group.members.map((m) => m.id).toSet();
     for (final m in group.members) {
       for (final path in m.imagePaths) {
-        await _storage.deleteImage(path);
+        await ImageStore.instance.delete(path);
       }
     }
     _notes.removeWhere((n) => ids.contains(n.id));
@@ -2643,7 +2584,7 @@ class AppState extends ChangeNotifier {
   /// Deletes an image file that was removed from a note in the editor.
   Future<void> refreshAfterImageRemoval(String path) async {
     if (path.isEmpty) return;
-    await _storage.deleteImage(path);
+    await ImageStore.instance.delete(path);
   }
 
   // ---- Spaces ------------------------------------------------------------
@@ -2705,7 +2646,7 @@ class AppState extends ChangeNotifier {
   Future<void> _reallyDeleteSpace(Space space) async {
     _spaces.remove(space);
     if (space.thumbnailPath != null) {
-      await _storage.deleteImage(space.thumbnailPath!);
+      await ImageStore.instance.delete(space.thumbnailPath!);
     }
     for (final n in _notes.where((n) => n.spaceId == space.id)) {
       n.spaceId = null;
@@ -3139,7 +3080,7 @@ class AppState extends ChangeNotifier {
     if (idx < 0) return;
     final page = _notes.removeAt(idx);
     for (final p in page.imagePaths) {
-      await _storage.deleteImage(p);
+      await ImageStore.instance.delete(p);
     }
     await _persist();
   }
@@ -3149,11 +3090,11 @@ class AppState extends ChangeNotifier {
     final idx = _books.indexWhere((b) => b.id == bookId);
     if (idx < 0) return;
     final book = _books.removeAt(idx);
-    if (book.coverPath != null) await _storage.deleteImage(book.coverPath!);
+    if (book.coverPath != null) await ImageStore.instance.delete(book.coverPath!);
     for (final n in _notes.where((n) => n.bookId == bookId).toList()) {
       _notes.remove(n);
       for (final p in n.imagePaths) {
-        await _storage.deleteImage(p);
+        await ImageStore.instance.delete(p);
       }
     }
     await _persist();
@@ -3213,6 +3154,7 @@ class AppState extends ChangeNotifier {
   /// Imports links saved by the share popup (one inbox file per share, so the
   /// popup never contends with this engine's writes to the data file).
   Future<void> _importSharedInbox() async {
+    if (!PlatformCaps.current.canShareIntent) return;
     final records = await _storage.drainShareInbox();
     for (final r in records) {
       final url = r['url'] as String?;
@@ -3271,6 +3213,9 @@ class AppState extends ChangeNotifier {
     // A YouTube spark always gets a thumbnail from its id, even if the scrape
     // below comes back empty.
     if (card.imageUrl.isEmpty) card.imageUrl = YouTubeService.thumbnailUrl(vid);
+    // A browser-only library can't scrape YouTube (and mustn't burn the
+    // attempt cap trying); the phone fetches it once the library gets there.
+    if (!PlatformCaps.current.canFetchPreviews) return;
     final data = await YouTubeService.fetch(vid);
     // Lock the spark as "fetched" once the scrape actually returned the page
     // (an empty transcript alone still counts — auto-captions sit behind
@@ -3336,7 +3281,7 @@ class AppState extends ChangeNotifier {
     if (idx < 0) return;
     final card = _cards.removeAt(idx);
     for (final path in card.imagePaths) {
-      await _storage.deleteImage(path);
+      await ImageStore.instance.delete(path);
     }
     await _persist();
   }
@@ -3354,6 +3299,10 @@ class AppState extends ChangeNotifier {
   }
 
   // ---- Maintenance -------------------------------------------------------
+
+  /// Nothing in the library yet (a fresh install or a new browser library).
+  bool get isLibraryEmpty =>
+      _notes.isEmpty && _cards.isEmpty && _spaces.isEmpty && _books.isEmpty;
 
   int get noteCount => _notes.length;
   int get spaceCount => _spaces.length;
@@ -3389,15 +3338,15 @@ class AppState extends ChangeNotifier {
   Future<void> clearAll() async {
     for (final n in _notes) {
       for (final p in n.imagePaths) {
-        await _storage.deleteImage(p);
+        await ImageStore.instance.delete(p);
       }
     }
     for (final s in _spaces) {
-      if (s.thumbnailPath != null) await _storage.deleteImage(s.thumbnailPath!);
+      if (s.thumbnailPath != null) await ImageStore.instance.delete(s.thumbnailPath!);
     }
     for (final c in _cards) {
       for (final p in c.imagePaths) {
-        await _storage.deleteImage(p);
+        await ImageStore.instance.delete(p);
       }
     }
     _notes.clear();
@@ -4394,21 +4343,6 @@ class AppState extends ChangeNotifier {
 
   Timer? _flushTimer;
   bool _dirty = false;
-  Future<void> _writeChain = Future.value();
-  Future<void> _dbWriteChain = Future.value();
-
-  /// The `_rev` captured at the last whole-file JSON checkpoint, so repeated
-  /// pauses with no edits in between don't re-write an identical file.
-  int _revAtJsonCheckpoint = -1;
-
-  /// Whether this launch has already raised the JSON-ahead flag (it only needs
-  /// raising once per stretch of JSON-mode saves).
-  bool _jsonAheadMarked = false;
-
-  /// Whether SQLite is the live store this launch: it imported cleanly and the
-  /// read flag is on. When false (fallback, or unit tests where sqflite is off)
-  /// the app runs on the JSON store exactly as it did before the migration.
-  bool get _dbIsPrimary => DbStore.readFromDb && _dbStore.usableForReads;
 
   /// Marks the library dirty and notifies immediately; the actual disk write
   /// is coalesced (~400ms) and runs on a background isolate. A burst of
@@ -4468,59 +4402,231 @@ class AppState extends ChangeNotifier {
         },
       );
 
+  /// Hands the library to the store, which writes (or sends) only what changed
+  /// since its last save.
   void _flush() {
     if (!_dirty) return;
     _dirty = false;
     final snapshot = _snapshot();
-    // Phase 3: SQLite is the sole per-save store — one edit writes one row, not
-    // the whole library. Serialized on its own chain; a failed DB write is
-    // retried on the next save and never surfaces.
-    _dbWriteChain = _dbWriteChain.then((_) async {
-      await _dbStore.syncFromAppData(snapshot);
-    }).catchError((_) {});
-    // The whole-file JSON is written per save only when the DB isn't the live
-    // store (fallback / unit tests) or the Phase 2 mirror is kept on; otherwise
-    // it's refreshed at checkpoints in flushNow() as a rollback + backup copy.
-    if (!_dbIsPrimary || DbStore.writeJsonOnSave) {
-      _revAtJsonCheckpoint = _rev;
-      // Saving to JSON because the DB isn't the live store: flag the JSON as
-      // ahead (once per stretch), so the next launch that does get the DB
-      // folds these edits into it instead of reading the stale DB over them.
-      final markAhead = !_dbIsPrimary && !_jsonAheadMarked;
-      if (markAhead) _jsonAheadMarked = true;
-      // catchError: one failed write (disk full, say) must not poison the
-      // chain and silently skip every save after it.
-      _writeChain = _writeChain.then((_) async {
-        if (markAhead) await _storage.markJsonAhead();
-        await _storage.save(snapshot);
-      }).catchError((_) {});
+    _store.save(snapshot, _rev);
+    for (final l in List.of(_flushListeners)) {
+      l(snapshot);
     }
   }
 
-  /// Forces any pending changes to disk now (app pause, before backup or
-  /// restore). Awaits both stores so nothing is left in flight — the DB in
-  /// particular, since the next launch reads from it.
+  /// Forces any pending changes to the store now (app pause, before backup or
+  /// restore) and waits until they have landed — the next launch reads them.
   Future<void> flushNow() async {
     _flushTimer?.cancel();
     _flushTimer = null;
     _flush();
-    // Phase 3 checkpoint: per-save JSON writes are off, so refresh the on-disk
-    // JSON here (pause, before a backup/restore) — it keeps `keepy_data.json`
-    // current for the backup zip and as the rollback artifact. Skipped when the
-    // library hasn't changed since the last checkpoint, or when _flush already
-    // wrote JSON this call.
-    if (_loaded &&
-        _dbIsPrimary &&
-        !DbStore.writeJsonOnSave &&
-        _rev != _revAtJsonCheckpoint) {
-      _revAtJsonCheckpoint = _rev;
-      final snapshot = _snapshot();
-      _writeChain = _writeChain
-          .then((_) => _storage.save(snapshot))
-          .catchError((_) {});
+    await _store.flushNow(loaded: _loaded, rev: _rev, snapshot: _snapshot);
+  }
+
+  /// Called with every saved snapshot (the phone server diffs it to push the
+  /// change to connected browsers).
+  final List<void Function(AppData snapshot)> _flushListeners = [];
+  void addFlushListener(void Function(AppData snapshot) l) =>
+      _flushListeners.add(l);
+  void removeFlushListener(void Function(AppData snapshot) l) =>
+      _flushListeners.remove(l);
+
+  /// The library as it stands right now (after pending edits), for the phone
+  /// server and backup export.
+  AppData currentSnapshot() => _snapshot();
+
+  // ---- Changes made elsewhere ---------------------------------------------
+
+  /// Notes open in an editor, by id: the editor reports whether it holds
+  /// unsaved changes. An incoming change never swaps a note out from under an
+  /// editor with unsaved work; the editor is told instead ([incomingNoteChanges]).
+  final Map<String, bool Function()> _openEditors = {};
+
+  void registerOpenEditor(String noteId, bool Function() hasUnsavedChanges) =>
+      _openEditors[noteId] = hasUnsavedChanges;
+
+  void unregisterOpenEditor(String noteId) {
+    _openEditors.remove(noteId);
+    _heldIncoming.remove(noteId);
+  }
+
+  /// Versions of open notes that arrived while their editor had unsaved work.
+  final Map<String, Note?> _heldIncoming = {};
+
+  bool hasIncomingFor(String noteId) => _heldIncoming.containsKey(noteId);
+
+  /// Discards the local copy of [noteId] in favour of the version that
+  /// arrived from elsewhere while it was being edited. Returns the note now in
+  /// the library (null if the other side deleted it).
+  Note? takeIncomingNote(String noteId) {
+    if (!_heldIncoming.containsKey(noteId)) return noteById(noteId);
+    final note = _heldIncoming.remove(noteId);
+    _replaceById(_notes, noteId, note, (n) => n.id);
+    _rev++;
+    _store.adopt(LibraryDelta(rows: [
+      (table: 'notes', id: noteId, row: note == null ? null : noteRow(note)),
+    ]));
+    notifyListeners();
+    return note;
+  }
+
+  final _incomingNoteChanges = StreamController<String>.broadcast();
+
+  /// Ids of notes changed elsewhere (the phone or a browser) while open here.
+  Stream<String> get incomingNoteChanges => _incomingNoteChanges.stream;
+
+  /// Applies a change made somewhere else — rows replaced, inserted or removed
+  /// by id, and settings keys — then notifies. With [persist] (the phone taking
+  /// a browser's edit) the change is saved through the normal path; otherwise
+  /// (a browser taking the phone's) the store records it as already held so it
+  /// isn't echoed back. Returns the delta as it now stands in memory.
+  LibraryDelta applyIncoming(LibraryDelta delta, {bool persist = false}) {
+    if (_disposed || delta.isEmpty) return LibraryDelta.empty;
+    final applied = <RowChange>[];
+    final changedNotes = <String>[];
+    for (final r in delta.rows) {
+      final row = r.row;
+      Map<String, dynamic>? body() =>
+          row == null ? null : jsonDecode(row['body'] as String) as Map<String, dynamic>;
+      switch (r.table) {
+        case 'notes':
+          final b = body();
+          final open = _openEditors[r.id];
+          if (open != null && open()) {
+            // Unsaved work here wins for now; the editor offers to load the
+            // other version (see [takeIncomingNote]).
+            _heldIncoming[r.id] = b == null ? null : Note.fromJson(b);
+            changedNotes.add(r.id);
+            continue;
+          }
+          _replaceById(_notes, r.id, b == null ? null : Note.fromJson(b),
+              (n) => n.id);
+          if (open != null) changedNotes.add(r.id);
+          applied.add((
+            table: r.table,
+            id: r.id,
+            row: b == null ? null : noteRow(_notes.firstWhere((n) => n.id == r.id)),
+          ));
+        case 'cards':
+          final b = body();
+          final c = b == null ? null : TweetCard.fromJson(b);
+          _replaceById(_cards, r.id, c, (c) => c.id);
+          applied.add((table: r.table, id: r.id, row: c == null ? null : cardRow(c)));
+        case 'books':
+          final b = body();
+          final v = b == null ? null : Book.fromJson(b);
+          _replaceById(_books, r.id, v, (v) => v.id);
+          applied.add((table: r.table, id: r.id, row: v == null ? null : bookRow(v)));
+        case 'impulses':
+          final b = body();
+          final v = b == null ? null : Impulse.fromJson(b);
+          _replaceById(_impulses, r.id, v, (v) => v.id);
+          applied.add(
+              (table: r.table, id: r.id, row: v == null ? null : impulseRow(v)));
+        case 'spaces':
+          final b = body();
+          final v = b == null ? null : Space.fromJson(b);
+          _replaceById(_spaces, r.id, v, (v) => v.id);
+          applied.add((table: r.table, id: r.id, row: v == null ? null : spaceRow(v)));
+      }
     }
-    await _writeChain;
-    await _dbWriteChain;
+    var settings = const <String, String>{};
+    if (delta.settings.isNotEmpty) {
+      final merged = _snapshot().settingsToJson();
+      delta.settings.forEach((k, v) {
+        try {
+          merged[k] = jsonDecode(v);
+        } catch (_) {}
+      });
+      final data = AppData.fromJson(merged);
+      final journalBefore = (_journalReminderOn, _journalReminderMinutes);
+      _applySettings(data);
+      AppPalette.dark = effectiveDark;
+      settings = {
+        for (final e in data.settingsToJson().entries)
+          if (delta.settings.containsKey(e.key)) e.key: jsonEncode(e.value),
+      };
+      if (persist &&
+          journalBefore != (_journalReminderOn, _journalReminderMinutes)) {
+        unawaited(_syncJournalReminder());
+      }
+    }
+    final out = LibraryDelta(rows: applied, settings: settings);
+    if (persist) {
+      _syncSideEffects(applied);
+      _persist();
+    } else {
+      _rev++;
+      _store.adopt(out);
+      notifyListeners();
+    }
+    for (final id in changedNotes) {
+      _incomingNoteChanges.add(id);
+    }
+    return out;
+  }
+
+  static void _replaceById<T>(
+      List<T> list, String id, T? value, String Function(T) idOf) {
+    final i = list.indexWhere((e) => idOf(e) == id);
+    if (value == null) {
+      if (i >= 0) list.removeAt(i);
+    } else if (i >= 0) {
+      list[i] = value;
+    } else {
+      list.add(value);
+    }
+  }
+
+  /// Re-arms the OS reminders a change made elsewhere touched: note reminders
+  /// and reflex-thread reminders (the phone acts on browser edits).
+  void _syncSideEffects(List<RowChange> rows) {
+    for (final r in rows) {
+      if (r.table == 'notes') {
+        final n = noteById(r.id);
+        if (n == null || n.deletedAt != null) {
+          unawaited(NotificationService.instance.cancel(r.id));
+        } else {
+          unawaited(NotificationService.instance.syncNote(n));
+        }
+      } else if (r.table == 'impulses') {
+        final i = impulseById(r.id);
+        if (i == null) continue;
+        for (final t in i.allThreads) {
+          final m = t.reminderMinutes;
+          if (i.deletedAt != null || i.archived || !t.notify || m == null) {
+            unawaited(NotificationService.instance.cancelThreadReminder(t.id));
+            continue;
+          }
+          unawaited(NotificationService.instance.scheduleThreadReminder(
+            threadId: t.id,
+            title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
+            body: 'From your daily day',
+            hour: m ~/ 60,
+            minute: m % 60,
+            weekdays: t.days,
+          ));
+        }
+      }
+    }
+  }
+
+  /// Drops [ids] from memory without deleting them anywhere (the Crypt
+  /// re-locking in a browser): the store forgets them too, so no delete is
+  /// ever sent for them.
+  void forgetLocally(Set<String> ids) {
+    if (ids.isEmpty) return;
+    final dropped = <RowChange>[
+      for (final n in _notes)
+        if (ids.contains(n.id)) (table: 'notes', id: n.id, row: null),
+      for (final c in _cards)
+        if (ids.contains(c.id)) (table: 'cards', id: c.id, row: null),
+    ];
+    _notes.removeWhere((n) => ids.contains(n.id));
+    _cards.removeWhere((c) => ids.contains(c.id));
+    _rev++;
+    _store.adopt(LibraryDelta(rows: dropped));
+    notifyListeners();
   }
 
   bool _disposed = false;
@@ -4529,6 +4635,8 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _flushTimer?.cancel();
+    _incomingSub?.cancel();
+    _incomingNoteChanges.close();
     super.dispose();
   }
 }

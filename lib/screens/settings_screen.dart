@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +14,9 @@ import '../theme/app_theme.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/tutorial_dialog.dart';
+import '../platform/braim_image.dart';
+import '../platform/platform_caps.dart';
+import '../web/web_library_actions.dart';
 
 /// Human-readable "last backed up" line for the backup row.
 String _lastBackupText(BuildContext context, DateTime? last) {
@@ -262,7 +263,8 @@ class SettingsScreen extends StatelessWidget {
     // Flip the switch first so it reflects the change immediately, then ask
     // for the permission (its dialog would otherwise stall the toggle).
     await appState.setJournalReminder(on: on);
-    if (on) {
+    // In a browser the phone fires the reminder; no permission to ask for here.
+    if (on && PlatformCaps.current.canScheduleReminders) {
       final granted = await NotificationService.instance.requestPermission();
       if (!granted && context.mounted) {
         messenger.showSnackBar(SnackBar(content: Text(t.notifPermNeeded)));
@@ -348,6 +350,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final caps = PlatformCaps.current;
     // The gesture-nav inset, so the list can scroll under the pill (with enough
     // bottom padding that the last row still clears it) the way the feed does.
     final navInset = MediaQuery.viewPaddingOf(context).bottom;
@@ -583,6 +586,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      if (caps.canScheduleReminders || caps.isRemote) ...[
                       _SectionLabel(context.t.journalSection),
                       GlassPanel(
                         borderRadius: 20,
@@ -627,6 +631,7 @@ class SettingsScreen extends StatelessWidget {
                           ),
                         ),
                       ],
+                      if (caps.canScheduleReminders) ...[
                       const SizedBox(height: 12),
                       GlassPanel(
                         borderRadius: 20,
@@ -643,7 +648,10 @@ class SettingsScreen extends StatelessWidget {
                               style: TextStyle(color: Color(0xFF5E5F69))),
                         ),
                       ),
+                      ],
                       const SizedBox(height: 24),
+                      ],
+                      if (caps.canBackupToDevice) ...[
                       _SectionLabel(context.t.backupSection),
                       GlassPanel(
                         borderRadius: 20,
@@ -806,6 +814,68 @@ class SettingsScreen extends StatelessWidget {
                         onRestore: () => _restoreFromDevice(context),
                       ),
                       const SizedBox(height: 24),
+                      ],
+                      if (caps.canExportBackupZip) ...[
+                        _SectionLabel(context.t.webThisComputerSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          onTap: () =>
+                              WebLibraryActions.exportAndDownload(context),
+                          child: ListTile(
+                            leading: Icon(Icons.download_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.webExportBackup,
+                                style:
+                                    TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(
+                                '${context.t.webExportBackupSubtitle}\n'
+                                '${_lastBackupText(context, state.lastBackupAt)}',
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (caps.canImportBackupZip)
+                          GlassPanel(
+                            borderRadius: 20,
+                            blur: 0,
+                            color: AppPalette.surfaceGlass,
+                            padding: EdgeInsets.zero,
+                            onTap: () =>
+                                WebLibraryActions.pickAndImport(context),
+                            child: ListTile(
+                              leading: Icon(Icons.upload_file_rounded,
+                                  color: AppPalette.inkPrimary),
+                              title: Text(context.t.webImportBackup,
+                                  style: TextStyle(
+                                      color: AppPalette.inkPrimary)),
+                              subtitle: Text(
+                                  context.t.webImportBackupSubtitle,
+                                  style: TextStyle(color: Color(0xFF5E5F69))),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 12, 6, 0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.info_outline_rounded,
+                                  size: 16, color: AppPalette.inkSecondary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(context.t.webStorageNote,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        height: 1.35,
+                                        color: AppPalette.inkSecondary)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                       _SectionLabel(context.t.storageSection),
                       GlassPanel(
                         borderRadius: 20,
@@ -843,6 +913,7 @@ class SettingsScreen extends StatelessWidget {
                               style: TextStyle(color: Color(0xFF5E5F69))),
                         ),
                       ),
+                      if (!caps.isRemote) ...[
                       const SizedBox(height: 12),
                       GlassPanel(
                         borderRadius: 20,
@@ -859,6 +930,7 @@ class SettingsScreen extends StatelessWidget {
                               style: TextStyle(color: Color(0xFFFF8A9B))),
                         ),
                       ),
+                      ],
                       const SizedBox(height: 24),
                       _SectionLabel(context.t.guideSettingsLabel),
                       GlassPanel(
@@ -937,8 +1009,12 @@ Widget _bgThumb(String customPath, String fallbackAsset) {
     child: SizedBox(
       width: 46,
       height: 46,
-      child: customPath.isNotEmpty && File(customPath).existsSync()
-          ? Image.file(File(customPath), fit: BoxFit.cover, cacheWidth: 140)
+      child: storedImageExists(customPath)
+          ? BraimImage(customPath,
+              fit: BoxFit.cover,
+              cacheWidth: 140,
+              errorBuilder: (_, _, _) => Image.asset(fallbackAsset,
+                  fit: BoxFit.cover, cacheWidth: 140))
           : Image.asset(fallbackAsset, fit: BoxFit.cover, cacheWidth: 140),
     ),
   );

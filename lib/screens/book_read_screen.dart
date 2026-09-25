@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -15,6 +14,7 @@ import '../models/note.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/text_prompt.dart';
+import '../platform/braim_image.dart';
 
 /// A reading theme: the paper and ink a book is read on.
 class ReaderTheme {
@@ -410,8 +410,8 @@ class _BookReadScreenState extends State<BookReadScreen> {
           constraints: BoxConstraints(maxHeight: maxImageHeight),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Image.file(
-              File(f.imagePath!),
+            child: BraimImage(
+              f.imagePath!,
               width: double.infinity,
               fit: BoxFit.contain,
               alignment: Alignment.center,
