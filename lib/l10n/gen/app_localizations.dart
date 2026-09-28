@@ -388,18 +388,6 @@ abstract class AppLocalizations {
   /// **'Transcript'**
   String get youtubeTranscript;
 
-  /// No description provided for @youtubeFetching.
-  ///
-  /// In en, this message translates to:
-  /// **'Fetching video details…'**
-  String get youtubeFetching;
-
-  /// No description provided for @youtubeUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'No description or transcript available'**
-  String get youtubeUnavailable;
-
   /// No description provided for @retry.
   ///
   /// In en, this message translates to:

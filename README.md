@@ -78,9 +78,9 @@ Saves tweets and links. Share a tweet to Braim from the Android share sheet, or
 press the action button and paste a URL. The item becomes a card carrying a
 best-effort preview. Tweets are fetched through Twitter/X oEmbed with no API
 key, with the author avatar supplied by unavatar. Other links are read through
-their Open Graph tags. A saved **YouTube** link is scraped, with no API key, for
-the video's title, channel, description, and caption transcript, shown in
-collapsible Description and Transcript panels on the card. Opening a card shows
+their Open Graph tags. A saved **YouTube** link takes its title, channel and
+thumbnail from YouTube's official oEmbed endpoint, with no API key; the watch
+page itself is never fetched. Opening a card shows
 the fetched preview and the source link, with a copy control, pinned at the top,
 and an editable note body beneath. A saved article may be opened in **reader
 mode**, which extracts the article text for clean reading. A card also exports to
@@ -276,7 +276,7 @@ lib/
   models/        Note, NoteBlock, Space, TweetCard, Book, Impulse, Annotation
   services/      SQLite store and one-time JSON importer (services/db), JSON
                  storage and export, note to/from Markdown, note/card PDF export,
-                 image picker, link preview, article extractor, YouTube scraper,
+                 image picker, link preview, article extractor, YouTube oEmbed,
                  book export (PDF/Markdown/ePub), notifications,
                  Do Not Disturb, focus media, seed data, wiki links
   state/         AppState (ChangeNotifier) and the Pomodoro controller

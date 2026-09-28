@@ -161,12 +161,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get youtubeTranscript => 'Transcript';
 
   @override
-  String get youtubeFetching => 'Fetching video details…';
-
-  @override
-  String get youtubeUnavailable => 'No description or transcript available';
-
-  @override
   String get retry => 'Retry';
 
   @override

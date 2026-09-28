@@ -21,7 +21,7 @@ us (see the [Privacy Policy](PRIVACY.md)). You are responsible for it,
 including making sure you have the right to save, export or share it.
 
 Braim can save material from other sources, such as article text in reader
-mode, tweet text and YouTube captions. That material belongs to its owners.
+mode and tweet text. That material belongs to its owners.
 Keep it for your own personal reference, and follow the copyright and the terms
 of the sites you save from. Don't use the App to republish other people's work
 without permission.

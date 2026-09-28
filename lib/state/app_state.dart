@@ -3253,9 +3253,10 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
-  /// Scrapes a YouTube spark's description + transcript (best-effort) and stores
-  /// them on the card, so a later open shows the stored copy without refetching.
-  /// [force] (the Retry button) refetches regardless of the attempt cap.
+  /// Fills a YouTube spark's title and channel from oEmbed (best-effort) for a
+  /// card that didn't get them when saved. Descriptions and transcripts are no
+  /// longer fetched; ones stored by earlier versions stay on the card.
+  /// [force] refetches regardless of the attempt cap.
   Future<void> fetchYouTubeDetails(String id, {bool force = false}) async {
     final idx = _cards.indexWhere((c) => c.id == id);
     if (idx < 0) return;
@@ -3263,26 +3264,21 @@ class AppState extends ChangeNotifier {
     final vid = YouTubeService.videoId(card.url);
     if (vid == null) return;
     if (card.videoFetched && !force) return;
-    // Stop auto-scraping a persistently-blocked video: after a few empty tries
-    // it costs a full (slow) scrape on every open for nothing. Retry ignores it.
+    // Stop auto-fetching a video oEmbed keeps refusing (private, removed):
+    // after a few empty tries it's a wasted request on every open.
     if (!force && card.videoFetchAttempts >= TweetCard.maxVideoAutoFetchAttempts) {
       return;
     }
-    // A YouTube spark always gets a thumbnail from its id, even if the scrape
+    // A YouTube spark always gets a thumbnail from its id, even if oEmbed
     // below comes back empty.
     if (card.imageUrl.isEmpty) card.imageUrl = YouTubeService.thumbnailUrl(vid);
     final data = await YouTubeService.fetch(vid);
-    // Lock the spark as "fetched" once the scrape actually returned the page
-    // (an empty transcript alone still counts — auto-captions sit behind
-    // YouTube's poToken and genuinely can't be gotten). A wholly-empty result
-    // is a block/rate-limit: leave it unfetched but count the attempt so the
-    // automatic retries are bounded.
-    final gotPage = data.description.isNotEmpty || data.title.isNotEmpty;
-    if (!gotPage) card.videoFetchAttempts++;
+    // An empty result means oEmbed refused or failed: leave it unfetched but
+    // count the attempt so the automatic retries are bounded.
+    final got = data.title.isNotEmpty;
+    if (!got) card.videoFetchAttempts++;
     card
-      ..videoDescription = data.description
-      ..videoTranscript = data.transcript
-      ..videoFetched = gotPage
+      ..videoFetched = got
       ..updatedAt = DateTime.now();
     // Use the video's own title/channel to identify the spark (unless the user
     // already gave it a title).

@@ -77,6 +77,17 @@ class LinkPreviewService {
   /// Returns null when the page can't be fetched (the card shows the bare
   /// domain instead).
   static Future<BasicLinkPreview?> fetchBasicPreview(String url) async {
+    final vid = YouTubeService.videoId(url);
+    if (vid != null) {
+      final data = await YouTubeService.fetch(vid);
+      return BasicLinkPreview(
+        title: data.title,
+        imageUrl: data.thumbnailUrl.isNotEmpty
+            ? data.thumbnailUrl
+            : YouTubeService.thumbnailUrl(vid),
+        siteName: 'YouTube',
+      );
+    }
     try {
       final res = await http
           .get(Uri.parse(url), headers: {'User-Agent': _userAgent})
@@ -105,6 +116,13 @@ class LinkPreviewService {
       final h = card.authorHandle.replaceFirst('@', '');
       card.avatarUrl = 'https://unavatar.io/twitter/$h';
     }
+    // YouTube goes through its official oEmbed endpoint only; the watch page
+    // itself is never fetched (see YouTubeService).
+    final vid = YouTubeService.videoId(card.url);
+    if (vid != null) {
+      await _applyYouTube(card, vid);
+      return card;
+    }
     try {
       if (card.isTweet) {
         final ok = await _fetchTweetOembed(card);
@@ -120,13 +138,26 @@ class LinkPreviewService {
     } catch (_) {
       // Leave card as-is; the UI shows the raw link.
     }
-    // A YouTube link always has a cover derivable from its id, so guarantee one
-    // even if the OG image fetch was blocked or missing.
-    final vid = YouTubeService.videoId(card.url);
-    if (vid != null && card.imageUrl.isEmpty) {
-      card.imageUrl = YouTubeService.thumbnailUrl(vid);
-    }
     return card;
+  }
+
+  /// Fills a YouTube card from oEmbed: the video's title names the spark (so
+  /// the feed reads as the video, not "Link") and its channel is the author.
+  /// The cover is derived from the id, so it's there even if oEmbed fails.
+  static Future<void> _applyYouTube(TweetCard card, String vid) async {
+    final data = await YouTubeService.fetch(vid);
+    card.siteName = 'YouTube';
+    card.imageUrl = data.thumbnailUrl.isNotEmpty
+        ? data.thumbnailUrl
+        : YouTubeService.thumbnailUrl(vid);
+    if (data.title.isNotEmpty) {
+      if (card.noteTitle.trim().isEmpty) card.noteTitle = data.title;
+      if (card.text.isEmpty) card.text = data.title;
+    }
+    if (data.author.isNotEmpty && card.authorName.trim().isEmpty) {
+      card.authorName = data.author;
+    }
+    card.fetched = data.title.isNotEmpty;
   }
 
   String _handleFromUrl(String url) {
@@ -180,13 +211,6 @@ class LinkPreviewService {
     if (imageOnly) return keep;
 
     if (page.siteName.isNotEmpty) card.siteName = page.siteName;
-    // For a YouTube link, use the video's own title to name the spark (so the
-    // feed reads as the video, not "Link") as soon as it's saved.
-    if (YouTubeService.videoId(card.url) != null &&
-        card.noteTitle.trim().isEmpty &&
-        page.title.isNotEmpty) {
-      card.noteTitle = page.title;
-    }
     if (card.text.isEmpty) {
       final combined = [page.title, page.description]
           .where((s) => s.trim().isNotEmpty)

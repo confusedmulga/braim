@@ -67,10 +67,10 @@ device's IP address and the request itself:
   endpoint** (`publish.twitter.com`) to fetch the post text, and **unavatar.io**
   to fetch the author's public profile picture from their handle. No login or
   API key is used; the requests carry only the post URL or public handle.
-- **For a YouTube link,** the App additionally requests the video's public watch
-  page on `youtube.com` to read its title, description and, when available,
-  captions, and loads the video thumbnail from `ytimg.com`. No login or API key
-  is used; the requests carry only the public video URL.
+- **For a YouTube link,** the App asks YouTube's public oEmbed endpoint
+  (`youtube.com/oembed`) for the video's title and channel name, and loads the
+  thumbnail from `ytimg.com`. No login or API key is used; the requests carry
+  only the public video URL.
 
 **Preview images** (article images, video thumbnails and profile pictures) are
 loaded from those hosts each time a card or link is displayed, so those hosts
@@ -109,7 +109,7 @@ purpose and never transmitted to us:
 Braim does not integrate any third-party analytics, advertising, or
 crash-reporting SDKs. Its only outbound network activity is the preview traffic
 described above: the linked website itself, X oEmbed, unavatar.io, and YouTube
-(its watch page and thumbnail host). None of it sends data to a server operated
+(its oEmbed endpoint and thumbnail host). None of it sends data to a server operated
 by us.
 
 ## Children's Privacy

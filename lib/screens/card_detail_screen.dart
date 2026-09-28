@@ -21,7 +21,6 @@ import '../services/file_names.dart';
 import '../services/note_markdown.dart';
 import '../services/note_pdf.dart';
 import '../services/wiki_links.dart';
-import '../services/youtube_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
@@ -112,9 +111,6 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     context.read<AppState>().updateCard(_card);
   }
 
-  /// True while the YouTube description/transcript is being scraped on open.
-  bool _ytLoading = false;
-
   @override
   void initState() {
     super.initState();
@@ -128,22 +124,20 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     _savedFingerprint = _fingerprint();
     _autosave = Timer.periodic(
         const Duration(seconds: 3), (_) => _autosaveTick());
-    // A YouTube spark scrapes its description + transcript the first time it's
-    // opened; thereafter the stored copy shows instantly. A persistently-blocked
-    // video stops auto-scraping after a few tries (Retry still forces it).
+    // A YouTube spark that missed its title/channel when saved fills them from
+    // oEmbed on open; a video oEmbed keeps refusing stops after a few tries.
     if (_card.shouldAutoFetchYouTube) {
       _loadYouTube();
     }
   }
 
-  Future<void> _loadYouTube({bool force = false}) async {
-    setState(() => _ytLoading = true);
+  Future<void> _loadYouTube() async {
     try {
-      await context.read<AppState>().fetchYouTubeDetails(_card.id, force: force);
+      await context.read<AppState>().fetchYouTubeDetails(_card.id);
     } catch (_) {
-      // Best-effort; the sections just stay empty.
+      // Best-effort; the card keeps what it has.
     }
-    if (mounted) setState(() => _ytLoading = false);
+    if (mounted) setState(() {});
   }
 
   @override
@@ -515,13 +509,11 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                   const SizedBox(height: 10),
                   _LinkBar(
                       url: _card.url, onOpen: _openLink, onCopy: _copyLink),
-                  if (YouTubeService.isYouTube(_card.url)) ...[
+                  // Only cards saved by earlier versions carry these.
+                  if (_card.videoDescription.trim().isNotEmpty ||
+                      _card.videoTranscript.trim().isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    _YouTubeSections(
-                      card: _card,
-                      loading: _ytLoading,
-                      onRetry: () => _loadYouTube(force: true),
-                    ),
+                    _YouTubeSections(card: _card),
                   ],
                   if (_card.articleText.isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -914,37 +906,18 @@ class _LinkBar extends StatelessWidget {
   }
 }
 
-/// The Description + Transcript panels for a YouTube spark, scraped so the video
-/// doesn't have to be opened. Sections that came back empty are simply omitted.
+/// The Description + Transcript panels for a YouTube spark saved by an earlier
+/// version of Braim (which read them from the watch page). New sparks don't get
+/// them; empty sections are omitted.
 class _YouTubeSections extends StatelessWidget {
-  const _YouTubeSections(
-      {required this.card, required this.loading, required this.onRetry});
+  const _YouTubeSections({required this.card});
 
   final TweetCard card;
-  final bool loading;
-  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final description = card.videoDescription.trim().isNotEmpty
-        ? card.videoDescription.trim()
-        : card.text.trim(); // fall back to the OG blurb if scrape came up dry
+    final description = card.videoDescription.trim();
     final transcript = card.videoTranscript.trim();
-
-    if (loading && description.isEmpty && transcript.isEmpty) {
-      return _panel(
-        Row(children: [
-          const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2)),
-          const SizedBox(width: 12),
-          Text(context.t.youtubeFetching,
-              style: TextStyle(color: AppPalette.inkSecondary)),
-        ]),
-      );
-    }
-
     final sections = <Widget>[];
     if (description.isNotEmpty) {
       sections.add(_ExpandableSection(
@@ -963,45 +936,8 @@ class _YouTubeSections extends StatelessWidget {
         initiallyExpanded: false,
       ));
     }
-    if (sections.isEmpty) {
-      return _panel(
-        Row(children: [
-          Icon(Icons.smart_display_outlined,
-              size: 18, color: AppPalette.inkSecondary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(context.t.youtubeUnavailable,
-                style: TextStyle(color: AppPalette.inkSecondary)),
-          ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: loading ? null : onRetry,
-            icon: loading
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.refresh_rounded, size: 18),
-            label: Text(context.t.retry),
-            style: TextButton.styleFrom(
-                foregroundColor: AppPalette.inkPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 8)),
-          ),
-        ]),
-      );
-    }
     return Column(children: sections);
   }
-
-  Widget _panel(Widget child) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppPalette.surfaceGlass,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppPalette.cardOutline),
-        ),
-        child: child,
-      );
 }
 
 /// A tap-to-expand titled panel holding long, selectable text (description or

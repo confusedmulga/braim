@@ -49,8 +49,6 @@
   "shareFailed": "Couldn't share the note",
   "youtubeDescription": "Description",
   "youtubeTranscript": "Transcript",
-  "youtubeFetching": "Fetching video details…",
-  "youtubeUnavailable": "No description or transcript available",
   "retry": "Retry",
   "markdownHint": "Write or paste Markdown…",
   "preview": "Preview",
