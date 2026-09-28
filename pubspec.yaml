@@ -109,6 +109,8 @@ flutter:
     - assets/fonts/OFL-EBGaramond.txt
     - assets/fonts/OFL-Merriweather.txt
     - assets/fonts/OFL-JetBrainsMono.txt
+    - assets/fonts/OFL-Inter.txt
+    - assets/fonts/OFL-Nunito.txt
 
   # Lora (OFL) — the app's voice: chrome, greetings and note headings.
   fonts:

@@ -42,6 +42,8 @@ void registerFontLicenses() {
     'EB Garamond': 'OFL-EBGaramond.txt',
     'Merriweather': 'OFL-Merriweather.txt',
     'JetBrains Mono': 'OFL-JetBrainsMono.txt',
+    'Inter': 'OFL-Inter.txt',
+    'Nunito': 'OFL-Nunito.txt',
   };
   LicenseRegistry.addLicense(() async* {
     for (final e in fonts.entries) {

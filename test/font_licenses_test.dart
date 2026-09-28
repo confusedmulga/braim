@@ -22,6 +22,8 @@ void main() {
       'EB Garamond (font)',
       'Merriweather (font)',
       'JetBrains Mono (font)',
+      'Inter (font)',
+      'Nunito (font)',
     });
   });
 }
