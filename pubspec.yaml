@@ -151,10 +151,6 @@ flutter:
           weight: 400
         - asset: assets/fonts/Merriweather-Bold.ttf
           weight: 700
-    # Display face for the feed greetings (user-supplied brand font).
-    - family: Brand
-      fonts:
-        - asset: assets/fonts/Brand.ttf
     # Inter (OFL) — a clean modern sans, offered as a body-font choice.
     - family: Inter
       fonts:
