@@ -280,17 +280,14 @@ class SeedData {
         text: 'How to Do Great Work, a long essay on choosing what to work on and sticking with it.',
         fetched: true,
         pinned: true,
+        // Demo text is an original summary, not an excerpt, so the seed carries
+        // no third-party prose.
         articleText:
-            "If you collected lists of techniques for doing great work in a lot "
-            "of different fields, what would the intersection look like? I decided "
-            "to find out.\n\n"
-            "The first step is to decide what to work on. The work you choose "
-            "needs to have three qualities: it has to be something you have a "
-            "natural aptitude for, that you have a deep interest in, and that "
-            "offers scope to do great work.\n\n"
-            "Four steps: choose a field, learn enough to get to the frontier, "
-            "notice gaps, explore promising ones. This is how practically "
-            "everyone who's done great work has done it.",
+            "My notes on the essay.\n\n"
+            "Pick something you are good at, curious about, and that has room "
+            "for ambitious work. Curiosity does most of the steering.\n\n"
+            "Get to the edge of what is known in that area, look for the gaps "
+            "other people walk past, and chase the ones that seem promising.",
         createdAt: ago(const Duration(days: 2)),
         updatedAt: ago(const Duration(days: 2)),
       ),
@@ -301,12 +298,11 @@ class SeedData {
         text: 'How to Pick a Career (That Actually Fits You)',
         fetched: true,
         articleText:
-            "We tend to think our career path is a straight line, but it's really "
-            "a series of experiments. The trick is to run more of them, and to run "
-            "them faster.\n\n"
-            "Your career is the roughly 20,000 to 150,000 working hours you'll "
-            "spend during your life. Spending a few dozen of them thinking hard "
-            "about how to spend the rest is time well spent.",
+            "My notes on the post.\n\n"
+            "A career reads less like a ladder and more like a run of "
+            "experiments, so it pays to run more of them.\n\n"
+            "Decades of working hours are at stake, which makes a few hours of "
+            "deliberate thinking about them a bargain.",
         createdAt: ago(const Duration(days: 4)),
         updatedAt: ago(const Duration(days: 4)),
       ),
@@ -316,12 +312,12 @@ class SeedData {
         text: 'Cassini–Huygens, the twenty-year mission to Saturn and its moons.',
         fetched: true,
         articleText:
-            "Cassini–Huygens was a space-research mission by NASA, ESA and the "
-            "Italian Space Agency to study Saturn and its system, including its "
-            "rings and natural satellites.\n\n"
-            "Launched in 1997, it reached Saturn in 2004 and studied the planet "
-            "until 2017, when it was deliberately flown into Saturn's atmosphere "
-            "to protect the potentially habitable moons Enceladus and Titan.",
+            "My notes on the article.\n\n"
+            "A joint NASA, ESA and Italian Space Agency probe sent to Saturn. "
+            "Launched 1997, arrived 2004, spent thirteen years among the rings "
+            "and moons.\n\n"
+            "In 2017 it was steered into Saturn on purpose so it could never "
+            "crash into, and contaminate, Enceladus or Titan.",
         createdAt: ago(const Duration(days: 7)),
         updatedAt: ago(const Duration(days: 7)),
       ),
@@ -349,10 +345,11 @@ class SeedData {
         spaceId: work.id,
         fetched: true,
         articleText:
-            "You do not rise to the level of your goals. You fall to the level of "
-            "your systems. Habits are the compound interest of self-improvement.\n\n"
-            "The four laws: make it obvious, make it attractive, make it easy, and "
-            "make it satisfying. Invert them to break a bad habit.",
+            "My notes on the book.\n\n"
+            "Systems beat goals: what you do daily decides the outcome more than "
+            "what you aim for. Small habits compound.\n\n"
+            "Build a habit by making it visible, appealing, low-effort and "
+            "rewarding; flip each of those to drop one.",
         createdAt: ago(const Duration(days: 12)),
         updatedAt: ago(const Duration(days: 1)),
       ),

@@ -8,6 +8,8 @@
 	<string>Braim needs access to your photos so you can add pictures to your notes and cortex folders.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Braim needs camera access so you can add photos to your notes.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Braim uses Face ID to unlock the Crypt folder.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

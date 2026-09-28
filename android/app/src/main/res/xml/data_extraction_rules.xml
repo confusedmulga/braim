@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android's own system backup (Android 12+). Braim's data is left in it so a
+     new phone can restore it, but the on-device "Backups" zips are kept out of
+     the Google-account copy: each zip repeats the whole library, so they would
+     push the app past Android's 25 MB cloud quota and stop the notes themselves
+     from being backed up. Device-to-device transfer keeps the default (all). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="external" path="Backups" />
+    </cloud-backup>
+</data-extraction-rules>

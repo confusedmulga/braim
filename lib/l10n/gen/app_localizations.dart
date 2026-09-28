@@ -2158,6 +2158,36 @@ abstract class AppLocalizations {
   /// **'A notes app · v1.0'**
   String get aboutLine;
 
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPolicy;
+
+  /// No description provided for @termsOfUse.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of use'**
+  String get termsOfUse;
+
+  /// No description provided for @openSourceLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source licenses'**
+  String get openSourceLicenses;
+
+  /// No description provided for @avatarsByUnavatar.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatars provided by Unavatar'**
+  String get avatarsByUnavatar;
+
+  /// No description provided for @trademarkNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'X, YouTube and other names shown on saved cards belong to their owners. Braim is not affiliated with or endorsed by them.'**
+  String get trademarkNotice;
+
   /// No description provided for @savedToCards.
   ///
   /// In en, this message translates to:
@@ -2995,7 +3025,7 @@ abstract class AppLocalizations {
   /// No description provided for @pomodoro.
   ///
   /// In en, this message translates to:
-  /// **'Pomodoro'**
+  /// **'Focus'**
   String get pomodoro;
 
   /// No description provided for @focusTimer.
@@ -3163,7 +3193,7 @@ abstract class AppLocalizations {
   /// No description provided for @dndGrantBody.
   ///
   /// In en, this message translates to:
-  /// **'Braim needs one-time Do Not Disturb access to mute your phone during focus. Nothing is read.'**
+  /// **'Braim needs one-time Do Not Disturb access to mute your phone during focus. Nothing is read. If Android closes Braim mid-session, Do Not Disturb stays on until you reopen Braim or turn it off yourself.'**
   String get dndGrantBody;
 
   /// No description provided for @dndGrant.

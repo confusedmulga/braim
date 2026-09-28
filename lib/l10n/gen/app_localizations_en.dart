@@ -1169,6 +1169,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutLine => 'A notes app · v1.0';
 
   @override
+  String get privacyPolicy => 'Privacy policy';
+
+  @override
+  String get termsOfUse => 'Terms of use';
+
+  @override
+  String get openSourceLicenses => 'Open-source licenses';
+
+  @override
+  String get avatarsByUnavatar => 'Avatars provided by Unavatar';
+
+  @override
+  String get trademarkNotice =>
+      'X, YouTube and other names shown on saved cards belong to their owners. Braim is not affiliated with or endorsed by them.';
+
+  @override
   String get savedToCards => 'Saved to Sparks';
 
   @override
@@ -1645,7 +1661,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filterAll => 'All';
 
   @override
-  String get pomodoro => 'Pomodoro';
+  String get pomodoro => 'Focus';
 
   @override
   String get focusTimer => 'Focus timer';
@@ -1731,7 +1747,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get dndGrantBody =>
-      'Braim needs one-time Do Not Disturb access to mute your phone during focus. Nothing is read.';
+      'Braim needs one-time Do Not Disturb access to mute your phone during focus. Nothing is read. If Android closes Braim mid-session, Do Not Disturb stays on until you reopen Braim or turn it off yourself.';
 
   @override
   String get dndGrant => 'Open settings';

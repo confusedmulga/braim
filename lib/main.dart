@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'l10n/l10n.dart';
@@ -31,8 +32,28 @@ void _onNotificationTap(String? payload, String? actionId) {
   );
 }
 
+/// The bundled OFL fonts aren't Dart packages, so Flutter's license page
+/// doesn't list them on its own; each font's license file is registered here.
+void registerFontLicenses() {
+  const fonts = {
+    'Lora': 'OFL-Lora.txt',
+    'Caveat': 'OFL-Caveat.txt',
+    'Space Grotesk': 'OFL-SpaceGrotesk.txt',
+    'EB Garamond': 'OFL-EBGaramond.txt',
+    'Merriweather': 'OFL-Merriweather.txt',
+    'JetBrains Mono': 'OFL-JetBrainsMono.txt',
+  };
+  LicenseRegistry.addLicense(() async* {
+    for (final e in fonts.entries) {
+      final text = await rootBundle.loadString('assets/fonts/${e.value}');
+      yield LicenseEntryWithLineBreaks(['${e.key} (font)'], text);
+    }
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerFontLicenses();
   // Best-effort; reminders simply don't fire if this fails.
   NotificationService.onSelect = _onNotificationTap;
   await NotificationService.instance.init();

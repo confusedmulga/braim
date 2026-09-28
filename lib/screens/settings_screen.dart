@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,18 @@ import '../theme/app_theme.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/tutorial_dialog.dart';
+
+const _privacyPolicyUrl =
+    'https://github.com/confusedmulga/braim/blob/main/PRIVACY.md';
+const _termsUrl = 'https://github.com/confusedmulga/braim/blob/main/TERMS.md';
+
+Future<void> _openExternal(String url) async {
+  try {
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  } catch (_) {
+    // No browser available; nothing else to do.
+  }
+}
 
 /// Human-readable "last backed up" line for the backup row.
 String _lastBackupText(BuildContext context, DateTime? last) {
@@ -905,6 +918,43 @@ class SettingsScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      _AboutLink(
+                        icon: Icons.privacy_tip_outlined,
+                        label: context.t.privacyPolicy,
+                        onTap: () => _openExternal(_privacyPolicyUrl),
+                      ),
+                      const SizedBox(height: 12),
+                      _AboutLink(
+                        icon: Icons.gavel_rounded,
+                        label: context.t.termsOfUse,
+                        onTap: () => _openExternal(_termsUrl),
+                      ),
+                      const SizedBox(height: 12),
+                      _AboutLink(
+                        icon: Icons.description_outlined,
+                        label: context.t.openSourceLicenses,
+                        onTap: () => showLicensePage(
+                          context: context,
+                          applicationName: context.t.appTitle,
+                          applicationLegalese: '© 2026 Kalpesh Nichal',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Unavatar's free plan requires this credit, linked to
+                      // unavatar.io, on a credits screen.
+                      _AboutLink(
+                        icon: Icons.account_circle_outlined,
+                        label: context.t.avatarsByUnavatar,
+                        onTap: () => _openExternal('https://unavatar.io'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+                        child: Text(context.t.trademarkNotice,
+                            style: TextStyle(
+                                color: AppPalette.inkSecondary,
+                                fontSize: 12)),
+                      ),
                     ],
                   ),
                 ),
@@ -1027,6 +1077,32 @@ class _DeviceBackupRestoreTileState extends State<_DeviceBackupRestoreTile> {
             style: TextStyle(color: AppPalette.inkPrimary)),
         subtitle:
             Text(subtitle, style: const TextStyle(color: Color(0xFF5E5F69))),
+      ),
+    );
+  }
+}
+
+/// A tappable row in the About section (policy, terms, licenses, credits).
+class _AboutLink extends StatelessWidget {
+  const _AboutLink(
+      {required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      borderRadius: 20,
+      blur: 0,
+      color: AppPalette.surfaceGlass,
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      child: ListTile(
+        leading: Icon(icon, color: AppPalette.inkPrimary),
+        title: Text(label, style: TextStyle(color: AppPalette.inkPrimary)),
+        trailing:
+            Icon(Icons.chevron_right_rounded, color: AppPalette.inkSecondary),
       ),
     );
   }

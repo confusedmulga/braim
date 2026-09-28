@@ -31,7 +31,7 @@ return its feed to the top.
 1-3. A drawer is stowed off the left edge. Drag inward from the left edge, or
 press the menu control at top left, to deploy it. The drawer provides access to
 Settings, Archive, Recently Deleted, the Journal year view, the Reflex
-trackers, the Pomodoro timer, and any folder.
+trackers, the Focus timer, and any folder.
 
 1-4. A search field and a sort control are fitted across the top of the feed
 stations. Search filters notes, cards, and folders as characters are entered;
@@ -144,7 +144,7 @@ analytics view reports progress over time. A consistency heatmap on each reflex
 opens a month-by-month history: every day with scheduled threads is shaded by
 how many were completed, and tapping a day shows that day's tally.
 
-### 3-2. POMODORO (Focus Timer)
+### 3-2. FOCUS TIMER
 
 A focus timer, reached from the drawer. Idle, it displays a tick-marked dial
 with a pull-up sheet for the session length and Do Not Disturb. Running, the
@@ -340,7 +340,19 @@ may be replaced with a manual luminance sampler later.
 
 ## LICENSE NOTE
 
-Bundled fonts (Lora, Caveat, Space Grotesk, EB Garamond, Merriweather, Inter,
-Nunito, JetBrains Mono) are distributed under the SIL Open Font License. Each
-license file travels with its font under `assets/fonts/`. JetBrains Mono is used
-only for code in exported PDFs.
+The MIT License in `LICENSE` covers the source code written for Braim. It does
+not cover:
+
+- **The Braim name and logo.** All rights reserved.
+- **Bundled fonts** (Lora, Caveat, Space Grotesk, EB Garamond, Merriweather,
+  Inter, Nunito, JetBrains Mono), distributed under the SIL Open Font License
+  with their license files under `assets/fonts/`. JetBrains Mono is used only for
+  code in exported PDFs.
+- **Bundled photographs** (the note backgrounds and feed wallpapers), which
+  remain the work of their photographers under their own licenses.
+- **Dart and Flutter packages**, each under its own license, listed in the app
+  under Settings › About › Open-source licenses.
+
+The [Privacy Policy](PRIVACY.md) and [Terms of Use](TERMS.md) are linked from
+Settings › About. Braim is not affiliated with X, YouTube, Google or unavatar.io;
+avatars are provided by [Unavatar](https://unavatar.io).
