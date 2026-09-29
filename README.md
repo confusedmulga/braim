@@ -338,12 +338,20 @@ may be replaced with a manual luminance sampler later.
 
 ---
 
+## CONTRIBUTORS
+
+- **Kalpesh Nichal**: author and publisher of Braim on Google Play.
+- **Ananya** ([@ananyaroys](https://github.com/ananyaroys)): contributor.
+
 ## LICENSE NOTE
 
 The MIT License in `LICENSE` covers the source code written for Braim. It does
 not cover:
 
-- **The Braim name and logo.** All rights reserved.
+- **The Braim name and logo.** All rights reserved. The logo was drawn by
+  Kalpesh Nichal in Affinity Designer (sources in `assets/logos/`).
+- **The focus-timer artwork** (`android/app/src/main/res/drawable-nodpi/focus_art.png`),
+  drawn as SVG for Braim by Claude, an AI model by Anthropic.
 - **Bundled fonts** (Lora, Caveat, Space Grotesk, EB Garamond, Merriweather,
   Inter, Nunito, JetBrains Mono), distributed under the SIL Open Font License
   with their license files under `assets/fonts/`. JetBrains Mono is used only for
