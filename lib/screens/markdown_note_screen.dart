@@ -154,8 +154,11 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     }
     final note = state.noteById(ref.id);
     if (note != null && mounted) {
-      await Navigator.of(context)
-          .push(MaterialPageRoute(builder: (_) => noteScreen(note)));
+      // Save first: going back to an already-open screen pops this one.
+      if (_editing) await _save();
+      if (!mounted) return;
+      await pushNoteScreen(context, note,
+          () => MaterialPageRoute(builder: (_) => noteScreen(note)));
     }
   }
 

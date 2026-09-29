@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../services/external_links.dart';
 import '../services/youtube_service.dart';
 import 'note_block.dart';
 
@@ -117,8 +118,10 @@ class TweetCard {
   /// URL, which also matched netflix.com, dropbox.com and any "…x.com" site.
   bool get isTweet => isTweetUrl(url);
 
+  /// A link saved without a scheme ("x.com/…", by older builds) is read as
+  /// https, so its host can still be checked.
   static bool isTweetUrl(String url) {
-    final host = Uri.tryParse(url.trim())?.host.toLowerCase() ?? '';
+    final host = Uri.tryParse(withUrlScheme(url))?.host.toLowerCase() ?? '';
     return host == 'x.com' ||
         host.endsWith('.x.com') ||
         host == 'twitter.com' ||

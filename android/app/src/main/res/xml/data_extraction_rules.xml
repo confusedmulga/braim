@@ -7,5 +7,8 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="external" path="Backups" />
+        <!-- Where the zips go when there is no external storage: the app's
+             documents directory (path_provider's app_flutter, under root). -->
+        <exclude domain="root" path="app_flutter/Backups" />
     </cloud-backup>
 </data-extraction-rules>

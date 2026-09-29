@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -1131,5 +1133,53 @@ void main() {
     final reloaded = await StorageService.instance.load();
     expect(reloaded.journalReminderOn, isTrue);
     expect(reloaded.journalReminderMinutes, 20 * 60 + 30);
+  });
+
+  test('a link pasted without https is saved with it, and a tweet is a tweet',
+      () async {
+    final state = await boot(AppData(notes: [], spaces: [], cards: []));
+    // The preview fetch runs in the background; answer it offline.
+    final card = await http.runWithClient(
+        () => state.addCardFromUrl('x.com/jack/status/20'),
+        () => MockClient((_) async => http.Response('', 404)));
+    expect(card.url, 'https://x.com/jack/status/20');
+    expect(card.isTweet, isTrue);
+
+    final inText = await http.runWithClient(
+        () => state.addCardFromUrl('worth a read: example.org/post today'),
+        () => MockClient((_) async => http.Response('', 404)));
+    expect(inText.url, 'https://example.org/post');
+  });
+
+  group('fetchYouTubeDetails', () {
+    const yt = 'https://www.youtube.com/watch?v=VTLnDqjfRZQ';
+
+    test('a refused fetch leaves "Modified" alone but counts the attempt',
+        () async {
+      final before = DateTime(2026, 1, 2, 3, 4);
+      final card = TweetCard(url: yt, updatedAt: before, fetched: true);
+      final state = await boot(AppData(notes: [], spaces: [], cards: [card]));
+      await http.runWithClient(() => state.fetchYouTubeDetails(card.id),
+          () => MockClient((_) async => http.Response('Unauthorized', 401)));
+      final after = state.cardById(card.id)!;
+      expect(after.updatedAt, before);
+      expect(after.videoFetchAttempts, 1);
+      expect(after.videoFetched, isFalse);
+    });
+
+    test('a successful fetch names the spark and does move "Modified"',
+        () async {
+      final before = DateTime(2026, 1, 2, 3, 4);
+      final card = TweetCard(url: yt, updatedAt: before, fetched: true);
+      final state = await boot(AppData(notes: [], spaces: [], cards: [card]));
+      await http.runWithClient(
+          () => state.fetchYouTubeDetails(card.id),
+          () => MockClient((_) async => http.Response(
+              '{"title":"How X works","author_name":"Channel"}', 200)));
+      final after = state.cardById(card.id)!;
+      expect(after.noteTitle, 'How X works');
+      expect(after.authorName, 'Channel');
+      expect(after.updatedAt.isAfter(before), isTrue);
+    });
   });
 }

@@ -370,17 +370,12 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     final state = context.read<AppState>();
     final note = state.noteById(id);
     if (note == null || note.circuitPlaceholder) return;
-    // This note's screen is already open beneath the map (the map was opened
-    // from it): go back to it. A second screen on the same note would have the
-    // two overwrite each other's edits.
-    final navigator = Navigator.of(context);
-    final open = OpenNoteScreens.routeFor(id);
-    if (open != null && identical(open.navigator, navigator)) {
-      navigator.popUntil((r) => r == open);
-      return;
-    }
-    final result = await navigator.push<CircuitMapFocus>(
-      MaterialPageRoute(
+    // If this note's screen is already open beneath the map (the map was
+    // opened from it), this goes back to it rather than opening a second one.
+    final result = await pushNoteScreen<CircuitMapFocus>(
+      context,
+      note,
+      () => MaterialPageRoute(
         builder: (_) => noteScreen(note,
             fromCircuitMap: true, startEditing: _bodyEmpty(note)),
       ),

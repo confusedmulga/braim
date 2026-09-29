@@ -9,10 +9,10 @@ import '../l10n/l10n.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill/quill_delta.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/note_block.dart';
 import '../screens/crop_screen.dart';
+import '../services/external_links.dart';
 import '../services/image_service.dart';
 import '../services/link_preview_service.dart';
 import '../services/storage_service.dart';
@@ -29,12 +29,7 @@ const String kHighlightInk = '#202124';
 
 /// Adds an https scheme when the user typed a bare host, so "example.com"
 /// becomes a working link. A URL that already carries a scheme is left as-is.
-String _normalizeLinkUrl(String raw) {
-  final u = raw.trim();
-  if (u.isEmpty) return u;
-  if (RegExp(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://').hasMatch(u)) return u;
-  return 'https://$u';
-}
+String _normalizeLinkUrl(String raw) => withUrlScheme(raw);
 
 /// A reusable rich-text + image block editor. It edits the [blocks] list in
 /// place; call [NoteBodyEditorState.sync] before persisting. The [activeController]
@@ -697,15 +692,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     });
   }
 
-  Future<void> _openLink(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // Leave the card in place; nothing else to do.
-    }
-  }
+  Future<void> _openLink(String url) => openExternalUrl(url);
 
   /// A pasted link as a small horizontal preview card (1500x400-ish ratio).
   Widget _linkCard(NoteBlock block) {

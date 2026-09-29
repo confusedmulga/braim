@@ -660,7 +660,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     }
     final target = state.noteById(ref.id);
     if (target != null) {
-      await Navigator.of(context).push(cupertinoRoute(noteScreen(target)));
+      await pushNoteScreen(
+          context, target, () => cupertinoRoute(noteScreen(target)));
     }
   }
 

@@ -1,8 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/note.dart';
+import '../services/external_links.dart';
 import '../services/wiki_links.dart';
 import '../theme/app_theme.dart';
 
@@ -172,15 +172,7 @@ class _RichBodyTextState extends State<RichBodyText> {
     return s;
   }
 
-  Future<void> _openUrl(String link) async {
-    final uri = Uri.tryParse(link.trim());
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // Nothing to do: the note stays put.
-    }
-  }
+  Future<void> _openUrl(String link) => openExternalUrl(link);
 
   @override
   Widget build(BuildContext context) {

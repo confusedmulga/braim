@@ -14,6 +14,7 @@ import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../services/backup_service.dart';
 import '../services/book_text_ops.dart';
+import '../services/external_links.dart';
 import '../services/link_preview_service.dart';
 import '../services/youtube_service.dart';
 import '../services/note_markdown.dart';
@@ -3277,17 +3278,22 @@ class AppState extends ChangeNotifier {
     // count the attempt so the automatic retries are bounded.
     final got = data.title.isNotEmpty;
     if (!got) card.videoFetchAttempts++;
-    card
-      ..videoFetched = got
-      ..updatedAt = DateTime.now();
+    card.videoFetched = got;
     // Use the video's own title/channel to identify the spark (unless the user
     // already gave it a title).
+    var named = false;
     if (card.noteTitle.trim().isEmpty && data.title.isNotEmpty) {
       card.noteTitle = data.title;
+      named = true;
     }
     if (card.authorName.trim().isEmpty && data.author.isNotEmpty) {
       card.authorName = data.author;
+      named = true;
     }
+    // "Modified" moves only when the card visibly changed: a refused fetch
+    // (private or removed video) must not float the spark to the top of a feed
+    // sorted by modified, once per retry.
+    if (named) card.updatedAt = DateTime.now();
     await _persist();
   }
 
@@ -3346,7 +3352,14 @@ class AppState extends ChangeNotifier {
 
   String _extractUrl(String text) {
     final match = RegExp(r'https?://\S+').firstMatch(text);
-    return (match?.group(0) ?? text).trim();
+    if (match != null) return match.group(0)!.trim();
+    // A bare address pasted without a scheme ("x.com/jack/status/20") gets
+    // one, so its preview can be fetched and a tweet is recognised by host.
+    final bare = RegExp(r'(?:^|\s)((?:[a-z0-9-]+\.)+[a-z]{2,}(?:/\S*)?)',
+            caseSensitive: false)
+        .firstMatch(text);
+    if (bare != null) return withUrlScheme(bare.group(1)!);
+    return text.trim();
   }
 
   // ---- Maintenance -------------------------------------------------------

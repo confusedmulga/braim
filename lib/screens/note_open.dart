@@ -62,3 +62,21 @@ class OpenNoteScreens {
     return (route != null && route.isActive) ? route : null;
   }
 }
+
+/// Opens [note]'s screen by pushing [route] — unless a screen for that note is
+/// already open further down this navigator, in which case it goes back to
+/// that one instead (see [OpenNoteScreens]). Every note-to-note jump (a
+/// `[[link]]`, a "Mentioned in" entry, a circuit map node) goes through here,
+/// so a note can never be open twice. Screens popped on the way back must
+/// already have saved themselves; every caller saves before navigating.
+/// Returns the pushed route's result, or null when it went back instead.
+Future<T?> pushNoteScreen<T>(
+    BuildContext context, Note note, Route<T> Function() route) {
+  final navigator = Navigator.of(context);
+  final open = OpenNoteScreens.routeFor(note.id);
+  if (open != null && identical(open.navigator, navigator)) {
+    navigator.popUntil((r) => r == open);
+    return Future<T?>.value();
+  }
+  return navigator.push(route());
+}

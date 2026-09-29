@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/note.dart';
 import '../models/note_block.dart';
+import '../services/external_links.dart';
 import '../theme/app_theme.dart';
 import 'wiki_text.dart';
 
@@ -64,33 +65,42 @@ class NoteReadBody extends StatelessWidget {
           ),
         ));
       } else if (b.isLink && b.url.isNotEmpty) {
+        // A pasted-link card (older notes): opens its link, like an inline one.
         children.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppPalette.bubbleGlass,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppPalette.cardOutline),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.link_rounded,
-                    size: 18, color: AppPalette.inkSecondary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    b.linkTitle.isNotEmpty ? b.linkTitle : b.url,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.inkPrimary,
-                    ),
-                  ),
+              onTap: () => openExternalUrl(b.url),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppPalette.bubbleGlass,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppPalette.cardOutline),
                 ),
-              ],
+                child: Row(
+                  children: [
+                    Icon(Icons.link_rounded,
+                        size: 18, color: AppPalette.inkSecondary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        b.linkTitle.isNotEmpty ? b.linkTitle : b.url,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppPalette.inkPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ));

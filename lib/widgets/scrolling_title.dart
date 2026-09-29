@@ -45,6 +45,12 @@ class _ScrollingTitleState extends State<ScrollingTitle> {
   /// Whether the last layout overflowed; null forces a re-check.
   bool? _overflowed;
 
+  /// The inputs of the last text measurement and its result. The screen above
+  /// can rebuild every frame (the circuit map animates its layout), and
+  /// shaping the text again each time would be wasted work.
+  Object? _measuredFor;
+  bool _measuredOverflow = false;
+
   @override
   void didUpdateWidget(ScrollingTitle old) {
     super.didUpdateWidget(old);
@@ -113,6 +119,25 @@ class _ScrollingTitleState extends State<ScrollingTitle> {
     _ctrl.jumpTo(0);
   }
 
+  /// Whether the title is wider than [maxWidth], measured only when the text,
+  /// its style, the width, text scaling or direction changed since last time.
+  bool _measureOverflow(BuildContext context, double maxWidth) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    final key = (widget.text, widget.style, maxWidth, scaler, direction);
+    if (key == _measuredFor) return _measuredOverflow;
+    final painter = TextPainter(
+      text: TextSpan(text: widget.text, style: widget.style),
+      maxLines: 1,
+      textDirection: direction,
+      textScaler: scaler,
+    )..layout();
+    _measuredOverflow = painter.width > maxWidth;
+    painter.dispose();
+    _measuredFor = key;
+    return _measuredOverflow;
+  }
+
   /// A tap: back to the start, then drift again from there.
   void _onTap() {
     if (!_canScroll) return;
@@ -138,14 +163,7 @@ class _ScrollingTitleState extends State<ScrollingTitle> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final painter = TextPainter(
-        text: TextSpan(text: widget.text, style: widget.style),
-        maxLines: 1,
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout();
-      final overflows = painter.width > constraints.maxWidth;
-      painter.dispose();
+      final overflows = _measureOverflow(context, constraints.maxWidth);
 
       if (overflows != _overflowed) {
         _overflowed = overflows;

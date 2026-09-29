@@ -3,8 +3,8 @@ import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter_highlight/themes/github.dart';
 import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../services/external_links.dart';
 import '../services/wiki_links.dart';
 import '../theme/app_theme.dart';
 
@@ -232,13 +232,5 @@ class MarkdownView extends StatelessWidget {
     ]);
   }
 
-  static Future<void> _open(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // A malformed or unsupported link is a no-op rather than a crash.
-    }
-  }
+  static Future<void> _open(String url) => openExternalUrl(url);
 }

@@ -12,11 +12,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/note.dart' show richToPlain, toggleChecklistLine;
 
 import '../models/tweet_card.dart';
+import '../services/external_links.dart';
 import '../services/file_names.dart';
 import '../services/note_markdown.dart';
 import '../services/note_pdf.dart';
@@ -132,12 +132,22 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   }
 
   Future<void> _loadYouTube() async {
+    final titleBefore = _card.noteTitle;
     try {
       await context.read<AppState>().fetchYouTubeDetails(_card.id);
     } catch (_) {
       // Best-effort; the card keeps what it has.
     }
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {
+      // The fetch may have named the spark after the video. The title field
+      // was filled before that, and saving writes the field back — so take the
+      // new title into it, unless the user has typed their own meanwhile.
+      if (_card.noteTitle != titleBefore && _titleCtrl.text == titleBefore) {
+        _titleCtrl.text = _card.noteTitle;
+        _savedFingerprint = _fingerprint();
+      }
+    });
   }
 
   @override
@@ -271,17 +281,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
       );
 
   Future<void> _openLink() async {
-    final uri = Uri.tryParse(_card.url);
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.t.couldNotOpenLink)),
-        );
-      }
-    }
+    if (await openExternalUrl(_card.url) || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.t.couldNotOpenLink)),
+    );
   }
 
   void _copyLink() {
@@ -429,7 +432,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     }
     final note = state.noteById(ref.id);
     if (note != null) {
-      await Navigator.of(context).push(bouncyRoute(noteScreen(note)));
+      await pushNoteScreen(context, note, () => bouncyRoute(noteScreen(note)));
     }
   }
 

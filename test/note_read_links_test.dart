@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher_platform_interface/link.dart';
@@ -78,8 +80,10 @@ void main() {
     {'insert': ' today\n'},
   ];
 
-  /// Boots an [AppState] holding [notes] and [cards], then shows [screen].
-  Future<AppState> pump(WidgetTester tester, Widget screen,
+  /// Like [pump], but builds the screen from the booted state — so it can be
+  /// handed the state's own live objects, as the app does.
+  Future<AppState> pumpWith(
+      WidgetTester tester, Widget Function(AppState) screen,
       {List<Note> notes = const [], List<TweetCard> cards = const []}) async {
     for (final name in ['keepy_data.json', 'keepy_data.bak']) {
       final f = File('${root.path}/$name');
@@ -97,12 +101,17 @@ void main() {
           ...FlutterQuillLocalizations.localizationsDelegates,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: screen,
+        home: screen(state),
       ),
     ));
     await tester.pumpAndSettle();
     return state;
   }
+
+  /// Boots an [AppState] holding [notes] and [cards], then shows [screen].
+  Future<AppState> pump(WidgetTester tester, Widget screen,
+          {List<Note> notes = const [], List<TweetCard> cards = const []}) =>
+      pumpWith(tester, (_) => screen, notes: notes, cards: cards);
 
   Future<void> close(WidgetTester tester, AppState state) async {
     // Unmount so the screen's autosave timer is cancelled.
@@ -194,6 +203,79 @@ void main() {
       expect(find.byIcon(Icons.check_box_rounded), findsOneWidget);
       final saved = state.cardById(card.id)!;
       expect(saved.blocks.single.text, contains('"checked"'));
+      await close(tester, state);
+    });
+  });
+
+  group('review fixes', () {
+    testWidgets('a pasted-link card opens its link from the read view',
+        (tester) async {
+      final note = Note(title: 'Card', blocks: [
+        NoteBlock(
+            type: NoteBlockType.link,
+            url: 'https://example.com/card',
+            linkTitle: 'Example card'),
+      ]);
+      final state = await pump(
+          tester, NoteEditorScreen(note: note, isNew: false),
+          notes: [note]);
+      await tester.tap(find.text('Example card'));
+      await tester.pumpAndSettle();
+      expect(launcher.launched, ['https://example.com/card']);
+      await close(tester, state);
+    });
+
+    testWidgets('following [[links]] back to an open note returns to it',
+        (tester) async {
+      // Two open screens on one note overwrite each other's edits, so going
+      // Alpha -> [[Beta]] -> [[Alpha]] must land back on the first Alpha.
+      final alpha = Note(title: 'Alpha', blocks: body([
+        {'insert': 'see [[Beta]]\n'},
+      ]));
+      final beta = Note(title: 'Beta', blocks: body([
+        {'insert': 'back to [[Alpha]]\n'},
+      ]));
+      final state = await pump(
+          tester, NoteEditorScreen(note: alpha, isNew: false),
+          notes: [alpha, beta]);
+
+      await tester.tapOnText(find.textRange.ofSubstring('Beta').first);
+      await tester.pumpAndSettle();
+      expect(find.byType(NoteEditorScreen, skipOffstage: false),
+          findsNWidgets(2));
+
+      await tester.tapOnText(find.textRange.ofSubstring('Alpha').first);
+      await tester.pumpAndSettle();
+      final open = find.byType(NoteEditorScreen, skipOffstage: false);
+      expect(open, findsOneWidget);
+      expect(tester.widget<NoteEditorScreen>(open).note.id, alpha.id);
+      await close(tester, state);
+    });
+
+    testWidgets('a fetched YouTube title survives editing the spark',
+        (tester) async {
+      final card = TweetCard(
+          url: 'https://www.youtube.com/watch?v=VTLnDqjfRZQ', fetched: true);
+      final oembed = http.Response(
+          '{"title":"How X works","author_name":"Channel",'
+          '"thumbnail_url":"https://i.ytimg.com/vi/VTLnDqjfRZQ/hqdefault.jpg"}',
+          200);
+      late AppState state;
+      await http.runWithClient(() async {
+        // Opened with the state's own card, exactly as the feed opens it.
+        state = await pumpWith(
+            tester, (s) => CardDetailScreen(card: s.cardById(card.id)!),
+            cards: [card]);
+      }, () => MockClient((_) async => oembed));
+      expect(state.cardById(card.id)!.noteTitle, 'How X works');
+
+      // Edit the spark's note and save: the title field must carry the
+      // fetched title, not the empty one it opened with.
+      await tester.tap(find.byIcon(Icons.edit_rounded));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.check_rounded));
+      await tester.pumpAndSettle();
+      expect(state.cardById(card.id)!.noteTitle, 'How X works');
       await close(tester, state);
     });
   });

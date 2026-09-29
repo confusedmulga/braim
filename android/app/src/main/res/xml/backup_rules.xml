@@ -2,4 +2,5 @@
 <!-- Android 11 and below: same rule as data_extraction_rules.xml. -->
 <full-backup-content>
     <exclude domain="external" path="Backups" />
+    <exclude domain="root" path="app_flutter/Backups" />
 </full-backup-content>

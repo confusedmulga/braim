@@ -47,6 +47,9 @@ void main() {
         'https://twitter.com/jack/status/20',
         'https://mobile.twitter.com/jack/status/20',
         'https://mobile.x.com/jack/status/20',
+        // Saved without a scheme by older builds.
+        'x.com/jack/status/20',
+        'twitter.com/jack/status/20',
       ]) {
         expect(TweetCard.isTweetUrl(u), isTrue, reason: u);
       }

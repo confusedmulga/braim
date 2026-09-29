@@ -4,12 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/l10n.dart';
 import 'package:provider/provider.dart';
 
 import '../services/backup_service.dart';
+import '../services/external_links.dart';
 import '../services/image_service.dart';
 import '../services/notification_service.dart';
 import '../state/app_state.dart';
@@ -22,13 +22,6 @@ const _privacyPolicyUrl =
     'https://github.com/confusedmulga/braim/blob/main/PRIVACY.md';
 const _termsUrl = 'https://github.com/confusedmulga/braim/blob/main/TERMS.md';
 
-Future<void> _openExternal(String url) async {
-  try {
-    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-  } catch (_) {
-    // No browser available; nothing else to do.
-  }
-}
 
 /// Human-readable "last backed up" line for the backup row.
 String _lastBackupText(BuildContext context, DateTime? last) {
@@ -403,559 +396,564 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  child: ListView(
+                  // One Column, not a lazy ListView: a ListView only estimates
+                  // the height of rows it hasn't built, and these rows range
+                  // from tall panels to small links, so the estimate ran
+                  // ~225px long. Reaching the bottom corrected it, and the
+                  // bounce sprang back up by itself. Settings is a few dozen
+                  // rows, cheap to build at once, and its height is then exact.
+                  child: SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(18, 18, 18, navInset + 28),
-                    children: [
-                      _SectionLabel(context.t.appearance),
-                      GlassPanel(
-                        borderRadius: 20,
-                        // The backdrop is flat and near-opaque; blurring it
-                        // would burn a BackdropFilter per panel for nothing.
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.brightness_6_outlined,
-                                    color: AppPalette.inkSecondary),
-                                const SizedBox(width: 14),
-                                Text(context.t.themeLabel,
-                                    style: TextStyle(
-                                        fontSize: 15.5,
-                                        color: AppPalette.inkPrimary)),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            SizedBox(
-                              width: double.infinity,
-                              child: SegmentedButton<String>(
-                                selected: {
-                                  state.darkFollowSystem
-                                      ? 'system'
-                                      : (state.darkMode ? 'dark' : 'light')
-                                },
-                                segments: [
-                                  ButtonSegment(
-                                    value: 'system',
-                                    label:
-                                        Text(context.t.appearanceSystem),
-                                    icon: const Icon(
-                                        Icons.brightness_auto_outlined),
-                                  ),
-                                  ButtonSegment(
-                                    value: 'light',
-                                    label: Text(context.t.appearanceLight),
-                                    icon: const Icon(
-                                        Icons.light_mode_outlined),
-                                  ),
-                                  ButtonSegment(
-                                    value: 'dark',
-                                    label: Text(context.t.appearanceDark),
-                                    icon:
-                                        const Icon(Icons.dark_mode_outlined),
-                                  ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _SectionLabel(context.t.appearance),
+                        GlassPanel(
+                          borderRadius: 20,
+                          // The backdrop is flat and near-opaque; blurring it
+                          // would burn a BackdropFilter per panel for nothing.
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.brightness_6_outlined,
+                                      color: AppPalette.inkSecondary),
+                                  const SizedBox(width: 14),
+                                  Text(context.t.themeLabel,
+                                      style: TextStyle(
+                                          fontSize: 15.5,
+                                          color: AppPalette.inkPrimary)),
                                 ],
-                                onSelectionChanged: (sel) {
-                                  final v = sel.first;
-                                  context.read<AppState>().setAppearance(
-                                        followSystem: v == 'system',
-                                        dark: v == 'dark',
-                                      );
-                                },
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.fontsSection),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.text_fields_rounded,
-                                    color: AppPalette.inkSecondary),
-                                const SizedBox(width: 14),
-                                Text(context.t.bodyFontLabel,
-                                    style: TextStyle(
-                                        fontSize: 15.5,
-                                        color: AppPalette.inkPrimary)),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppPalette.bubbleGlass,
-                                borderRadius: BorderRadius.circular(12),
-                                border:
-                                    Border.all(color: AppPalette.cardOutline),
-                              ),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  isExpanded: true,
-                                  value: state.noteBodyFont,
-                                  dropdownColor: AppPalette.sheet,
-                                  borderRadius: BorderRadius.circular(14),
-                                  items: [
-                                    for (final f in kBodyFontOptions)
-                                      DropdownMenuItem(
-                                        value: f.family,
-                                        child: Text(f.label,
-                                            style: TextStyle(
-                                                fontFamily: f.family,
-                                                fontSize: 16,
-                                                color: AppPalette.inkPrimary)),
-                                      ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                child: SegmentedButton<String>(
+                                  selected: {
+                                    state.darkFollowSystem
+                                        ? 'system'
+                                        : (state.darkMode ? 'dark' : 'light')
+                                  },
+                                  segments: [
+                                    ButtonSegment(
+                                      value: 'system',
+                                      label:
+                                          Text(context.t.appearanceSystem),
+                                      icon: const Icon(
+                                          Icons.brightness_auto_outlined),
+                                    ),
+                                    ButtonSegment(
+                                      value: 'light',
+                                      label: Text(context.t.appearanceLight),
+                                      icon: const Icon(
+                                          Icons.light_mode_outlined),
+                                    ),
+                                    ButtonSegment(
+                                      value: 'dark',
+                                      label: Text(context.t.appearanceDark),
+                                      icon:
+                                          const Icon(Icons.dark_mode_outlined),
+                                    ),
                                   ],
-                                  onChanged: (v) {
-                                    if (v != null) {
-                                      context
-                                          .read<AppState>()
-                                          .setNoteBodyFont(v);
-                                    }
+                                  onSelectionChanged: (sel) {
+                                    final v = sel.first;
+                                    context.read<AppState>().setAppearance(
+                                          followSystem: v == 'system',
+                                          dark: v == 'dark',
+                                        );
                                   },
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            // Live preview in the selected font.
-                            Text(context.t.bodyFontPreview,
-                                style: TextStyle(
-                                    fontFamily: state.noteBodyFont,
-                                    fontSize: 16,
-                                    height: 1.35,
-                                    color: AppPalette.inkSecondary)),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.feedBackgroundSection),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                        child: Column(
-                          children: [
-                            // A clear row per theme: preview, what it is, and
-                            // the photo button to pick the image.
-                            _bgModeRow(
-                              context,
-                              label: context.t.backgroundForLight,
-                              preview: _bgThumb(state.feedBackgroundLight,
-                                  'assets/wallpapers/bg_light.jpg'),
-                              isSet: state.feedBackgroundLight.isNotEmpty,
-                              onPick: () async {
-                                final path = await ImageService.pickSingle();
-                                if (path != null && context.mounted) {
-                                  context.read<AppState>().setFeedBackground(
-                                      dark: false, path: path);
-                                }
-                              },
-                            ),
-                            const SizedBox(height: 14),
-                            _bgModeRow(
-                              context,
-                              label: context.t.backgroundForDark,
-                              preview: _bgThumb(state.feedBackgroundDark,
-                                  'assets/wallpapers/bg_dark.jpg'),
-                              isSet: state.feedBackgroundDark.isNotEmpty,
-                              onPick: () async {
-                                final path = await ImageService.pickSingle();
-                                if (path != null && context.mounted) {
-                                  context.read<AppState>().setFeedBackground(
-                                      dark: true, path: path);
-                                }
-                              },
-                            ),
-                            if (state.feedBackgroundLight.isNotEmpty ||
-                                state.feedBackgroundDark.isNotEmpty)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: () => context
-                                      .read<AppState>()
-                                      .clearFeedBackgrounds(),
-                                  icon: const Icon(Icons.restart_alt_rounded,
-                                      size: 18),
-                                  label: Text(context.t.feedBackgroundReset),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.fontsSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.text_fields_rounded,
+                                      color: AppPalette.inkSecondary),
+                                  const SizedBox(width: 14),
+                                  Text(context.t.bodyFontLabel,
+                                      style: TextStyle(
+                                          fontSize: 15.5,
+                                          color: AppPalette.inkPrimary)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: AppPalette.bubbleGlass,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: AppPalette.cardOutline),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    isExpanded: true,
+                                    value: state.noteBodyFont,
+                                    dropdownColor: AppPalette.sheet,
+                                    borderRadius: BorderRadius.circular(14),
+                                    items: [
+                                      for (final f in kBodyFontOptions)
+                                        DropdownMenuItem(
+                                          value: f.family,
+                                          child: Text(f.label,
+                                              style: TextStyle(
+                                                  fontFamily: f.family,
+                                                  fontSize: 16,
+                                                  color: AppPalette.inkPrimary)),
+                                        ),
+                                    ],
+                                    onChanged: (v) {
+                                      if (v != null) {
+                                        context
+                                            .read<AppState>()
+                                            .setNoteBodyFont(v);
+                                      }
+                                    },
+                                  ),
                                 ),
                               ),
-                          ],
+                              const SizedBox(height: 12),
+                              // Live preview in the selected font.
+                              Text(context.t.bodyFontPreview,
+                                  style: TextStyle(
+                                      fontFamily: state.noteBodyFont,
+                                      fontSize: 16,
+                                      height: 1.35,
+                                      color: AppPalette.inkSecondary)),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.journalSection),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        child: SwitchListTile(
-                          secondary: Icon(Icons.auto_stories_outlined,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.journalReminderTitle,
-                              style: TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(context.t.journalReminderSubtitle,
-                              style: TextStyle(color: Color(0xFF5E5F69))),
-                          value: state.journalReminderOn,
-                          onChanged: (v) => _setJournalReminder(context, v),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.feedBackgroundSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                          child: Column(
+                            children: [
+                              // A clear row per theme: preview, what it is, and
+                              // the photo button to pick the image.
+                              _bgModeRow(
+                                context,
+                                label: context.t.backgroundForLight,
+                                preview: _bgThumb(state.feedBackgroundLight,
+                                    'assets/wallpapers/bg_light.jpg'),
+                                isSet: state.feedBackgroundLight.isNotEmpty,
+                                onPick: () async {
+                                  final path = await ImageService.pickSingle();
+                                  if (path != null && context.mounted) {
+                                    context.read<AppState>().setFeedBackground(
+                                        dark: false, path: path);
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 14),
+                              _bgModeRow(
+                                context,
+                                label: context.t.backgroundForDark,
+                                preview: _bgThumb(state.feedBackgroundDark,
+                                    'assets/wallpapers/bg_dark.jpg'),
+                                isSet: state.feedBackgroundDark.isNotEmpty,
+                                onPick: () async {
+                                  final path = await ImageService.pickSingle();
+                                  if (path != null && context.mounted) {
+                                    context.read<AppState>().setFeedBackground(
+                                        dark: true, path: path);
+                                  }
+                                },
+                              ),
+                              if (state.feedBackgroundLight.isNotEmpty ||
+                                  state.feedBackgroundDark.isNotEmpty)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: () => context
+                                        .read<AppState>()
+                                        .clearFeedBackgrounds(),
+                                    icon: const Icon(Icons.restart_alt_rounded,
+                                        size: 18),
+                                    label: Text(context.t.feedBackgroundReset),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      if (state.journalReminderOn) ...[
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.journalSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          child: SwitchListTile(
+                            secondary: Icon(Icons.auto_stories_outlined,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.journalReminderTitle,
+                                style: TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.journalReminderSubtitle,
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                            value: state.journalReminderOn,
+                            onChanged: (v) => _setJournalReminder(context, v),
+                          ),
+                        ),
+                        if (state.journalReminderOn) ...[
+                          const SizedBox(height: 12),
+                          GlassPanel(
+                            borderRadius: 20,
+                            blur: 0,
+                            color: AppPalette.surfaceGlass,
+                            padding: EdgeInsets.zero,
+                            onTap: () => _pickJournalTime(context),
+                            child: ListTile(
+                              leading: Icon(Icons.schedule_rounded,
+                                  color: AppPalette.inkPrimary),
+                              title: Text(context.t.journalReminderTime,
+                                  style:
+                                      TextStyle(color: AppPalette.inkPrimary)),
+                              trailing: Text(
+                                TimeOfDay(
+                                        hour: state.journalReminderMinutes ~/ 60,
+                                        minute:
+                                            state.journalReminderMinutes % 60)
+                                    .format(context),
+                                style: TextStyle(
+                                    color: AppPalette.inkPrimary,
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         GlassPanel(
                           borderRadius: 20,
                           blur: 0,
                           color: AppPalette.surfaceGlass,
                           padding: EdgeInsets.zero,
-                          onTap: () => _pickJournalTime(context),
+                          onTap: () => _testNotifications(context),
                           child: ListTile(
-                            leading: Icon(Icons.schedule_rounded,
+                            leading: Icon(Icons.notifications_active_outlined,
                                 color: AppPalette.inkPrimary),
-                            title: Text(context.t.journalReminderTime,
-                                style:
-                                    TextStyle(color: AppPalette.inkPrimary)),
-                            trailing: Text(
-                              TimeOfDay(
-                                      hour: state.journalReminderMinutes ~/ 60,
-                                      minute:
-                                          state.journalReminderMinutes % 60)
-                                  .format(context),
-                              style: TextStyle(
-                                  color: AppPalette.inkPrimary,
-                                  fontWeight: FontWeight.w700),
-                            ),
+                            title: Text(context.t.testNotification,
+                                style: TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.testNotificationSubtitle,
+                                style: TextStyle(color: Color(0xFF5E5F69))),
                           ),
                         ),
-                      ],
-                      const SizedBox(height: 12),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        onTap: () => _testNotifications(context),
-                        child: ListTile(
-                          leading: Icon(Icons.notifications_active_outlined,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.testNotification,
-                              style: TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(context.t.testNotificationSubtitle,
-                              style: TextStyle(color: Color(0xFF5E5F69))),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.backupSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          // The backdrop is flat and near-opaque; blurring it
+                          // would burn a BackdropFilter per panel for nothing.
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          // Save to a local target (Files, an SD card) through the
+                          // system save dialog.
+                          onTap: () => _saveToDevice(context),
+                          child: ListTile(
+                            leading: Icon(Icons.backup_outlined,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.backupTitle,
+                                style:
+                                    TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(
+                                _lastBackupText(context, state.lastBackupAt),
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.backupSection),
-                      GlassPanel(
-                        borderRadius: 20,
-                        // The backdrop is flat and near-opaque; blurring it
-                        // would burn a BackdropFilter per panel for nothing.
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        // Save to a local target (Files, an SD card) through the
-                        // system save dialog.
-                        onTap: () => _saveToDevice(context),
-                        child: ListTile(
-                          leading: Icon(Icons.backup_outlined,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.backupTitle,
-                              style:
-                                  TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(
-                              _lastBackupText(context, state.lastBackupAt),
-                              style: TextStyle(color: Color(0xFF5E5F69))),
+                        const SizedBox(height: 12),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          // Send a copy off-device (Drive, email, another app)
+                          // through the OS share sheet — the reliable Drive route.
+                          onTap: () => _shareBackup(context),
+                          child: ListTile(
+                            leading: Icon(Icons.share_outlined,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.sendBackupTitle,
+                                style: TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.sendBackupSubtitle,
+                                style:
+                                    const TextStyle(color: Color(0xFF5E5F69))),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        // Send a copy off-device (Drive, email, another app)
-                        // through the OS share sheet — the reliable Drive route.
-                        onTap: () => _shareBackup(context),
-                        child: ListTile(
-                          leading: Icon(Icons.share_outlined,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.sendBackupTitle,
-                              style: TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(context.t.sendBackupSubtitle,
-                              style:
-                                  const TextStyle(color: Color(0xFF5E5F69))),
+                        const SizedBox(height: 12),
+                        GlassPanel(
+                          borderRadius: 20,
+                          // The backdrop is flat and near-opaque; blurring it
+                          // would burn a BackdropFilter per panel for nothing.
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          onTap: () => _restore(context),
+                          child: ListTile(
+                            leading: Icon(Icons.settings_backup_restore_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.restoreFromBackup,
+                                style:
+                                    TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.restoreSubtitle,
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GlassPanel(
-                        borderRadius: 20,
-                        // The backdrop is flat and near-opaque; blurring it
-                        // would burn a BackdropFilter per panel for nothing.
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        onTap: () => _restore(context),
-                        child: ListTile(
-                          leading: Icon(Icons.settings_backup_restore_rounded,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.restoreFromBackup,
-                              style:
-                                  TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(context.t.restoreSubtitle,
-                              style: TextStyle(color: Color(0xFF5E5F69))),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SwitchListTile(
-                              secondary: Icon(Icons.schedule_rounded,
-                                  color: AppPalette.inkPrimary),
-                              title: Text(context.t.autoBackupTitle,
-                                  style: TextStyle(
-                                      color: AppPalette.inkPrimary)),
-                              subtitle: Text(context.t.autoBackupSubtitle,
-                                  style: const TextStyle(
-                                      color: Color(0xFF5E5F69))),
-                              value: state.localAutoBackup,
-                              onChanged: (v) => context
-                                  .read<AppState>()
-                                  .setLocalAutoBackup(v),
-                            ),
-                            if (state.localAutoBackup) ...[
-                              Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                                child: Row(
-                                  children: [
-                                    Text(context.t.autoBackupFrequency,
-                                        style: TextStyle(
-                                            color: AppPalette.inkPrimary,
-                                            fontWeight: FontWeight.w600)),
-                                    const Spacer(),
-                                    DropdownButton<String>(
-                                      value: state.localAutoBackupFreq,
-                                      underline: const SizedBox.shrink(),
-                                      dropdownColor: AppPalette.surfaceGlass,
-                                      borderRadius: BorderRadius.circular(12),
-                                      // An explicit style with no family falls
-                                      // back to the platform sans; name the app
-                                      // font so it matches the rest of the UI.
-                                      style: TextStyle(
-                                          fontFamily: kNoteHeadingFont,
-                                          color: AppPalette.inkPrimary,
-                                          fontSize: 15),
-                                      items: [
-                                        DropdownMenuItem(
-                                            value: 'daily',
-                                            child: Text(
-                                                context.t.autoBackupDaily)),
-                                        DropdownMenuItem(
-                                            value: 'weekly',
-                                            child: Text(
-                                                context.t.autoBackupWeekly)),
-                                        DropdownMenuItem(
-                                            value: 'monthly',
-                                            child: Text(
-                                                context.t.autoBackupMonthly)),
-                                      ],
-                                      onChanged: (v) {
-                                        if (v != null) {
-                                          context
-                                              .read<AppState>()
-                                              .setLocalAutoBackupFreq(v);
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
+                        const SizedBox(height: 12),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SwitchListTile(
+                                secondary: Icon(Icons.schedule_rounded,
+                                    color: AppPalette.inkPrimary),
+                                title: Text(context.t.autoBackupTitle,
+                                    style: TextStyle(
+                                        color: AppPalette.inkPrimary)),
+                                subtitle: Text(context.t.autoBackupSubtitle,
+                                    style: const TextStyle(
+                                        color: Color(0xFF5E5F69))),
+                                value: state.localAutoBackup,
+                                onChanged: (v) => context
+                                    .read<AppState>()
+                                    .setLocalAutoBackup(v),
                               ),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Icon(Icons.info_outline_rounded,
-                                        size: 16,
-                                        color: AppPalette.inkSecondary),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(context.t.autoBackupNote,
+                              if (state.localAutoBackup) ...[
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                                  child: Row(
+                                    children: [
+                                      Text(context.t.autoBackupFrequency,
                                           style: TextStyle(
-                                              fontSize: 12,
-                                              height: 1.35,
-                                              color:
-                                                  AppPalette.inkSecondary)),
-                                    ),
-                                  ],
+                                              color: AppPalette.inkPrimary,
+                                              fontWeight: FontWeight.w600)),
+                                      const Spacer(),
+                                      DropdownButton<String>(
+                                        value: state.localAutoBackupFreq,
+                                        underline: const SizedBox.shrink(),
+                                        dropdownColor: AppPalette.surfaceGlass,
+                                        borderRadius: BorderRadius.circular(12),
+                                        // An explicit style with no family falls
+                                        // back to the platform sans; name the app
+                                        // font so it matches the rest of the UI.
+                                        style: TextStyle(
+                                            fontFamily: kNoteHeadingFont,
+                                            color: AppPalette.inkPrimary,
+                                            fontSize: 15),
+                                        items: [
+                                          DropdownMenuItem(
+                                              value: 'daily',
+                                              child: Text(
+                                                  context.t.autoBackupDaily)),
+                                          DropdownMenuItem(
+                                              value: 'weekly',
+                                              child: Text(
+                                                  context.t.autoBackupWeekly)),
+                                          DropdownMenuItem(
+                                              value: 'monthly',
+                                              child: Text(
+                                                  context.t.autoBackupMonthly)),
+                                        ],
+                                        onChanged: (v) {
+                                          if (v != null) {
+                                            context
+                                                .read<AppState>()
+                                                .setLocalAutoBackupFreq(v);
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(Icons.info_outline_rounded,
+                                          size: 16,
+                                          color: AppPalette.inkSecondary),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(context.t.autoBackupNote,
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                height: 1.35,
+                                                color:
+                                                    AppPalette.inkSecondary)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      _DeviceBackupRestoreTile(
-                        onRestore: () => _restoreFromDevice(context),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.storageSection),
-                      GlassPanel(
-                        borderRadius: 20,
-                        // The backdrop is flat and near-opaque; blurring it
-                        // would burn a BackdropFilter per panel for nothing.
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          children: [
-                            _statRow(Icons.lightbulb_outline_rounded,
-                                context.t.statNotes,
-                                state.noteCount),
-                            _statRow(Icons.grid_view_rounded,
-                                context.t.statCortex,
-                                state.spaceCount),
-                            _statRow(Icons.style_outlined, context.t.statCards,
-                                state.cardCount),
-                          ],
+                        const SizedBox(height: 12),
+                        _DeviceBackupRestoreTile(
+                          onRestore: () => _restoreFromDevice(context),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        onTap: () => _loadSample(context),
-                        child: ListTile(
-                          leading: Icon(Icons.auto_awesome_rounded,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.loadSampleData,
-                              style: TextStyle(color: AppPalette.inkPrimary)),
-                          subtitle: Text(context.t.loadSampleDataSubtitle,
-                              style: TextStyle(color: Color(0xFF5E5F69))),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.storageSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          // The backdrop is flat and near-opaque; blurring it
+                          // would burn a BackdropFilter per panel for nothing.
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            children: [
+                              _statRow(Icons.lightbulb_outline_rounded,
+                                  context.t.statNotes,
+                                  state.noteCount),
+                              _statRow(Icons.grid_view_rounded,
+                                  context.t.statCortex,
+                                  state.spaceCount),
+                              _statRow(Icons.style_outlined, context.t.statCards,
+                                  state.cardCount),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      GlassPanel(
-                        borderRadius: 20,
-                        // The backdrop is flat and near-opaque; blurring it
-                        // would burn a BackdropFilter per panel for nothing.
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        onTap: () => _confirmClear(context),
-                        child: ListTile(
-                          leading: const Icon(Icons.delete_forever_rounded,
-                              color: Color(0xFFFF8A9B)),
-                          title: Text(context.t.clearAllData,
-                              style: TextStyle(color: Color(0xFFFF8A9B))),
+                        const SizedBox(height: 12),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          onTap: () => _loadSample(context),
+                          child: ListTile(
+                            leading: Icon(Icons.auto_awesome_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.loadSampleData,
+                                style: TextStyle(color: AppPalette.inkPrimary)),
+                            subtitle: Text(context.t.loadSampleDataSubtitle,
+                                style: TextStyle(color: Color(0xFF5E5F69))),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.guideSettingsLabel),
-                      GlassPanel(
-                        borderRadius: 20,
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: EdgeInsets.zero,
-                        child: ListTile(
-                          leading: Icon(Icons.help_outline_rounded,
-                              color: AppPalette.inkPrimary),
-                          title: Text(context.t.guideTitle,
+                        const SizedBox(height: 12),
+                        GlassPanel(
+                          borderRadius: 20,
+                          // The backdrop is flat and near-opaque; blurring it
+                          // would burn a BackdropFilter per panel for nothing.
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          onTap: () => _confirmClear(context),
+                          child: ListTile(
+                            leading: const Icon(Icons.delete_forever_rounded,
+                                color: Color(0xFFFF8A9B)),
+                            title: Text(context.t.clearAllData,
+                                style: TextStyle(color: Color(0xFFFF8A9B))),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.guideSettingsLabel),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            leading: Icon(Icons.help_outline_rounded,
+                                color: AppPalette.inkPrimary),
+                            title: Text(context.t.guideTitle,
+                                style: TextStyle(
+                                    color: AppPalette.inkPrimary,
+                                    fontWeight: FontWeight.w600)),
+                            trailing: Icon(Icons.chevron_right_rounded,
+                                color: AppPalette.inkSecondary),
+                            onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const GuideScreen())),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.aboutSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          // The backdrop is flat and near-opaque; blurring it
+                          // would burn a BackdropFilter per panel for nothing.
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(context.t.appTitle,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                      color: AppPalette.inkPrimary)),
+                              const SizedBox(height: 4),
+                              Text(context.t.aboutLine,
+                                  style: TextStyle(
+                                      color: AppPalette.inkSecondary,
+                                      fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _AboutLink(
+                          icon: Icons.privacy_tip_outlined,
+                          label: context.t.privacyPolicy,
+                          onTap: () => openExternalUrl(_privacyPolicyUrl),
+                        ),
+                        const SizedBox(height: 12),
+                        _AboutLink(
+                          icon: Icons.gavel_rounded,
+                          label: context.t.termsOfUse,
+                          onTap: () => openExternalUrl(_termsUrl),
+                        ),
+                        const SizedBox(height: 12),
+                        _AboutLink(
+                          icon: Icons.description_outlined,
+                          label: context.t.openSourceLicenses,
+                          onTap: () => _openLicenses(context),
+                        ),
+                        const SizedBox(height: 12),
+                        // Unavatar's free plan requires this credit, linked to
+                        // unavatar.io, on a credits screen.
+                        _AboutLink(
+                          icon: Icons.account_circle_outlined,
+                          label: context.t.avatarsByUnavatar,
+                          onTap: () => openExternalUrl('https://unavatar.io'),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+                          child: Text(context.t.trademarkNotice,
                               style: TextStyle(
-                                  color: AppPalette.inkPrimary,
-                                  fontWeight: FontWeight.w600)),
-                          trailing: Icon(Icons.chevron_right_rounded,
-                              color: AppPalette.inkSecondary),
-                          onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const GuideScreen())),
+                                  color: AppPalette.inkSecondary,
+                                  fontSize: 12)),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SectionLabel(context.t.aboutSection),
-                      GlassPanel(
-                        borderRadius: 20,
-                        // The backdrop is flat and near-opaque; blurring it
-                        // would burn a BackdropFilter per panel for nothing.
-                        blur: 0,
-                        color: AppPalette.surfaceGlass,
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(context.t.appTitle,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                    color: AppPalette.inkPrimary)),
-                            const SizedBox(height: 4),
-                            Text(context.t.aboutLine,
-                                style: TextStyle(
-                                    color: AppPalette.inkSecondary,
-                                    fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _AboutLink(
-                        icon: Icons.privacy_tip_outlined,
-                        label: context.t.privacyPolicy,
-                        onTap: () => _openExternal(_privacyPolicyUrl),
-                      ),
-                      const SizedBox(height: 12),
-                      _AboutLink(
-                        icon: Icons.gavel_rounded,
-                        label: context.t.termsOfUse,
-                        onTap: () => _openExternal(_termsUrl),
-                      ),
-                      const SizedBox(height: 12),
-                      _AboutLink(
-                        icon: Icons.description_outlined,
-                        label: context.t.openSourceLicenses,
-                        onTap: () => showLicensePage(
-                          context: context,
-                          applicationName: context.t.appTitle,
-                          applicationLegalese: '© 2026 Kalpesh Nichal',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Unavatar's free plan requires this credit, linked to
-                      // unavatar.io, on a credits screen.
-                      _AboutLink(
-                        icon: Icons.account_circle_outlined,
-                        label: context.t.avatarsByUnavatar,
-                        onTap: () => _openExternal('https://unavatar.io'),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
-                        child: Text(context.t.trademarkNotice,
-                            style: TextStyle(
-                                color: AppPalette.inkSecondary,
-                                fontSize: 12)),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -965,6 +963,31 @@ class SettingsScreen extends StatelessWidget {
       ),
       ),
     );
+  }
+
+  /// Flutter's built-in licenses page, painted like every other screen. The
+  /// app theme makes scaffolds and app bars transparent so each screen can
+  /// paint its own backdrop; this page paints none, so its top bar showed
+  /// whatever sat behind it. Here its page, bars and panels are all the solid
+  /// sheet colour Settings uses, in both light and dark mode.
+  void _openLicenses(BuildContext context) {
+    final base = Theme.of(context);
+    final sheet = AppPalette.sheet;
+    final applicationName = context.t.appTitle;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => Theme(
+        data: base.copyWith(
+          scaffoldBackgroundColor: sheet,
+          canvasColor: sheet,
+          cardColor: sheet,
+          appBarTheme: base.appBarTheme.copyWith(backgroundColor: sheet),
+        ),
+        child: LicensePage(
+          applicationName: applicationName,
+          applicationLegalese: '© 2026 Kalpesh Nichal',
+        ),
+      ),
+    ));
   }
 
   Widget _statRow(IconData icon, String label, int value) {
@@ -987,9 +1010,18 @@ Widget _bgThumb(String customPath, String fallbackAsset) {
     child: SizedBox(
       width: 46,
       height: 46,
-      child: customPath.isNotEmpty && File(customPath).existsSync()
-          ? Image.file(File(customPath), fit: BoxFit.cover, cacheWidth: 140)
-          : Image.asset(fallbackAsset, fit: BoxFit.cover, cacheWidth: 140),
+      // No synchronous existsSync() here: Settings rebuilds on every app
+      // change. A custom image that's gone falls back to the built-in one
+      // when the (asynchronous) load fails.
+      child: customPath.isEmpty
+          ? Image.asset(fallbackAsset, fit: BoxFit.cover, cacheWidth: 140)
+          : Image.file(
+              File(customPath),
+              fit: BoxFit.cover,
+              cacheWidth: 140,
+              errorBuilder: (_, _, _) => Image.asset(fallbackAsset,
+                  fit: BoxFit.cover, cacheWidth: 140),
+            ),
     ),
   );
 }
