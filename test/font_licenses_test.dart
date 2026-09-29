@@ -1,5 +1,7 @@
 import 'package:braim/main.dart';
+import 'package:braim/models/book.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -25,5 +27,15 @@ void main() {
       'Inter (font)',
       'Nunito (font)',
     });
+  });
+
+  test('every book face has the OFL license its ePub export embeds', () async {
+    for (final family in [...BookFonts.all, 'unknown-falls-back']) {
+      final text = await rootBundle.loadString(BookFonts.licenseAsset(family));
+      expect(text, contains('SIL OPEN FONT LICENSE Version 1.1'),
+          reason: family);
+    }
+    expect(BookFonts.licenseAsset('EB Garamond'),
+        'assets/fonts/OFL-EBGaramond.txt');
   });
 }

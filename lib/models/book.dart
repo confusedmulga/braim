@@ -137,6 +137,13 @@ class BookFonts {
           ),
         _ => ('assets/fonts/Lora-Regular.ttf', 'assets/fonts/Lora-Bold.ttf'),
       };
+
+  /// The bundled OFL license for a family's [assets], which must ship with
+  /// any export that embeds the font file itself (the ePub).
+  static String licenseAsset(String family) {
+    final file = assets(family).$1.split('/').last;
+    return 'assets/fonts/OFL-${file.split('-').first}.txt';
+  }
 }
 
 /// How finished a chapter is; shown as a small tag beside it.

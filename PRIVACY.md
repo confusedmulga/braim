@@ -29,6 +29,9 @@ account with us and no analytics library in the App. Specifically:
   store your biometric data or device credentials; the operating system handles
   this entirely. Crypt restricts access inside the App; it does not encrypt its
   contents.
+- **Clipboard.** When you tap the button to add a link, the App reads your
+  clipboard once to pre-fill the link field if it holds a web address. The text
+  stays on your device and is only saved if you confirm it.
 - **Backups you export** are saved as zip files where you choose. If you share
   one (for example, via email, cloud storage, or another app) using your
   device's share sheet, that transfer is between you and the destination you

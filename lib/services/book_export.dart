@@ -298,13 +298,19 @@ class BookExport {
       final (reg, bold) = BookFonts.assets(book.fontFamily);
       final regBytes = (await rootBundle.load(reg)).buffer.asUint8List();
       final boldBytes = (await rootBundle.load(bold)).buffer.asUint8List();
+      // The ePub carries the font file itself, and the OFL requires its
+      // copyright notice and license to travel with every copy of the font.
+      final license = await rootBundle
+          .loadString(BookFonts.licenseAsset(book.fontFamily));
       archive.addFile(
           ArchiveFile('OEBPS/fonts/body.ttf', regBytes.length, regBytes));
       archive.addFile(ArchiveFile(
           'OEBPS/fonts/body-bold.ttf', boldBytes.length, boldBytes));
+      addText('OEBPS/fonts/OFL.txt', license);
       fontItems =
           '<item id="font-body" href="fonts/body.ttf" media-type="application/x-font-ttf"/>\n'
-          '    <item id="font-body-bold" href="fonts/body-bold.ttf" media-type="application/x-font-ttf"/>';
+          '    <item id="font-body-bold" href="fonts/body-bold.ttf" media-type="application/x-font-ttf"/>\n'
+          '    <item id="font-license" href="fonts/OFL.txt" media-type="text/plain"/>';
       fontFace = '''
 @font-face { font-family: "BookFont"; font-weight: normal; font-style: normal; src: url(fonts/body.ttf); }
 @font-face { font-family: "BookFont"; font-weight: bold; font-style: normal; src: url(fonts/body-bold.ttf); }
