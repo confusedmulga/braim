@@ -712,6 +712,69 @@ class AppState extends ChangeNotifier {
       .map((s) => s.id)
       .toSet();
 
+  // ---- Braim Web visibility -------------------------------------------------
+  //
+  // What the laptop's browser may see. Every web route checks these; anything
+  // they refuse answers 404, so a Crypt note looks exactly like a missing one.
+
+  /// A note the web may show: a live, searchable note (not deleted, not in the
+  /// Crypt, not archived, not a journal entry, not a circuit placeholder), or a
+  /// manuscript page of a live book.
+  bool isWebVisibleNote(Note n) {
+    if (n.bookId == null) return _isSearchableNote(n);
+    if (!n.isManuscriptPage ||
+        n.deletedAt != null ||
+        n.archived ||
+        n.journalDate != null ||
+        n.spaceId == kCryptSpaceId) {
+      return false;
+    }
+    final book = bookById(n.bookId!);
+    return book != null && !book.archived && book.deletedAt == null;
+  }
+
+  int _webNotesRev = -1;
+  List<Note>? _webNotesCache;
+
+  /// The Home feed for the web: like [notes] but WITHOUT the phone's transient
+  /// tag filter, which is phone-only view state.
+  List<Note> get webFeedNotes {
+    if (_webNotesRev != _rev || _webNotesCache == null) {
+      _webNotesCache = _feedNotes(null);
+      _webNotesRev = _rev;
+    }
+    return _webNotesCache!;
+  }
+
+  int _webImagesRev = -1;
+  Set<String>? _webImagesCache;
+
+  /// Image file names the web may serve: images in web-visible notes and cards,
+  /// and covers of live books. Memoized on [revision].
+  Set<String> get webImageNames {
+    if (_webImagesRev != _rev || _webImagesCache == null) {
+      final names = <String>{};
+      void add(String path) {
+        final name = path.split(RegExp(r'[\\/]')).last;
+        if (name.isNotEmpty) names.add(name);
+      }
+
+      for (final n in _notes) {
+        if (isWebVisibleNote(n)) n.imagePaths.forEach(add);
+      }
+      for (final c in _cards) {
+        if (_isFeedCard(c)) c.imagePaths.forEach(add);
+      }
+      for (final b in books) {
+        final cover = b.coverPath;
+        if (cover != null) add(cover);
+      }
+      _webImagesCache = names;
+      _webImagesRev = _rev;
+    }
+    return _webImagesCache!;
+  }
+
   // ---- Journal -------------------------------------------------------------
 
   /// Canonical journal key for a calendar day: 'yyyy-MM-dd'.
@@ -900,22 +963,27 @@ class AppState extends ChangeNotifier {
     if (_notesRev != _rev ||
         _notesViewRev != _viewRev ||
         _notesCache == null) {
-      final hidden = _hiddenFoldIds();
-      final tag = _activeTag;
-      _notesCache = _notes
-          .where((n) =>
-              _isFeedNote(n) &&
-              !hidden.contains(_effectiveFolder(n)) &&
-              (tag == null || n.tags.contains(tag)))
-          .toList()
-        ..sort((a, b) {
-          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-          return _compareNotes(a, b);
-        });
+      _notesCache = _feedNotes(_activeTag);
       _notesRev = _rev;
       _notesViewRev = _viewRev;
     }
     return _notesCache!;
+  }
+
+  /// The Home feed, pinned first in the chosen sort order, narrowed to [tag]
+  /// when one is given. Backs both [notes] and [webFeedNotes].
+  List<Note> _feedNotes(String? tag) {
+    final hidden = _hiddenFoldIds();
+    return _notes
+        .where((n) =>
+            _isFeedNote(n) &&
+            !hidden.contains(_effectiveFolder(n)) &&
+            (tag == null || n.tags.contains(tag)))
+        .toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return _compareNotes(a, b);
+      });
   }
 
   /// Notes eligible for universal search: live notes (including branches and

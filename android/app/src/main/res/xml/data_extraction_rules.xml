@@ -3,12 +3,18 @@
      new phone can restore it, but the on-device "Backups" zips are kept out of
      the Google-account copy: each zip repeats the whole library, so they would
      push the app past Android's 25 MB cloud quota and stop the notes themselves
-     from being backed up. Device-to-device transfer keeps the default (all). -->
+     from being backed up. Device-to-device transfer keeps everything except
+     Braim Web's linked browsers, which a new phone must pair again. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="external" path="Backups" />
         <!-- Where the zips go when there is no external storage: the app's
              documents directory (path_provider's app_flutter, under root). -->
         <exclude domain="root" path="app_flutter/Backups" />
+        <!-- Braim Web's linked browsers: they belong to this phone only. -->
+        <exclude domain="root" path="app_flutter/braim_web_sessions.json" />
     </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="app_flutter/braim_web_sessions.json" />
+    </device-transfer>
 </data-extraction-rules>

@@ -63,6 +63,9 @@ dependencies:
   markdown_widget: ^2.3.2+8
   flutter_highlight: ^0.7.0
   markdown: ^7.3.1
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +81,7 @@ dev_dependencies:
   path_provider_platform_interface: any
   sqflite_common_ffi: ^2.4.0+3
   url_launcher_platform_interface: any
+  fake_async: ^1.3.3
 
 flutter_launcher_icons:
   android: true
@@ -102,6 +106,9 @@ flutter:
   assets:
     - assets/
     - assets/wallpapers/
+    # Braim Web's CSS and scripts. assets/web/vendor/ (Quill) is listed here
+    # once it exists; asset folders don't include their subfolders.
+    - assets/web/
     # OFL requires the license to travel with the font.
     - assets/fonts/OFL-SpaceGrotesk.txt
     - assets/fonts/OFL-Lora.txt

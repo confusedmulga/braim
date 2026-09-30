@@ -2366,4 +2366,64 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String get webSection => 'Braim Web';
+
+  @override
+  String get webCodeLabel => 'Pairing code';
+
+  @override
+  String get webLogOut => 'Log out';
+
+  @override
+  String get webPairTitle => 'Link this browser to Braim';
+
+  @override
+  String get webPairHelp =>
+      'Find the code in Braim on your phone: Settings, Braim Web.';
+
+  @override
+  String get webPairLink => 'Link';
+
+  @override
+  String get webPairWrong => 'That code didn\'t match';
+
+  @override
+  String get webPairExpired =>
+      'That code has expired. Use the new one on your phone.';
+
+  @override
+  String webPairLocked(int seconds) {
+    return 'Too many tries. Wait $seconds seconds.';
+  }
+
+  @override
+  String get webPairFull =>
+      'Too many linked browsers. Log one out on your phone.';
+
+  @override
+  String get webPairNewAddress =>
+      'If your phone\'s address changes, you\'ll need to link again.';
+
+  @override
+  String get webLinkedPlaceholder =>
+      'This browser is linked. Your library will appear here.';
+
+  @override
+  String get webOffline => 'Braim Web is off, or your phone is out of reach.';
+
+  @override
+  String get webNotFound => 'Not found';
+
+  @override
+  String get webError => 'Something went wrong';
+
+  @override
+  String webBrowserOn(String browser, String os) {
+    return '$browser on $os';
+  }
+
+  @override
+  String get webUnknownBrowser => 'Browser';
 }

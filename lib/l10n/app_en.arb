@@ -1020,5 +1020,33 @@
       "circuits": { "type": "int" },
       "notes": { "type": "int" }
     }
-  }
+  },
+  "webSection": "Braim Web",
+  "webCodeLabel": "Pairing code",
+  "webLogOut": "Log out",
+  "webPairTitle": "Link this browser to Braim",
+  "webPairHelp": "Find the code in Braim on your phone: Settings, Braim Web.",
+  "webPairLink": "Link",
+  "webPairWrong": "That code didn't match",
+  "webPairExpired": "That code has expired. Use the new one on your phone.",
+  "webPairLocked": "Too many tries. Wait {seconds} seconds.",
+  "@webPairLocked": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "webPairFull": "Too many linked browsers. Log one out on your phone.",
+  "webPairNewAddress": "If your phone's address changes, you'll need to link again.",
+  "webLinkedPlaceholder": "This browser is linked. Your library will appear here.",
+  "webOffline": "Braim Web is off, or your phone is out of reach.",
+  "webNotFound": "Not found",
+  "webError": "Something went wrong",
+  "webBrowserOn": "{browser} on {os}",
+  "@webBrowserOn": {
+    "placeholders": {
+      "browser": { "type": "String" },
+      "os": { "type": "String" }
+    }
+  },
+  "webUnknownBrowser": "Browser"
 }

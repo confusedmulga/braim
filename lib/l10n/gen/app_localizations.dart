@@ -4263,6 +4263,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{circuits, plural, =1{This includes a circuit, so all {notes} of its notes will move to Recently deleted, where they stay for 30 days.} other{This includes {circuits} circuits, so all {notes} of their notes will move to Recently deleted, where they stay for 30 days.}}'**
   String circuitBulkDeleteBody(int circuits, int notes);
+
+  /// No description provided for @webSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim Web'**
+  String get webSection;
+
+  /// No description provided for @webCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Pairing code'**
+  String get webCodeLabel;
+
+  /// No description provided for @webLogOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out'**
+  String get webLogOut;
+
+  /// No description provided for @webPairTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Link this browser to Braim'**
+  String get webPairTitle;
+
+  /// No description provided for @webPairHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Find the code in Braim on your phone: Settings, Braim Web.'**
+  String get webPairHelp;
+
+  /// No description provided for @webPairLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get webPairLink;
+
+  /// No description provided for @webPairWrong.
+  ///
+  /// In en, this message translates to:
+  /// **'That code didn\'t match'**
+  String get webPairWrong;
+
+  /// No description provided for @webPairExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'That code has expired. Use the new one on your phone.'**
+  String get webPairExpired;
+
+  /// No description provided for @webPairLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many tries. Wait {seconds} seconds.'**
+  String webPairLocked(int seconds);
+
+  /// No description provided for @webPairFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many linked browsers. Log one out on your phone.'**
+  String get webPairFull;
+
+  /// No description provided for @webPairNewAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'If your phone\'s address changes, you\'ll need to link again.'**
+  String get webPairNewAddress;
+
+  /// No description provided for @webLinkedPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'This browser is linked. Your library will appear here.'**
+  String get webLinkedPlaceholder;
+
+  /// No description provided for @webOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim Web is off, or your phone is out of reach.'**
+  String get webOffline;
+
+  /// No description provided for @webNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Not found'**
+  String get webNotFound;
+
+  /// No description provided for @webError.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong'**
+  String get webError;
+
+  /// No description provided for @webBrowserOn.
+  ///
+  /// In en, this message translates to:
+  /// **'{browser} on {os}'**
+  String webBrowserOn(String browser, String os);
+
+  /// No description provided for @webUnknownBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get webUnknownBrowser;
 }
 
 class _AppLocalizationsDelegate
