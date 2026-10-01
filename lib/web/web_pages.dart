@@ -3,11 +3,13 @@
 // section 8.
 
 import 'dart:convert';
+import 'dart:ui' show Rect;
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../models/note_block.dart';
 import '../models/tweet_card.dart';
+import '../services/circuit_layout.dart';
 import '../services/note_markdown.dart';
 import '../state/app_state.dart';
 import 'web_api.dart';
@@ -37,8 +39,11 @@ String pairPage(AppLocalizations l10n, WebAssets assets) {
   }
   final body =
       '''
-<main class="pair">
-<h1>${esc(l10n.webPairTitle)}</h1>
+<main class="desk-center">
+<div class="window dialog">
+${windowTitleBar(l10n.webPairTitle)}
+<div class="window-body pair">
+<img class="dialog-logo" src="${esc(assets.url('logo.svg'))}" alt="${esc(l10n.appTitle)}">
 <p class="muted">${esc(l10n.webPairHelp)}</p>
 <form id="pair-form" data-offline="${esc(l10n.webOffline)}" novalidate>
 <fieldset>
@@ -49,6 +54,8 @@ String pairPage(AppLocalizations l10n, WebAssets assets) {
 <button type="submit" class="primary">${esc(l10n.webPairLink)}</button>
 </form>
 <p class="muted small">${esc(l10n.webPairNewAddress)}</p>
+</div>
+</div>
 </main>''';
   return htmlPage(
     assets: assets,
@@ -58,13 +65,44 @@ String pairPage(AppLocalizations l10n, WebAssets assets) {
   );
 }
 
+/// A window's striped title bar: an optional close box (a link, or a button
+/// with [closeAction]), the title, an optional colour [label] square, and
+/// [end] (buttons) at the right. [title] is escaped here; [label] and [end]
+/// must already be.
+String windowTitleBar(
+  String title, {
+  String? closeHref,
+  String? closeAction,
+  String closeLabel = '',
+  String label = '',
+  String end = '',
+}) {
+  final close = closeHref != null
+      ? '<a class="close-box" href="${esc(closeHref)}" '
+            'title="${esc(closeLabel)}" aria-label="${esc(closeLabel)}"></a>'
+      : closeAction != null
+      ? '<button type="button" class="close-box" data-action="$closeAction" '
+            'title="${esc(closeLabel)}" aria-label="${esc(closeLabel)}">'
+            '</button>'
+      : '';
+  return '<header class="titlebar">$close'
+      '<h1 class="window-title"><span>$label${esc(title)}</span></h1>'
+      '${end.isEmpty ? '' : '<span class="titlebar-end">$end</span>'}'
+      '</header>';
+}
+
 /// A plain error page: a heading and a link home. Never a stack trace.
 String errorPage(AppLocalizations l10n, WebAssets assets, String message) {
   final body =
       '''
-<main class="narrow error">
-<h1>${esc(message)}</h1>
-<p><a href="/">${esc(l10n.appTitle)}</a></p>
+<main class="desk-center">
+<div class="window dialog alert">
+${windowTitleBar(l10n.appTitle)}
+<div class="window-body">
+<h1 class="alert-text">${esc(message)}</h1>
+<p class="alert-actions"><a class="button primary" href="/">${esc(l10n.webTabNotes)}</a></p>
+</div>
+</div>
 </main>''';
   return htmlPage(
     assets: assets,
@@ -94,6 +132,7 @@ class WebPages {
     String tab = '',
     String query = '',
     bool editor = false,
+    bool map = false,
   }) {
     String tabLink(String key, String href, String label) {
       final current = key == tab;
@@ -101,28 +140,48 @@ class WebPages {
           '${current ? ' aria-current="page"' : ''}>${esc(label)}</a>';
     }
 
+    // A classic menu bar: the logo in the corner, the File menu, then one
+    // item per section, the current one inverted.
     final body =
         '''
 <header class="bar">
-<a class="brand" href="/">${esc(l10n.appTitle)}</a>
-<nav class="tabs">${tabLink('notes', '/', l10n.webTabNotes)}${tabLink('sparks', '/sparks', l10n.webTabSparks)}</nav>
+<a class="logo" href="/" title="${esc(l10n.appTitle)}"><img src="${esc(assets.url('logo.svg'))}" alt="${esc(l10n.appTitle)}"></a>
+<details class="menu">
+<summary>${esc(l10n.webMenuFile)}</summary>
+<div class="menu-panel">
+<a href="/notes/new">${esc(l10n.webNewNote)}</a>
+<a href="/notes/new?kind=markdown">${esc(l10n.webNewMarkdown)}</a>
+<a href="/sparks#add">${esc(l10n.webAddLink)}</a>
+<a href="/circuits#new">${esc(l10n.newCircuit)}</a>
+<hr>
+<button type="button" data-action="find">${esc(l10n.webFind)}<kbd>/</kbd></button>
+<hr>
+<button type="button" data-action="logout">${esc(l10n.webLogOut)}</button>
+</div>
+</details>
+<nav class="tabs">${tabLink('notes', '/', l10n.webTabNotes)}${tabLink('sparks', '/sparks', l10n.webTabSparks)}${tabLink('circuits', '/circuits', l10n.webTabCircuits)}</nav>
 <div class="bar-end">
 <form class="search" action="/search" method="get" role="search">
 <input type="search" name="q" value="${esc(query)}" placeholder="${esc(l10n.webSearch)}" aria-label="${esc(l10n.webSearch)}">
 </form>
 <span class="dot" id="conn" role="status" title="${esc(l10n.webConnected)}" aria-label="${esc(l10n.webConnected)}"></span>
-<button type="button" class="plain" data-action="logout">${esc(l10n.webLogOut)}</button>
 </div>
 </header>
-<p class="banner" id="banner" hidden data-offline="${esc(l10n.webOffline)}" data-deleted="${esc(l10n.webDeletedOnPhone)}"></p>
+<p class="banner" id="banner" hidden data-offline="${esc(l10n.webOffline)}" data-deleted="${esc(l10n.webDeletedOnPhone)}" data-failed="${esc(l10n.webSaveFailed)}" data-cancel="${esc(l10n.cancel)}"></p>
 <main${view.attrs.isEmpty ? '' : ' ${view.attrs}'}>${view.main}</main>''';
     return htmlPage(
       assets: assets,
       title: view.title,
       body: body,
       csrf: csrf,
-      styles: editor ? const ['vendor/quill.core.css', 'editor.css'] : const [],
-      scripts: editor ? const ['vendor/quill.js', 'editor.js'] : const [],
+      styles: [
+        if (editor) ...const ['vendor/quill.core.css', 'editor.css'],
+        if (map) 'map.css',
+      ],
+      scripts: [
+        if (editor) ...const ['vendor/quill.js', 'editor.js'],
+        if (map) 'map.js',
+      ],
     );
   }
 
@@ -130,15 +189,13 @@ class WebPages {
 
   WebView feed() {
     final notes = state.webFeedNotes;
-    final out = StringBuffer('<div class="title-row"><h1 class="page-title">')
-      ..write(esc(l10n.webTabNotes))
-      ..write('</h1><div class="actions">')
-      ..write(
-        '<a class="button tonal" href="/notes/new?kind=markdown">'
-        '${esc(l10n.webNewMarkdown)}</a>',
-      )
-      ..write('<a class="button" href="/notes/new">${esc(l10n.webNewNote)}</a>')
-      ..write('</div></div>');
+    final out = StringBuffer(
+      _listWindowTop(
+        l10n.webTabNotes,
+        notes.length,
+        '<a class="button" href="/notes/new">${esc(l10n.webNewNote)}</a>',
+      ),
+    );
     if (notes.isEmpty) {
       out.write('<p class="empty">${esc(l10n.webFeedEmpty)}</p>');
     } else {
@@ -148,17 +205,25 @@ class WebPages {
       }
       out.write('</div>');
     }
+    out.write('</div></article>');
     return (title: l10n.webTabNotes, main: out.toString(), attrs: 'data-list');
   }
 
-  String _noteCard(Note n) {
+  /// The top of a list window, like a Finder window's: the striped title bar,
+  /// then an info bar with the item count and [actions] (already escaped).
+  String _listWindowTop(String title, int count, String actions) =>
+      '<article class="window list-window">${windowTitleBar(title)}'
+      '<div class="info-bar"><span>${esc(l10n.itemsCount(count))}</span>'
+      '$actions</div><div class="window-body">';
+
+  /// A feed card for [n], linking to the note or to [href].
+  String _noteCard(Note n, {String? href}) {
     final title = n.title.trim();
     final circuit = n.isCircuitRoot;
     final snippet = _snippet(n, title);
-    final tint = _tintStyle(n.colorValue);
     final out = StringBuffer(
-      '<a class="card${tint.isEmpty ? '' : ' tinted'}'
-      '${circuit ? ' circuit' : ''}" href="${esc(_noteHref(n))}"$tint>',
+      '<a class="card${circuit ? ' circuit' : ''}" '
+      'href="${esc(href ?? _noteHref(n))}">',
     );
     final thumb = n.thumbnailPath;
     if (thumb != null) {
@@ -182,7 +247,7 @@ class WebPages {
     } else if (title.isEmpty && !circuit) {
       out.write('<p class="snippet muted">${esc(l10n.emptyNote)}</p>');
     }
-    final meta = StringBuffer();
+    final meta = StringBuffer(_label(n.colorValue));
     if (n.pinned) {
       meta.write(_pin());
     }
@@ -212,35 +277,24 @@ class WebPages {
   // ---- A note ----------------------------------------------------------------
 
   WebView note(Note n) {
-    final tint = _tintStyle(n.colorValue);
-    final out =
-        StringBuffer(
-          _navRow(_back('/', l10n.webTabNotes), _editHref('/notes', n.id)),
-        )..write(
-          '<article class="note sheet${tint.isEmpty ? '' : ' tinted'}"$tint>',
-        );
-    final path = n.isCircuitNode ? state.circuitPath(n.id) : const <Note>[];
-    if (path.length > 1) {
-      out.write('<nav class="crumbs">');
-      for (var i = 0; i < path.length - 1; i++) {
-        final p = path[i];
-        final name = p.title.trim().isEmpty
-            ? l10n.untitledNote
-            : p.title.trim();
-        out.write(
-          state.isWebVisibleNote(p)
-              ? '<a href="${esc(_noteHref(p))}">${esc(name)}</a>'
-              : '<span>${esc(name)}</span>',
-        );
-        out.write('<span class="sep">›</span>');
-      }
-      out.write('</nav>');
-    }
     final title = n.title.trim();
-    // A Markdown note's title is its own first heading, drawn by the body.
-    if (!n.markdown && title.isNotEmpty) {
-      out.write('<h1 class="note-title">${esc(title)}</h1>');
-    }
+    final display = title.isNotEmpty
+        ? title
+        : (n.textPreview.isNotEmpty
+              ? n.textPreview.split('\n').first
+              : l10n.emptyNote);
+    final out = StringBuffer('<article class="window note">')
+      ..write(
+        windowTitleBar(
+          display,
+          closeHref: '/',
+          closeLabel: l10n.webTabNotes,
+          label: _label(n.colorValue),
+          end: _editButton('/notes', n.id),
+        ),
+      )
+      ..write(_circuitBar(n))
+      ..write('<div class="window-body">');
     if (n.tags.isNotEmpty) {
       out.write('<p class="note-meta">');
       for (final t in n.tags) {
@@ -250,12 +304,7 @@ class WebPages {
     }
     out
       ..write(_noteBody(n))
-      ..write('</article>');
-    final display = title.isNotEmpty
-        ? title
-        : (n.textPreview.isNotEmpty
-              ? n.textPreview.split('\n').first
-              : l10n.emptyNote);
+      ..write('</div></article>');
     final api = '/api/notes/${Uri.encodeComponent(n.id)}';
     return (
       title: display,
@@ -345,21 +394,279 @@ class WebPages {
         : externalLink(href, inner.toString(), cls: 'linkcard');
   }
 
+  // ---- Circuits ---------------------------------------------------------------
+
+  static String _mapHref(String rootId, {String? focus}) =>
+      '/circuits/${Uri.encodeComponent(rootId)}'
+      '${focus == null ? '' : '?focus=${Uri.encodeComponent(focus)}'}';
+
+  /// A circuit note's name on the map and in its crumbs.
+  String _nodeTitle(Note n) {
+    final t = n.title.trim();
+    if (t.isNotEmpty) return t;
+    return n.isCircuitRoot ? l10n.untitledCircuit : l10n.untitledNote;
+  }
+
+  /// Under a circuit note's title bar: the path from the first note, then
+  /// the map and the two ways to add a note, as on the phone. Empty for a
+  /// note outside a circuit.
+  String _circuitBar(Note n) {
+    final root = n.inCircuit ? state.circuitRootOf(n) : null;
+    if (root == null) return '';
+    final out = StringBuffer('<div class="info-bar circuit-bar">');
+    final path = state.circuitPath(n.id);
+    if (path.length > 1) {
+      out.write('<nav class="crumbs">');
+      for (var i = 0; i < path.length - 1; i++) {
+        final p = path[i];
+        final name = esc(_nodeTitle(p));
+        out
+          ..write(
+            state.isWebVisibleNote(p)
+                ? '<a href="${esc(_noteHref(p))}">$name</a>'
+                : '<span>$name</span>',
+          )
+          ..write('<span class="sep">›</span>');
+      }
+      out.write('</nav>');
+    } else {
+      out.write('<span>${esc(l10n.circuitLabel)}</span>');
+    }
+    final api = '/api/circuits/nodes/${Uri.encodeComponent(n.id)}';
+    String add(String what, String label) =>
+        '<button type="button" class="small" data-circuit-add="'
+        '${esc('$api/$what')}"><span aria-hidden="true">+</span>&nbsp;'
+        '${esc(label)}</button>';
+    out
+      ..write('<span class="actions">')
+      ..write(
+        '<a class="button small" href="'
+        '${esc(_mapHref(root.id, focus: n.id))}">${esc(l10n.circuitMap)}</a>',
+      );
+    if (!n.isCircuitRoot) out.write(add('sibling', l10n.circuitNextTo));
+    out
+      ..write(add('child', l10n.circuitUnder))
+      ..write('</span></div>');
+    return out.toString();
+  }
+
+  /// The circuits the web may show, newest first.
+  List<Note> _circuitRoots() =>
+      state.searchableNotes
+          .where((n) => n.isCircuitRoot && state.isWebVisibleNote(n))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  WebView circuits() {
+    final roots = _circuitRoots();
+    final out = StringBuffer(
+      _listWindowTop(
+        l10n.webTabCircuits,
+        roots.length,
+        '<form class="add-link" id="new-circuit">'
+        '<input type="text" name="title" required maxlength="200" '
+        'placeholder="${esc(l10n.title)}" aria-label="${esc(l10n.title)}">'
+        '<button type="submit" class="primary">${esc(l10n.newCircuit)}'
+        '</button></form>',
+      ),
+    );
+    if (roots.isEmpty) {
+      out.write('<p class="empty">${esc(l10n.webCircuitsEmpty)}</p>');
+    } else {
+      out.write('<div class="feed">');
+      for (final n in roots) {
+        out.write(_noteCard(n, href: _mapHref(n.id)));
+      }
+      out.write('</div>');
+    }
+    out.write('</div></article>');
+    return (
+      title: l10n.webTabCircuits,
+      main: out.toString(),
+      attrs: 'data-list',
+    );
+  }
+
+  static CircuitLayoutMode _layoutMode(String s) => switch (s) {
+    'ttb' => CircuitLayoutMode.ttb,
+    'radial' => CircuitLayoutMode.radial,
+    _ => CircuitLayoutMode.ltr,
+  };
+
+  /// The circuit's layout, built as the phone's map builds it (`_layoutFor`
+  /// in `circuit_map_screen.dart`), with nothing collapsed.
+  CircuitLayout circuitLayout(Note root) {
+    final children = <String, List<String>>{
+      for (final n in state.circuitNodes(root.id))
+        n.id: [for (final c in state.circuitChildren(n.id)) c.id],
+    };
+    return layoutCircuit(
+      rootId: root.id,
+      children: children,
+      mode: _layoutMode(root.circuitLayout),
+    );
+  }
+
+  /// Three square dots, for a node's More button.
+  static const _dots =
+      '<svg viewBox="0 0 14 4" width="14" height="4" aria-hidden="true">'
+      '<rect width="3" height="3" fill="currentColor"/>'
+      '<rect x="5.5" width="3" height="3" fill="currentColor"/>'
+      '<rect x="11" width="3" height="3" fill="currentColor"/></svg>';
+
+  /// A length in CSS pixels, without a needless `.0`.
+  static String _px(double v) {
+    final s = v.toStringAsFixed(1);
+    return s.endsWith('.0') ? s.substring(0, s.length - 2) : s;
+  }
+
+  /// One branch line, in the shapes of the phone's `_EdgePainter`: a cubic
+  /// through the midpoint left to right and top down, straight for radial.
+  static String _edgePath(CircuitLayoutMode mode, Rect p, Rect c) {
+    switch (mode) {
+      case CircuitLayoutMode.ltr:
+        final mid = _px((p.right + c.left) / 2);
+        return 'M${_px(p.right)} ${_px(p.center.dy)}'
+            'C$mid ${_px(p.center.dy)} $mid ${_px(c.center.dy)} '
+            '${_px(c.left)} ${_px(c.center.dy)}';
+      case CircuitLayoutMode.ttb:
+        final mid = _px((p.bottom + c.top) / 2);
+        return 'M${_px(p.center.dx)} ${_px(p.bottom)}'
+            'C${_px(p.center.dx)} $mid ${_px(c.center.dx)} $mid '
+            '${_px(c.center.dx)} ${_px(c.top)}';
+      case CircuitLayoutMode.radial:
+        return 'M${_px(p.center.dx)} ${_px(p.center.dy)}'
+            'L${_px(c.center.dx)} ${_px(c.center.dy)}';
+    }
+  }
+
+  /// The map: the canvas the layout gives, drawn on the server; `map.js`
+  /// pans and zooms it and runs each node's menu. [focus] is a node to centre
+  /// and flash.
+  WebView circuitMap(Note root, {String? focus}) {
+    final layout = circuitLayout(root);
+    final nodes = {for (final n in state.circuitNodes(root.id)) n.id: n};
+    final title = _nodeTitle(root);
+    final size = layout.canvasSize;
+    final strings = jsonEncode({
+      'save': l10n.save,
+      'cancel': l10n.cancel,
+      'failed': l10n.webSaveFailed,
+    });
+    final out =
+        StringBuffer(
+            '<article class="window map-window" id="map" '
+            'data-focus="${esc(focus ?? '')}" data-strings="${esc(strings)}" '
+            'data-layout-api="'
+            '${esc('/api/circuits/${Uri.encodeComponent(root.id)}/layout')}">',
+          )
+          ..write(
+            windowTitleBar(
+              title,
+              closeHref: '/circuits',
+              closeLabel: l10n.webTabCircuits,
+              label: _label(root.colorValue),
+            ),
+          )
+          ..write('<div class="info-bar"><span>')
+          ..write(
+            esc(l10n.circuitNotesCount(state.circuitBranchCount(root.id) + 1)),
+          )
+          ..write('</span><span class="actions"><span class="segmented">');
+    for (final (mode, label) in [
+      ('ltr', l10n.circuitLayoutLtr),
+      ('ttb', l10n.circuitLayoutTtb),
+      ('radial', l10n.circuitLayoutRadial),
+    ]) {
+      final current = _layoutMode(mode) == layout.mode;
+      out.write(
+        '<button type="button" data-layout="$mode"'
+        '${current ? ' class="current" aria-pressed="true"' : ''}>'
+        '${esc(label)}</button>',
+      );
+    }
+    out
+      ..write(
+        '</span><button type="button" class="small" data-view="fit">'
+        '${esc(l10n.webFit)}</button><button type="button" class="small" '
+        'data-view="centre">${esc(l10n.webCentre)}</button></span></div>',
+      )
+      ..write(
+        '<div class="map-view" id="map-view" tabindex="0">'
+        '<div class="canvas" id="map-canvas" style="width:${_px(size.width)}px;'
+        'height:${_px(size.height)}px">'
+        '<svg class="edges" width="${_px(size.width)}" '
+        'height="${_px(size.height)}" aria-hidden="true">',
+      );
+    for (final (parent, child) in layout.edges) {
+      final p = layout.rects[parent];
+      final c = layout.rects[child];
+      if (p == null || c == null) continue;
+      out.write('<path d="${_edgePath(layout.mode, p, c)}"/>');
+    }
+    out.write('</svg>');
+    final add = esc(l10n.circuitAddChild);
+    final more = esc(l10n.moreOptions);
+    layout.rects.forEach((id, r) {
+      final n = nodes[id];
+      if (n == null) return;
+      final name = esc(_nodeTitle(n));
+      final kind = n.isCircuitRoot
+          ? ' root'
+          : (n.circuitPlaceholder ? ' placeholder' : '');
+      out.write(
+        '<div class="node$kind${id == focus ? ' focus' : ''}" '
+        'data-node="${esc(id)}" style="left:${_px(r.left)}px;'
+        'top:${_px(r.top)}px;width:${_px(r.width)}px;'
+        'height:${_px(r.height)}px">',
+      );
+      if (n.circuitPlaceholder) {
+        // Not a note: it opens its menu (write a note here, or remove it).
+        out.write(
+          '<button type="button" class="node-open" data-menu="${esc(id)}">'
+          '<span class="node-title">$name</span></button></div>',
+        );
+        return;
+      }
+      out.write(
+        '<a class="node-open" href="${esc(_noteHref(n))}">'
+        '${_label(n.colorValue)}<span class="node-title">$name</span>'
+        '${n.markdown ? '<span class="badge" title="${esc(l10n.circuitTypeMarkdown)}">{ }</span>' : ''}'
+        '</a><button type="button" class="node-more" data-menu="${esc(id)}" '
+        'title="$more" aria-label="$more: $name">$_dots</button></div>',
+      );
+    });
+    // The + buttons go last, so they sit above every node.
+    for (final id in layout.rects.keys) {
+      final n = nodes[id];
+      if (n == null || n.circuitPlaceholder) continue;
+      final a = layout.plusAnchor(id);
+      out.write(
+        '<button type="button" class="node-plus" data-add="${esc(id)}" '
+        'style="left:${_px(a.dx - 14)}px;top:${_px(a.dy - 14)}px" '
+        'title="$add" aria-label="$add: ${esc(_nodeTitle(n))}">+</button>',
+      );
+    }
+    out.write('</div></div></article>');
+    return (title: title, main: out.toString(), attrs: 'data-map');
+  }
+
   // ---- Sparks -----------------------------------------------------------------
 
   WebView sparks() {
     final cards = state.cards;
-    final out = StringBuffer('<div class="title-row"><h1 class="page-title">')
-      ..write(esc(l10n.webTabSparks))
-      ..write('</h1>')
-      ..write(
+    final out = StringBuffer(
+      _listWindowTop(
+        l10n.webTabSparks,
+        cards.length,
         '<form class="add-link" id="add-link">'
         '<input type="url" name="url" required '
         'placeholder="${esc(l10n.webAddLinkHint)}" '
         'aria-label="${esc(l10n.webAddLinkHint)}">'
         '<button type="submit" class="primary">${esc(l10n.webAddLink)}'
-        '</button></form></div>',
-      );
+        '</button></form>',
+      ),
+    );
     if (cards.isEmpty) {
       out.write('<p class="empty">${esc(l10n.webSparksEmpty)}</p>');
     } else {
@@ -369,6 +676,7 @@ class WebPages {
       }
       out.write('</div>');
     }
+    out.write('</div></article>');
     return (title: l10n.webTabSparks, main: out.toString(), attrs: 'data-list');
   }
 
@@ -411,9 +719,16 @@ class WebPages {
   }
 
   WebView spark(TweetCard c) {
-    final out = StringBuffer(
-      _navRow(_back('/sparks', l10n.webTabSparks), _editHref('/sparks', c.id)),
-    )..write('<article class="spark-page sheet">');
+    final out = StringBuffer('<article class="window spark-page">')
+      ..write(
+        windowTitleBar(
+          sparkTitle(c),
+          closeHref: '/sparks',
+          closeLabel: l10n.webTabSparks,
+          end: _editButton('/sparks', c.id),
+        ),
+      )
+      ..write('<div class="window-body">');
     final cover = _remoteImage(c.coverImageUrl);
     if (cover != null) {
       out.write(
@@ -428,7 +743,7 @@ class WebPages {
     if (byline.isNotEmpty) {
       out.write('<p class="kicker">${esc(byline.join(' · '))}</p>');
     }
-    out.write('<h1 class="note-title">${esc(sparkTitle(c))}</h1>');
+    out.write('<h2 class="spark-title">${esc(sparkTitle(c))}</h2>');
     if (c.noteTitle.trim().isNotEmpty && c.authorName.trim().isNotEmpty) {
       out.write('<p class="muted">${esc(c.authorName.trim())}</p>');
     }
@@ -462,7 +777,7 @@ class WebPages {
     section(l10n.youtubeDescription, c.videoDescription);
     section(l10n.youtubeTranscript, c.videoTranscript);
     section(l10n.readerSection, c.articleText);
-    out.write('</article>');
+    out.write('</div></article>');
     final api = '/api/sparks/${Uri.encodeComponent(c.id)}';
     return (
       title: sparkTitle(c),
@@ -549,21 +864,30 @@ class WebPages {
         'linkPrompt': l10n.linkUrlHint,
       },
     });
-    // Saving is automatic, so the bar needs only the save state and Done.
-    final out = StringBuffer('<div class="nav-row edit-bar">')
-      ..write(
-        '<span class="save-state" id="save-state" aria-live="polite">'
-        '</span><button type="button" class="primary" data-action="done">'
-        '${esc(l10n.done)}</button></div>',
-      )
-      ..write(
-        '<div class="edit-banner" id="edit-banner" hidden><span></span>'
-        '<div class="edit-banner-actions"></div></div>',
-      )
-      ..write(
-        '<article class="sheet editor" id="editor" '
-        'data-config="${esc(config)}">',
-      );
+    // Saving is automatic: the title bar holds the save state and Done, and
+    // its close box is Done too.
+    final out =
+        StringBuffer(
+            '<div class="edit-banner" id="edit-banner" hidden><span></span>'
+            '<div class="edit-banner-actions"></div></div>',
+          )
+          ..write(
+            '<article class="window editor" id="editor" '
+            'data-config="${esc(config)}">',
+          )
+          ..write(
+            windowTitleBar(
+              pageTitle,
+              closeAction: 'done',
+              closeLabel: l10n.done,
+              end:
+                  '<span class="save-state" id="save-state" '
+                  'aria-live="polite"></span><button type="button" '
+                  'class="primary small" data-action="done">'
+                  '${esc(l10n.done)}</button>',
+            ),
+          )
+          ..write('<div class="window-body">');
     if (kind == 'rich') out.write(_toolbar());
     out.write(
       '<input class="title-input" id="title-input" type="text" '
@@ -617,7 +941,7 @@ class WebPages {
         );
       }
     }
-    out.write('</article>');
+    out.write('</div></article>');
     if (deleteLabel != null) {
       out.write(
         '<p class="danger-row"><button type="button" class="danger" '
@@ -704,9 +1028,12 @@ class WebPages {
     String query,
     ({List<Note> notes, List<TweetCard> cards})? found,
   ) {
-    final out = StringBuffer('<h1 class="page-title">')
-      ..write(esc(query.trim().isEmpty ? l10n.webSearch : query.trim()))
-      ..write('</h1>');
+    final heading = query.trim().isEmpty ? l10n.webSearch : query.trim();
+    final out = StringBuffer('<article class="window search-window">')
+      ..write(
+        windowTitleBar(heading, closeHref: '/', closeLabel: l10n.webTabNotes),
+      )
+      ..write('<div class="window-body">');
     if (found == null) {
       out.write('<p class="empty">${esc(l10n.webSearchPrompt)}</p>');
     } else if (found.notes.isEmpty && found.cards.isEmpty) {
@@ -740,11 +1067,8 @@ class WebPages {
         out.write('</ul></section>');
       }
     }
-    return (
-      title: query.trim().isEmpty ? l10n.webSearch : query.trim(),
-      main: out.toString(),
-      attrs: 'data-list',
-    );
+    out.write('</div></article>');
+    return (title: heading, main: out.toString(), attrs: 'data-list');
   }
 
   /// Title and subtitle as the phone's search list shows them.
@@ -780,29 +1104,30 @@ class WebPages {
   WebView notAvailable(String title) => (
     title: l10n.webNotAvailable,
     main:
-        '<div class="narrow"><h1 class="page-title">'
-        '${esc(l10n.webNotAvailable)}</h1>'
-        '${title.trim().isEmpty ? '' : '<p class="muted">${esc(title.trim())}</p>'}'
-        '</div>',
+        '<div class="window dialog alert">'
+        '${windowTitleBar(title.trim().isEmpty ? l10n.appTitle : title.trim())}'
+        '<div class="window-body"><h1 class="alert-text">'
+        '${esc(l10n.webNotAvailable)}</h1><p class="alert-actions">'
+        '<a class="button primary" href="/">${esc(l10n.webTabNotes)}</a>'
+        '</p></div></div>',
     attrs: '',
   );
 
   // ---- Helpers ------------------------------------------------------------------
 
-  /// The row above a note or spark: its back button, and Edit.
-  String _navRow(String back, String editHref) =>
-      '<div class="nav-row">$back<a class="button tonal" '
-      'href="${esc(editHref)}">${esc(l10n.editAction)}</a></div>';
+  /// Edit, at the right of a note's or spark's title bar.
+  String _editButton(String base, String id) =>
+      '<a class="button small" href="${esc(_editHref(base, id))}">'
+      '${esc(l10n.editAction)}</a>';
 
   static String _editHref(String base, String id) =>
       '$base/${Uri.encodeComponent(id)}/edit';
 
-  /// The back button above a note or spark: a chevron and the list's name.
-  static String _back(String href, String label) =>
-      '<a class="back" href="$href"><svg viewBox="0 0 10 16" aria-hidden="true">'
-      '<path d="M8.5 1.5 2 8l6.5 6.5" fill="none" stroke="currentColor" '
-      'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>'
-      '</svg>${esc(label)}</a>';
+  /// A note's colour tag as a Finder-style label square, or '' for none.
+  static String _label(int? value) {
+    final style = _tintStyle(value);
+    return style.isEmpty ? '' : '<span class="label"$style></span>';
+  }
 
   /// A small pushpin, for pinned notes and sparks.
   String _pin() =>

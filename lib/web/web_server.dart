@@ -202,6 +202,8 @@ class BraimWebServer {
     ..get('/sparks', _sparks)
     ..get('/sparks/<id>', _spark)
     ..get('/sparks/<id>/edit', _editSpark)
+    ..get('/circuits', _circuits)
+    ..get('/circuits/<id>', _circuitMap)
     ..post('/api/notes', (Request r) => api.createNote(r))
     ..put(
       '/api/notes/<id>',
@@ -238,6 +240,43 @@ class BraimWebServer {
     ..delete(
       '/api/sparks/<id>/lease',
       (Request r, String id) => api.releaseLease(id, _sid(r)),
+    )
+    ..post('/api/circuits', (Request r) => api.createCircuit(r))
+    ..get(
+      '/api/circuits/nodes/<id>/menu',
+      (Request r, String id) => api.circuitNodeMenu(id),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/child',
+      (Request r, String id) => api.addCircuitNote(r, id, under: true),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/sibling',
+      (Request r, String id) => api.addCircuitNote(r, id, under: false),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/rename',
+      (Request r, String id) => api.renameCircuitNode(r, id, _sid(r)),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/move',
+      (Request r, String id) => api.moveCircuitNode(r, id),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/delete',
+      (Request r, String id) => api.deleteCircuitNode(r, id, _sid(r)),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/write-placeholder',
+      (Request r, String id) => api.writePlaceholder(r, id),
+    )
+    ..post(
+      '/api/circuits/nodes/<id>/remove-placeholder',
+      (Request r, String id) => api.removePlaceholder(id),
+    )
+    ..post(
+      '/api/circuits/<id>/layout',
+      (Request r, String id) => api.setCircuitLayout(r, id),
     )
     ..get('/search', _search)
     ..get('/link', _link)
@@ -393,6 +432,7 @@ class BraimWebServer {
     String tab = '',
     String query = '',
     bool editor = false,
+    bool map = false,
   }) {
     if (request.url.queryParameters['partial'] == '1') {
       return _html(view.main);
@@ -404,6 +444,7 @@ class BraimWebServer {
         tab: tab,
         query: query,
         editor: editor,
+        map: map,
       ),
     );
   }
@@ -430,7 +471,12 @@ class BraimWebServer {
   Response _editNote(Request request, String id) {
     final n = _visibleNote(id);
     if (n == null) return _failure(request, 404);
-    return _view(request, pages.noteEditor(n), tab: 'notes', editor: true);
+    return _view(
+      request,
+      pages.noteEditor(n),
+      tab: n.inCircuit ? 'circuits' : 'notes',
+      editor: true,
+    );
   }
 
   Response _editSpark(Request request, String id) {
@@ -452,7 +498,33 @@ class BraimWebServer {
   Response _note(Request request, String id) {
     final n = _visibleNote(id);
     if (n == null) return _failure(request, 404);
-    return _view(request, pages.note(n), tab: 'notes');
+    return _view(
+      request,
+      pages.note(n),
+      tab: n.inCircuit ? 'circuits' : 'notes',
+    );
+  }
+
+  Response _circuits(Request request) =>
+      _view(request, pages.circuits(), tab: 'circuits');
+
+  /// A circuit's map. Only a first note has one, and only while the web may
+  /// show it; a placeholder can be focused but never opened.
+  Response _circuitMap(Request request, String id) {
+    final root = api.circuitRoot(id);
+    if (root == null) return _failure(request, 404);
+    final focus = request.url.queryParameters['focus'];
+    return _view(
+      request,
+      pages.circuitMap(
+        root,
+        focus: focus != null && api.circuitNode(focus)?.circuitId == id
+            ? focus
+            : null,
+      ),
+      tab: 'circuits',
+      map: true,
+    );
   }
 
   Response _sparks(Request request) =>

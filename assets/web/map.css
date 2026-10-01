@@ -1,0 +1,98 @@
+/* Braim Web's circuit map: a window you pan and zoom, with each note a small
+   framed box and the branches drawn in ink. Same classic desktop look as
+   app.css. */
+
+/* The map window fills the desk below the menu bar. */
+main[data-map] { padding-bottom: 24px; }
+.map-window {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+  height: calc(100vh - var(--bar-h) - 64px);
+  min-height: 440px;
+}
+.map-view {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  outline-offset: -4px;
+}
+.map-view.dragging { cursor: grabbing; }
+.canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-select: none; }
+.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.edges path { fill: none; stroke: var(--ink); stroke-width: 2; }
+
+.node {
+  position: absolute;
+  display: flex;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--shade);
+}
+/* The first note has the default button's second ring. */
+.node.root { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink), 6px 6px 0 4px var(--shade); }
+.node.placeholder { border-style: dashed; box-shadow: none; color: var(--ink-2); }
+.node-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 4px 6px 4px 10px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: 700 14px/1.2 var(--ui);
+  text-align: left;
+  text-decoration: none;
+  white-space: normal;
+}
+.node-open .label { flex: none; margin: 0; }
+.node-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.placeholder .node-title { font-weight: 500; font-style: italic; }
+.badge { flex: none; margin-left: auto; padding: 0 3px; border: 1.5px solid currentColor; font: 700 10px/13px var(--mono); }
+.node-more {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-left: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  font: 700 16px/1 var(--ui);
+}
+.node-open:hover, .node-more:hover { background: var(--ink); color: var(--paper); }
+.node-plus {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  font: 700 18px/1 var(--ui);
+  box-shadow: 3px 3px 0 var(--shade);
+}
+/* A node the map was opened on blinks, inverted, a few times. */
+.node.flash { animation: blink 0.36s steps(1) 4; }
+@keyframes blink { 50% { background: var(--ink); color: var(--paper); } }
+
+.node-menu { position: fixed; top: 0; left: 0; z-index: 40; max-width: min(320px, calc(100vw - 24px)); }
+.menu-head { margin: 0 0 4px; padding: 4px 16px 6px; border-bottom: 2px solid var(--ink); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 720px) {
+  main[data-map] { padding-bottom: 12px; }
+  .map-window { height: calc(100vh - 130px); min-height: 360px; }
+  .map-window .info-bar .segmented button { padding: 0 8px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node.flash { animation: none; background: var(--ink); color: var(--paper); }
+}

@@ -1100,5 +1100,11 @@
   "webMarkdownSource": "Markdown",
   "webPreview": "Preview",
   "webSubheading": "Sub-heading",
-  "webDeleteNote": "Delete note"
+  "webDeleteNote": "Delete note",
+  "webMenuFile": "File",
+  "webFind": "Find…",
+  "webTabCircuits": "Circuits",
+  "webCircuitsEmpty": "No circuits yet.",
+  "webFit": "Fit",
+  "webCentre": "Centre"
 }

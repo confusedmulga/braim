@@ -132,7 +132,22 @@
         if (res.status === 401) { location.replace('/pair'); return null; }
         return res.ok ? res.text() : null;
       })
-      .then(function (html) { if (html !== null && html !== undefined) main.innerHTML = html; })
+      .then(function (html) {
+        if (html === null || html === undefined) return;
+        // Keep a half-typed link or title, and its focus, across the swap.
+        var kept = {};
+        var active = document.activeElement;
+        var focused = active && active.form && active.form.id ? active.form.id : null;
+        main.querySelectorAll('form[id] input[name]').forEach(function (i) {
+          kept[i.form.id + ' ' + i.name] = i.value;
+        });
+        main.innerHTML = html;
+        main.querySelectorAll('form[id] input[name]').forEach(function (i) {
+          var v = kept[i.form.id + ' ' + i.name];
+          if (v) i.value = v;
+          if (i.form.id === focused) i.focus();
+        });
+      })
       .catch(function () {});
   }
 
@@ -195,22 +210,139 @@
     });
   }
 
-  // ---- Adding a spark ---------------------------------------------------------------
+  // ---- Adding a spark or a circuit ----------------------------------------------
+  // Listened for on the document: a list page's live refresh replaces its forms.
 
-  function setUpAddLink(form) {
-    form.addEventListener('submit', function (e) {
+  function offline() { showBanner(banner.getAttribute('data-offline')); }
+
+  // Posts [data] to [url] and hands the reply's JSON to [then], with a banner
+  // for a failure. [button] is disabled meanwhile.
+  function act(url, data, button, then) {
+    if (button) button.disabled = true;
+    return post(url, data).then(function (res) {
+      if (res.status === 401) { location.replace('/pair'); return; }
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (res.ok) then(body);
+        else showBanner(body.message || banner.getAttribute('data-failed'));
+      });
+    }).catch(offline).then(function () { if (button) button.disabled = false; });
+  }
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    var input = form.querySelector('input');
+    if (form.id === 'add-link') {
       e.preventDefault();
-      var input = form.querySelector('input');
-      var button = form.querySelector('button');
-      button.disabled = true;
-      post('/api/sparks', { url: input.value.trim() }).then(function (res) {
-        if (res.status === 401) { location.replace('/pair'); return; }
-        if (res.ok) { input.value = ''; refreshList(); }
-      }).catch(function () {
-        showBanner(banner.getAttribute('data-offline'));
-      }).then(function () { button.disabled = false; });
+      act('/api/sparks', { url: input.value.trim() }, form.querySelector('button'),
+        function () { input.value = ''; refreshList(); });
+    } else if (form.id === 'new-circuit') {
+      e.preventDefault();
+      if (!input.value.trim()) return;
+      act('/api/circuits', { title: input.value.trim() }, form.querySelector('button'),
+        function (body) { location.href = body.edit; });
+    }
+  });
+
+  // A circuit note's "+ Next to this note" and "+ Under this note": add, then
+  // show the new note on the map.
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-circuit-add]');
+    if (!b) return;
+    act(b.getAttribute('data-circuit-add'), { markdown: false }, b,
+      function (body) { location.href = body.map; });
+  });
+
+  // ---- Dialogs: a window on the desk, as the old system drew them --------------
+  // o: {title, text, body, input, value, choices: [{label, value, primary,
+  // danger}]}. Resolves with the chosen value (the typed text, for an input
+  // dialog), or null for Cancel and Esc.
+
+  function dialog(o) {
+    return new Promise(function (resolve) {
+      var opener = document.activeElement;
+      var back = document.createElement('div');
+      back.className = 'modal';
+      back.innerHTML = '<div class="window dialog" role="dialog" aria-modal="true" ' +
+        'aria-labelledby="dialog-title"><header class="titlebar"><h1 class="window-title" ' +
+        'id="dialog-title"><span></span></h1></header><div class="window-body"></div></div>';
+      back.querySelector('.window-title span').textContent = o.title || document.title;
+      var body = back.querySelector('.window-body');
+      function para(cls, text) {
+        if (!text) return;
+        var p = document.createElement('p');
+        p.className = cls;
+        p.textContent = text;
+        body.appendChild(p);
+      }
+      para('alert-text', o.text);
+      para('alert-body', o.body);
+      var input = null;
+      if (o.input) {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'dialog-input';
+        input.maxLength = 200;
+        input.value = o.value || '';
+        body.appendChild(input);
+      }
+      var row = document.createElement('p');
+      row.className = 'alert-actions';
+      body.appendChild(row);
+
+      function close(value) {
+        document.removeEventListener('keydown', onKey, true);
+        back.remove();
+        if (opener && opener.focus) opener.focus();
+        resolve(value);
+      }
+      function addButton(label, cls, value) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = cls;
+        b.textContent = label;
+        b.addEventListener('click', function () {
+          close(value === null ? null : (input ? input.value : value));
+        });
+        row.appendChild(b);
+        return b;
+      }
+      var cancel = addButton(banner ? banner.getAttribute('data-cancel') : 'Cancel', '', null);
+      var last = cancel;
+      (o.choices || []).forEach(function (c) {
+        last = addButton(c.label, c.danger ? 'danger' : (c.primary ? 'primary' : ''),
+          c.value === undefined ? true : c.value);
+      });
+
+      function onKey(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          close(null);
+        } else if (e.key === 'Enter' && e.target === input) {
+          e.preventDefault();
+          last.click();
+        } else if (e.key === 'Tab') {
+          // Keep the focus inside the dialog.
+          var stops = back.querySelectorAll('input, button');
+          var first = stops[0];
+          var end = stops[stops.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); end.focus(); }
+          else if (!e.shiftKey && document.activeElement === end) { e.preventDefault(); first.focus(); }
+        }
+      }
+      document.addEventListener('keydown', onKey, true);
+      back.addEventListener('mousedown', function (e) { if (e.target === back) close(null); });
+      document.body.appendChild(back);
+      if (input) { input.focus(); input.select(); } else cancel.focus();
     });
   }
+
+  // For map.js and editor.js.
+  window.braim = {
+    post: post,
+    dialog: dialog,
+    banner: showBanner,
+    text: function (key) { return banner ? banner.getAttribute('data-' + key) || '' : ''; }
+  };
 
   var source = null;
   var lastConnected = Date.now();
@@ -264,8 +396,6 @@
 
   var pairForm = document.getElementById('pair-form');
   if (pairForm) setUpPairing(pairForm);
-  var addLink = document.getElementById('add-link');
-  if (addLink) setUpAddLink(addLink);
   setUpTicks();
   document.querySelectorAll('[data-action="logout"]').forEach(setUpLogout);
 
@@ -277,6 +407,30 @@
 
   // Keys: "/" searches, "e" edits the open note or spark.
   var search = document.querySelector('.search input');
+
+  // ---- The File menu: a <details>, closed by a click elsewhere or Esc --------
+  var menu = document.querySelector('details.menu');
+  if (menu) {
+    document.addEventListener('click', function (e) {
+      if (menu.open && !menu.contains(e.target)) menu.open = false;
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !menu.open) return;
+      e.preventDefault();
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    });
+    var find = menu.querySelector('[data-action="find"]');
+    if (find) {
+      find.addEventListener('click', function () {
+        menu.open = false;
+        if (search) { search.focus(); search.select(); }
+      });
+    }
+  }
+  // File > Add a link and File > New circuit.
+  var field = { '#add': '#add-link input', '#new': '#new-circuit input' }[location.hash];
+  if (field && document.querySelector(field)) document.querySelector(field).focus();
   document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.target;

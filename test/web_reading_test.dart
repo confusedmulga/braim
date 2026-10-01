@@ -229,7 +229,7 @@ void main() {
 
     test('?partial=1 returns only the main area, for live refresh', () async {
       final html = await body('/?partial=1');
-      expect(html, startsWith('<div class="title-row"><h1 class="page-title">'));
+      expect(html, startsWith('<article class="window list-window">'));
       expect(html, isNot(contains('<html')));
       expect(html, contains('Groceries'));
     });
@@ -238,7 +238,9 @@ void main() {
       'a note page: title, body, images, link cards, watch attributes',
       () async {
         final html = await body('/notes/visible');
-        expect(html, contains('<h1 class="note-title">Groceries</h1>'));
+        // The title sits in the window's title bar, after any colour label.
+        expect(html, contains('<h1 class="window-title"><span>'));
+        expect(html, contains('Groceries</span></h1>'));
         expect(html, contains('<p>Milk and '));
         expect(
           html,
@@ -291,7 +293,7 @@ void main() {
       expect(list, contains('src="https:&#47;&#47;example.com&#47;cover.png"'));
 
       final html = await body('/sparks/spark');
-      expect(html, contains('<h1 class="note-title">Shared page</h1>'));
+      expect(html, contains('<h2 class="spark-title">Shared page</h2>'));
       expect(html, contains('Hi &lt;script&gt;alert(1)&lt;&#47;script&gt;'));
       expect(html, contains('&lt;img src=x onerror=alert(2)&gt;'));
       expect(html, contains('&lt;iframe'));

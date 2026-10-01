@@ -363,13 +363,19 @@
   });
   document.querySelectorAll('[data-action="delete"]').forEach(function (b) {
     b.addEventListener('click', function () {
-      if (!id || locked || !window.confirm(S.deleteConfirm)) return;
-      clearTimeout(timer);
-      dirty = false;
-      req('DELETE', itemUrl()).then(function (res) {
-        if (res.ok) { navigating = true; location.replace(cfg.list); return; }
-        return res.json().then(function (b2) { if (b2.error === 'leased') lock(b2.message); });
-      }).catch(function () { setState(S.failed); });
+      if (!id || locked) return;
+      var ask = window.braim
+        ? window.braim.dialog({ text: S.deleteConfirm, choices: [{ label: b.textContent, danger: true }] })
+        : Promise.resolve(window.confirm(S.deleteConfirm));
+      ask.then(function (ok) {
+        if (!ok) return;
+        clearTimeout(timer);
+        dirty = false;
+        req('DELETE', itemUrl()).then(function (res) {
+          if (res.ok) { navigating = true; location.replace(cfg.list); return; }
+          return res.json().then(function (b2) { if (b2.error === 'leased') lock(b2.message); });
+        }).catch(function () { setState(S.failed); });
+      });
     });
   });
 

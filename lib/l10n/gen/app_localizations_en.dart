@@ -2557,4 +2557,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webDeleteNote => 'Delete note';
+
+  @override
+  String get webMenuFile => 'File';
+
+  @override
+  String get webFind => 'Find…';
+
+  @override
+  String get webTabCircuits => 'Circuits';
+
+  @override
+  String get webCircuitsEmpty => 'No circuits yet.';
+
+  @override
+  String get webFit => 'Fit';
+
+  @override
+  String get webCentre => 'Centre';
 }

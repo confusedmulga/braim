@@ -18,11 +18,16 @@ class WebAssets {
   static const files = <String, String>{
     'app.css': 'text/css; charset=utf-8',
     'app.js': 'text/javascript; charset=utf-8',
+    // The Braim logo (assets/logos/braim.svg, cropped to the drawing).
+    'logo.svg': 'image/svg+xml',
     // Edit pages only.
     'editor.css': 'text/css; charset=utf-8',
     'editor.js': 'text/javascript; charset=utf-8',
     'vendor/quill.core.css': 'text/css; charset=utf-8',
     'vendor/quill.js': 'text/javascript; charset=utf-8',
+    // Circuit maps only.
+    'map.css': 'text/css; charset=utf-8',
+    'map.js': 'text/javascript; charset=utf-8',
   };
 
   /// Served at `/fonts/<name>` from `assets/fonts/<name>`.

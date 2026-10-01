@@ -457,6 +457,7 @@ API (JSON; mutations need the CSRF header):
 | `POST /api/circuits/nodes/<id>/delete` | `{mode: "all"\|"keepSlot"}` |
 | `POST /api/circuits/nodes/<id>/write-placeholder`, `.../remove-placeholder` | Placeholder actions |
 | `POST /api/circuits/<rootId>/layout` | `{mode: "ltr"\|"ttb"\|"radial"}` |
+| `GET /api/circuits/nodes/<id>/menu` | A node's menu and its dialog texts (added Phase 5) |
 | `POST /api/books/<id>/chapters` | Add a chapter |
 | `POST /api/books/<id>/pages/<pageId>/move` | `{delta: -1\|1}` |
 
@@ -495,26 +496,37 @@ the actual sizes in this file at the end of Phase 7.
 
 ### 8.2 Layout and look
 
-- A top bar: "Braim", tabs **Notes**, **Sparks**, **Circuits**, **Books**, a
-  search box, and **Log out**. A small dot shows the phone connection state.
+- A menu bar: the Braim logo (`assets/web/logo.svg`) in the left corner, a
+  **File** menu (New note, New Markdown note, Add a link, Find…, Log out),
+  then one menu title per section (**Notes**, **Sparks**, **Circuits**,
+  **Books**), the current one inverted; a search box and a small square at the
+  right show the phone connection state.
 - Content in a centred column; the notes feed is a responsive masonry of cards
   built with CSS columns, pinned first, in the phone's sort order.
-- Light and dark from `prefers-color-scheme`, with colours taken from
-  `AppPalette` so it looks like Braim. Note colour tags use `NoteColors`
-  swatches.
+- Light and dark from `prefers-color-scheme` (dark is the same design
+  inverted). Note colour tags show as Finder-style label squares in the
+  `NoteColors` swatch.
 - Fonts from the phone's bundle through `/fonts/<file>`, with
-  `font-display: swap`. **Changed by the owner on 2026-10-01:** Lora is the
-  one face for the whole site, chrome and note bodies alike; the phone's body
-  font setting does not apply on the web. Code blocks use the laptop's own
-  monospace face. `font-weight` never exceeds 700.
-- **Design language (owner, 2026-10-01):** follow a clean, native
-  look. Content first; a translucent navigation bar with a hairline
-  edge; Notes and Sparks as a segmented control; one tint colour for
-  everything interactive; grouping by fill and soft shadow rather than
-  outlines; large titles; inset grouped lists with chevrons for search; notes
-  and sparks on raised sheets with a back button; 44 px touch targets on
-  touch screens; focus rings; `prefers-reduced-motion` honoured. Keep new
-  pages in this language.
+  `font-display: swap`: Space Grotesk for the chrome (menus, title bars,
+  buttons, card titles), Lora for everything you read (note bodies, snippets,
+  spark text), JetBrains Mono for code and the Markdown source. The phone's
+  body font setting does not apply on the web. `font-weight` never exceeds
+  700.
+- **Design language (owner, 2026-10-01, replacing the earlier native-style
+  pass):** the classic black-and-white Mac desktop, copied from the owner's
+  reference picture of a Finder screen. A grey desk; square windows with a
+  2 px black frame, a hard offset shadow and a striped title bar with a close
+  box and a centred title; menus that drop from the menu bar with a hard
+  shadow and dotted separators; rounded push buttons, the default one with a
+  second ring; checkboxes that show an X; everything inverted on hover. Every
+  page is a window: the Notes and Sparks lists are Finder windows with an
+  info bar ("11 items" and the page's action) over a double rule; a note or
+  spark is a window whose close box goes back and whose title bar holds
+  **Edit**; editors keep the save state and **Done** in the title bar, and the
+  close box is Done too; search is a list view; pairing and errors are
+  dialogs on an empty desk. 44 px touch targets on touch screens, a dotted
+  focus outline, `prefers-reduced-motion` honoured. Keep new pages in this
+  language.
 - Keyboard: `/` focuses search, `e` edits the open item, `Ctrl+S` saves,
   `Esc` leaves the editor.
 
@@ -525,7 +537,8 @@ the actual sizes in this file at the end of Phase 7.
   expired. A line: "Find the code in Braim on your phone: Settings, Braim
   Web."
 - **Notes feed.** `webFeedNotes`. Circuit first notes render as a circuit
-  card, like the phone's. Buttons **New note** and **New Markdown note**.
+  card, like the phone's. **New note** in the window's info bar; **New note**
+  and **New Markdown note** in the File menu.
 - **Note view.** Title, then blocks in order: text blocks as HTML (9.1), image
   blocks as `<img src="/img/...">`, link blocks as small link cards. Markdown
   notes render sanitised Markdown. Tags and the colour tag display only.
@@ -802,6 +815,7 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webFeedEmpty` / `webSparksEmpty` | No notes yet. / No sparks yet. |
 | `webPinned` / `webConnected` | Pinned / Connected to your phone |
 | `webEditingElsewhere` | Being edited in another browser |
+| `webMenuFile` / `webFind` | File / Find… |
 | `webAddLinkHint` | Paste a link |
 | `webSaving` / `webSaved` / `webSaveFailed` | Saving… / Saved / Not saved. Check the connection and try again. |
 | `webMarkdownSource` / `webPreview` / `webSubheading` / `webDeleteNote` | Markdown / Preview / Sub-heading / Delete note |
@@ -815,6 +829,7 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webOffline` | Braim Web is off, or your phone is out of reach. |
 | `webNotAvailable` | Open this on your phone |
 | `webFit` / `webCentre` | Fit / Centre |
+| `webCircuitsEmpty` | No circuits yet. |
 | `webAddChapter` / `webRead` / `webBackToContents` | Add chapter / Read / Back to contents |
 
 ---
@@ -1024,17 +1039,61 @@ Phase 4 notes (2026-10-01; analyzer clean, 334 tests passing):
 - Sizes now: `app.css` 15.8 KB, `app.js` 9.9 KB, `editor.js` 14.1 KB (over the
   10 KB budget, about 4 KB gzipped), `editor.css` 4.0 KB, Quill 209 KB.
 
+Retro redesign (2026-10-01, after Phase 4; analyzer clean, 334 tests
+passing): the owner asked for the look of a classic Mac Finder screen, with
+the Braim logo in the menu-bar corner, so 8.2 now describes that design.
+`app.css` and `editor.css` were rewritten, the pages restructured into windows
+(`windowTitleBar` in `web_pages.dart`), and `app.js` gained the File menu
+(closes on an outside click or `Esc`; Find focuses search). New strings
+`webMenuFile` and `webFind`; the list windows reuse `itemsCount`. Sizes now:
+`app.css` 17.9 KB (over the 15 KB budget, about 4 KB compressed),
+`editor.css` 3.7 KB.
+
 ### Phase 5: Circuits
-- [ ] Circuits list and map (9.3), `map.js`.
-- [ ] Node menu actions, delete dialog, placeholder actions, layout switch.
-- [ ] New circuit; circuit controls and breadcrumb on note pages.
-- [ ] Tests:
+- [x] Circuits list and map (9.3), `map.js`.
+- [x] Node menu actions, delete dialog, placeholder actions, layout switch.
+- [x] New circuit; circuit controls and breadcrumb on note pages.
+- [x] Tests:
   - the map's node set and edges match `layoutCircuit` for all three modes;
   - add child and sibling produce "Note #N" titles; delete-only leaves
     "Placeholder #N"; delete-all trashes the subtree as one group;
   - placeholders are not openable as notes;
   - a map of a circuit whose first note is not web-visible answers 404.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Analyzer, tests, emulator build, owner test script.
+
+Phase 5 notes (2026-10-02; analyzer clean, 357 tests passing):
+
+- Files: the circuit handlers in `lib/web/web_api.dart`, the list, map and
+  circuit bar in `lib/web/web_pages.dart`, `assets/web/map.js` and
+  `assets/web/map.css` (map pages only). Tests: `test/web_circuits_test.dart`.
+- The map is drawn on the server from `layoutCircuit`, with the children
+  built as the phone's `_layoutFor` builds them and nothing collapsed. Nodes
+  are absolutely placed boxes, branches one SVG `path` each in the shapes of
+  `_EdgePainter`, and each live note gets a **+** at `plusAnchor`. `map.js`
+  pans (drag), zooms (mouse wheel, trackpad pinch, two-finger touch, `+`,
+  `-`, `0`), fits the nodes and their **+** buttons, and keeps the view when
+  it redraws after a change (its own or the phone's).
+- Extra route: `GET /api/circuits/nodes/<id>/menu` returns a node's menu
+  items and the texts of its rename and delete dialogs, so the rules and the
+  wording stay in Dart and `map.js` only draws what it is given.
+- A delete carries the `count` its dialog showed (a circuit's notes, or the
+  notes below a branch); if the circuit changed since, the server answers 409
+  `changed` instead of deleting something the dialog didn't mention. A delete
+  is also refused while any note it would remove is being edited elsewhere,
+  and a rename while that note is.
+- Dialogs (rename, delete, and the editor's Delete) are drawn by `app.js` as
+  retro windows (`braim.dialog`), replacing the browser's `confirm()`.
+- Fixed on the way: a list page's live refresh replaced the Add a link form
+  and lost its handler (the next submit went to the browser). Forms and the
+  circuit buttons are now handled on the document, and the refresh keeps a
+  half-typed value and its focus.
+- The menu bar lights **Circuits** on a circuit note's page and editor.
+- Strings: `webTabCircuits`, `webFit`, `webCentre` and `webCircuitsEmpty` are new;
+  New circuit reuses the existing `newCircuit` key (same wording), so
+  `webNewCircuit` was not added. The rest reuse the phone's circuit keys.
+- Sizes now: `app.js` 16.1 KB and `app.css` 19.6 KB (both over their 15 KB
+  budgets, about 5 KB compressed each), `map.js` 11.8 KB (over its 8 KB
+  budget, about 3.5 KB compressed), `map.css` 3.3 KB.
 
 ### Phase 6: Books
 - [ ] Shelf, contents with reordering and Add chapter, reader, page editor.
@@ -1205,10 +1264,13 @@ adb -s emulator-5554 forward tcp:8420 tcp:8420
 | Pairing with five browsers linked (added Phase 1) | Refused before the code is checked, so the code is not used up and no miss is counted |
 | Markdown sanitiser, script-like tags (added Phase 3) | `script`, `style`, `iframe`, `object`, `embed`, `template`, `svg` and similar are removed with their contents, not unwrapped: their text is code, not prose. Other disallowed tags keep their text, as 5.5 says |
 | Markdown links that are neither web, mail nor `/` paths (added Phase 3) | Dropped, keeping the link text (a `notes.md` link has nowhere to go) |
-| Note body font on the web (owner, 2026-10-01) | Lora everywhere; the phone's body font setting (Caveat by default) is not used on the web |
+| Note body font on the web (owner, 2026-10-01) | Lora for everything you read; the phone's body font setting (Caveat by default) is not used on the web |
+| Chrome font for the retro design (added with the redesign) | Space Grotesk, the bundled face closest to the reference picture's menu font; Lora stays for reading. Switching the chrome back to Lora is one line in `app.css` |
 | A `[[link]]` to a title that doesn't exist (added Phase 3) | The same "Open this on your phone" page as a hidden item, so the web never reveals whether a hidden note has that title |
 | An emptied rich note saved from the web (added Phase 4) | Kept, not deleted: the web only deletes with the Delete button. (An emptied Markdown note is deleted on leaving the editor, as on the phone) |
-| Deleting circuit notes and book pages from the web (added Phase 4) | Refused (400 `not_here`) until Phase 5 brings the circuit rules; book pages stay phone-only |
+| Deleting circuit notes and book pages from the web (added Phase 4, settled Phase 5) | Circuit notes delete from the map's node menu, which carries the circuit rules; `DELETE /api/notes/<id>` and the editor's Delete stay for plain notes. Book pages stay phone-only |
+| Adding from the map vs from a note page (added Phase 5) | From the map, the new note opens in its editor (9.3). From a note page, **+ Next to this note** and **+ Under this note** show the new note on the map, as the phone does |
+| A new circuit's title (added Phase 5) | Required: an untitled, empty first note could be cleaned up as an empty note |
 | Web edits autosave (added Phase 4) | 1.5 s after typing stops, plus Done, `Esc` and `Ctrl+S` |
 | Indent deeper than three levels (added Phase 4) | Saved as level 3, the phone's deepest |
 | Wi-Fi lost while on (added Phase 2) | Braim Web stays on and Settings shows "Connect to Wi-Fi or turn on your hotspot first" in place of the address; nothing can reach it meanwhile, and auto-off still applies |

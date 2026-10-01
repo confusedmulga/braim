@@ -1,5 +1,5 @@
-// Braim Web's JSON API for editing: notes, Markdown notes and sparks, their
-// edit leases and checklist ticks. Every change goes through AppState on the
+// Braim Web's JSON API for editing: notes, Markdown notes, sparks and
+// circuits, their edit leases and checklist ticks. Every change goes through AppState on the
 // live objects, so the phone, the database and backups see it at once. See
 // docs/braim-web-plan.md, sections 7.3, 9 and 11.
 
@@ -483,4 +483,333 @@ class WebApi {
     String id,
     String sessionId,
   ) => _check(request, id, sessionId, card: visibleSpark(id));
+
+  // ---- Circuits (section 9.3) ----------------------------------------------------
+
+  /// A circuit's first note, if the web may show its map.
+  Note? circuitRoot(String id) {
+    final n = state.noteById(id);
+    return n != null && n.isCircuitRoot && state.isWebVisibleNote(n) ? n : null;
+  }
+
+  /// A live note of a circuit whose map the web may show. Placeholders count:
+  /// they are drawn on the map, though they never open as notes.
+  Note? circuitNode(String id) {
+    final n = state.noteById(id);
+    if (n == null || n.deletedAt != null || !n.inCircuit) return null;
+    final root = state.circuitRootOf(n);
+    if (root == null || circuitRoot(root.id) == null) return null;
+    if (!n.circuitPlaceholder && !state.isWebVisibleNote(n)) return null;
+    return n;
+  }
+
+  /// A node's name as the map and its dialogs show it.
+  String nodeTitle(Note n) {
+    final t = n.title.trim();
+    if (t.isNotEmpty) return t;
+    return n.isCircuitRoot ? l10n.untitledCircuit : l10n.untitledNote;
+  }
+
+  String _noteTitle(int n) => l10n.circuitNoteTitle(n);
+
+  static Response _ok() => jsonResponse(200, {'ok': true});
+
+  /// Where a new or changed circuit note can be opened: its editor, or the
+  /// map focused on it.
+  static Map<String, Object> _places(Note n) => {
+    'id': n.id,
+    'edit': '/notes/${Uri.encodeComponent(n.id)}/edit',
+    'map':
+        '/circuits/${Uri.encodeComponent(n.circuitId ?? n.id)}'
+        '?focus=${Uri.encodeComponent(n.id)}',
+  };
+
+  /// [id] and every live note below it.
+  List<Note> _subtree(String id) {
+    final self = state.noteById(id);
+    final out = <Note>[?self];
+    final stack = [id];
+    final seen = <String>{id};
+    while (stack.isNotEmpty) {
+      for (final c in state.circuitChildren(stack.removeLast())) {
+        if (!seen.add(c.id)) continue;
+        out.add(c);
+        stack.add(c.id);
+      }
+    }
+    return out;
+  }
+
+  /// The number a delete dialog quotes: a circuit's notes, or the notes below
+  /// a branch. A delete sent with a different number was decided on a
+  /// circuit that has changed since.
+  int _deleteCount(Note n) => n.isCircuitRoot
+      ? state.circuitNodes(n.id).where((m) => !m.circuitPlaceholder).length
+      : state.circuitDescendantCount(n.id);
+
+  /// `POST /api/circuits`: a new circuit whose first note is titled `title`.
+  Future<Response> createCircuit(Request request) async {
+    final title = (await _body(request))?['title'];
+    if (title is! String) return _bad();
+    if (title.trim().isEmpty) return _bad('empty');
+    final root = state.newCircuitRootDraft()..title = title.trim();
+    await state.ensureCircuitRootSaved(root);
+    return jsonResponse(201, _places(root));
+  }
+
+  /// `POST /api/circuits/nodes/<id>/child` and `.../sibling`: a new "Note #N"
+  /// under [id] or right after it. On the first note, both add a child.
+  Future<Response> addCircuitNote(
+    Request request,
+    String id, {
+    required bool under,
+  }) async {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    if (node.circuitPlaceholder) return _bad('placeholder');
+    final body = await _body(request);
+    if (body == null) return _bad();
+    final markdown = body['markdown'] == true;
+    final created = under || node.isCircuitRoot
+        ? await state.addCircuitChild(
+            id,
+            markdown: markdown,
+            noteTitle: _noteTitle,
+          )
+        : await state.addCircuitSibling(
+            id,
+            markdown: markdown,
+            noteTitle: _noteTitle,
+          );
+    return jsonResponse(201, _places(created));
+  }
+
+  /// `POST /api/circuits/nodes/<id>/rename`. Refused while someone else is
+  /// editing the note, since their editor would put the old title back.
+  Future<Response> renameCircuitNode(
+    Request request,
+    String id,
+    String sessionId,
+  ) async {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    if (node.circuitPlaceholder) return _bad('placeholder');
+    final title = (await _body(request))?['title'];
+    if (title is! String) return _bad();
+    if (title.trim().isEmpty) return _bad('empty');
+    final conflict = _leaseConflict(id, webLeaseHolder(sessionId));
+    if (conflict != null) return conflict;
+    await state.renameCircuitNode(id, title.trim());
+    return _ok();
+  }
+
+  /// `POST /api/circuits/nodes/<id>/move`: up (-1) or down (1) among its
+  /// siblings.
+  Future<Response> moveCircuitNode(Request request, String id) async {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    if (node.isCircuitRoot) return _bad('root');
+    final delta = (await _body(request))?['delta'];
+    if (delta is! int || (delta != -1 && delta != 1)) return _bad();
+    await state.moveCircuitNode(id, delta);
+    return _ok();
+  }
+
+  /// `POST /api/circuits/nodes/<id>/delete`, by the phone's rules: the first
+  /// note takes the whole circuit; a branch with notes below it goes with
+  /// them (`all`) or leaves a placeholder (`keepSlot`); anything else goes
+  /// alone. `count` is the number the dialog showed.
+  Future<Response> deleteCircuitNode(
+    Request request,
+    String id,
+    String sessionId,
+  ) async {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    if (node.circuitPlaceholder) return _bad('placeholder');
+    final body = await _body(request);
+    if (body == null) return _bad();
+    final mode = body['mode'];
+    final keepSlot = mode == 'keepSlot';
+    final canKeepSlot =
+        !node.isCircuitRoot && state.circuitDescendantCount(id) > 0;
+    if (mode != 'all' && !(keepSlot && canKeepSlot)) return _bad();
+    if (body['count'] != _deleteCount(node)) {
+      return jsonResponse(409, {
+        'error': 'changed',
+        'message': l10n.webChangedOnPhone,
+      });
+    }
+    final members = node.isCircuitRoot
+        ? state.circuitNodes(id)
+        : (keepSlot ? [node] : _subtree(id));
+    final holder = webLeaseHolder(sessionId);
+    for (final m in members) {
+      final conflict = _leaseConflict(m.id, holder);
+      if (conflict != null) return conflict;
+    }
+    if (node.isCircuitRoot) {
+      await state.deleteCircuit(id);
+    } else if (keepSlot) {
+      await state.deleteCircuitNodeKeepSlot(
+        id,
+        placeholderTitle: l10n.circuitPlaceholderTitle,
+      );
+    } else {
+      await state.deleteCircuitSubtree(id);
+    }
+    for (final m in members) {
+      state.releaseEditLease(m.id, holder);
+    }
+    return jsonResponse(200, {
+      'ok': true,
+      if (node.isCircuitRoot) 'go': '/circuits',
+    });
+  }
+
+  /// `POST /api/circuits/nodes/<id>/write-placeholder`: the placeholder
+  /// becomes a new "Note #N" in place, rich or Markdown.
+  Future<Response> writePlaceholder(Request request, String id) async {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    if (!node.circuitPlaceholder) return _bad('not_placeholder');
+    final body = await _body(request);
+    if (body == null) return _bad();
+    final note = await state.writeIntoPlaceholder(
+      id,
+      markdown: body['markdown'] == true,
+      noteTitle: _noteTitle,
+    );
+    return jsonResponse(200, _places(note));
+  }
+
+  /// `POST /api/circuits/nodes/<id>/remove-placeholder`: the notes under it
+  /// move up into its place.
+  Future<Response> removePlaceholder(String id) async {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    if (!node.circuitPlaceholder) return _bad('not_placeholder');
+    await state.deletePlaceholder(id);
+    return _ok();
+  }
+
+  /// `POST /api/circuits/<rootId>/layout`: `ltr`, `ttb` or `radial`.
+  Future<Response> setCircuitLayout(Request request, String rootId) async {
+    if (circuitRoot(rootId) == null) return _notFound();
+    final mode = (await _body(request))?['mode'];
+    if (mode is! String || !const {'ltr', 'ttb', 'radial'}.contains(mode)) {
+      return _bad();
+    }
+    await state.setCircuitLayout(rootId, mode);
+    return _ok();
+  }
+
+  /// `GET /api/circuits/nodes/<id>/menu`: what a node's menu offers, with the
+  /// texts of its rename and delete dialogs, so the rules and the wording live
+  /// here rather than in `map.js`. Each item names an action and, for the
+  /// ones that post, the body to send.
+  Response circuitNodeMenu(String id) {
+    final node = circuitNode(id);
+    if (node == null) return _notFound();
+    final title = nodeTitle(node);
+    final api = '/api/circuits/nodes/${Uri.encodeComponent(id)}';
+    Map<String, Object> item(
+      String action,
+      String label, {
+      bool enabled = true,
+      bool danger = false,
+      Map<String, Object>? send,
+    }) => {
+      'action': action,
+      'label': label,
+      if (!enabled) 'disabled': true,
+      if (danger) 'danger': true,
+      'send': ?send,
+    };
+    const sep = {'sep': true};
+
+    if (node.circuitPlaceholder) {
+      return jsonResponse(200, {
+        'title': title,
+        'api': api,
+        'items': [
+          item('write', l10n.circuitSlotWrite, send: {'markdown': false}),
+          item(
+            'write',
+            l10n.circuitSlotWriteMarkdown,
+            send: {'markdown': true},
+          ),
+          sep,
+          item('remove', l10n.circuitSlotRemove, danger: true),
+        ],
+      });
+    }
+
+    final root = node.isCircuitRoot;
+    final items = <Map<String, Object>>[
+      item('open', l10n.circuitOpen),
+      item('rename', l10n.circuitRename),
+      sep,
+      if (!root)
+        item('sibling', l10n.circuitAddSibling, send: {'markdown': false}),
+      item('child', l10n.circuitAddChild, send: {'markdown': false}),
+      item('child', l10n.circuitAddChildMarkdown, send: {'markdown': true}),
+    ];
+    if (!root) {
+      final sibs = state.circuitChildren(node.circuitParentId!);
+      final i = sibs.indexWhere((s) => s.id == id);
+      items.addAll([
+        sep,
+        item('move', l10n.circuitMoveUp, enabled: i > 0, send: {'delta': -1}),
+        item(
+          'move',
+          l10n.circuitMoveDown,
+          enabled: i >= 0 && i < sibs.length - 1,
+          send: {'delta': 1},
+        ),
+      ]);
+    }
+    items.addAll([
+      sep,
+      item(
+        'delete',
+        root ? l10n.circuitDeleteCircuitAction : l10n.delete,
+        danger: true,
+      ),
+    ]);
+
+    final count = _deleteCount(node);
+    final deleteAlone = {'mode': 'all', 'label': l10n.delete, 'danger': true};
+    final Map<String, Object> delete = root
+        ? {
+            'text': l10n.circuitDeleteCircuit(title, count),
+            'choices': [deleteAlone],
+          }
+        : count == 0
+        ? {
+            'text': l10n.circuitDeleteTitle(title),
+            'body': l10n.deleteItemsConfirm(1),
+            'choices': [deleteAlone],
+          }
+        : {
+            'text': l10n.circuitDeleteTitle(title),
+            'body': l10n.circuitDeleteBody(count),
+            'choices': [
+              {'mode': 'keepSlot', 'label': l10n.circuitDeleteOnly},
+              {
+                'mode': 'all',
+                'label': l10n.circuitDeleteAll(count + 1),
+                'danger': true,
+              },
+            ],
+          };
+    return jsonResponse(200, {
+      'title': title,
+      'api': api,
+      'open': '/notes/${Uri.encodeComponent(id)}',
+      'items': items,
+      'rename': {'title': l10n.circuitRename, 'value': node.title.trim()},
+      'delete': {...delete, 'count': count},
+    });
+  }
 }

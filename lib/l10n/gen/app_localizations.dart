@@ -4617,6 +4617,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete note'**
   String get webDeleteNote;
+
+  /// No description provided for @webMenuFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get webMenuFile;
+
+  /// No description provided for @webFind.
+  ///
+  /// In en, this message translates to:
+  /// **'Find…'**
+  String get webFind;
+
+  /// No description provided for @webTabCircuits.
+  ///
+  /// In en, this message translates to:
+  /// **'Circuits'**
+  String get webTabCircuits;
+
+  /// No description provided for @webCircuitsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No circuits yet.'**
+  String get webCircuitsEmpty;
+
+  /// No description provided for @webFit.
+  ///
+  /// In en, this message translates to:
+  /// **'Fit'**
+  String get webFit;
+
+  /// No description provided for @webCentre.
+  ///
+  /// In en, this message translates to:
+  /// **'Centre'**
+  String get webCentre;
 }
 
 class _AppLocalizationsDelegate
