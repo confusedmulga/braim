@@ -13,7 +13,12 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
 import '../l10n/l10n.dart';
+import '../services/library_search.dart';
+import '../services/storage_service.dart';
 import '../state/app_state.dart';
+import '../models/note.dart';
+import '../models/tweet_card.dart';
+import '../services/wiki_links.dart';
 import 'web_assets.dart';
 import 'web_auth.dart';
 import 'web_events.dart';
@@ -26,11 +31,14 @@ class BraimWebServer {
     required this.sessions,
     WebPairing? pairing,
     WebAssets? assets,
+    Future<Directory> Function()? imagesDir,
     this.onActivity,
   }) : pairing = pairing ?? WebPairing(),
        assets = assets ?? WebAssets(),
+       _imagesDir = imagesDir ?? (() => StorageService.instance.imagesDir),
        l10n = lookupAppLocalizations(const Locale('en')) {
     events = WebEventHub(source: state, revision: () => state.revision);
+    pages = WebPages(l10n: l10n, assets: this.assets, state: state);
   }
 
   /// Tried in order until one is free.
@@ -46,6 +54,8 @@ class BraimWebServer {
   final WebAssets assets;
   final AppLocalizations l10n;
   late final WebEventHub events;
+  late final WebPages pages;
+  final Future<Directory> Function() _imagesDir;
 
   /// Called on every request from a linked browser, and on pairing; the
   /// controller's auto-off timer restarts on it. Event streams don't count:
@@ -178,7 +188,15 @@ class BraimWebServer {
   }
 
   Router _routes() => Router(notFoundHandler: (r) => _failure(r, 404))
-    ..get('/', _home)
+    ..get('/', _feed)
+    ..get('/notes/<id>', _note)
+    ..get('/sparks', _sparks)
+    ..get('/sparks/<id>', _spark)
+    ..get('/search', _search)
+    ..get('/link', _link)
+    ..get('/img/<name>', _image)
+    ..get('/api/notes/<id>/meta', _noteMeta)
+    ..get('/api/sparks/<id>/meta', _sparkMeta)
     ..post('/api/logout', _logout)
     ..post('/api/ping', _ping)
     ..get('/api/events', _events);
@@ -319,8 +337,138 @@ class BraimWebServer {
   WebSession _session(Request r) => r.context[_sessionKey] as WebSession;
   String _csrf(Request r) => r.context[_csrfKey] as String;
 
-  Response _home(Request request) =>
-      _html(homePlaceholderPage(l10n, assets, _csrf(request)));
+  /// A signed-in page, or just its main area when a list page refreshes
+  /// itself (`?partial=1`).
+  Response _view(
+    Request request,
+    WebView view, {
+    String tab = '',
+    String query = '',
+  }) {
+    if (request.url.queryParameters['partial'] == '1') {
+      return _html(view.main);
+    }
+    return _html(
+      pages.page(view, csrf: _csrf(request), tab: tab, query: query),
+    );
+  }
+
+  Response _feed(Request request) => _view(request, pages.feed(), tab: 'notes');
+
+  /// The live note [id] if the web may show it. Anything else, the Crypt
+  /// included, is indistinguishable from a note that doesn't exist.
+  Note? _visibleNote(String id) {
+    final n = state.noteById(id);
+    return n != null && state.isWebVisibleNote(n) ? n : null;
+  }
+
+  /// The spark [id] if it is in the Sparks feed's population.
+  TweetCard? _visibleSpark(String id) {
+    final c = state.cardById(id);
+    if (c == null) return null;
+    for (final s in state.searchableCards) {
+      if (identical(s, c)) return c;
+    }
+    return null;
+  }
+
+  Response _note(Request request, String id) {
+    final n = _visibleNote(id);
+    if (n == null) return _failure(request, 404);
+    return _view(request, pages.note(n), tab: 'notes');
+  }
+
+  Response _sparks(Request request) =>
+      _view(request, pages.sparks(), tab: 'sparks');
+
+  Response _spark(Request request, String id) {
+    final c = _visibleSpark(id);
+    if (c == null) return _failure(request, 404);
+    return _view(request, pages.spark(c), tab: 'sparks');
+  }
+
+  Future<Response> _search(Request request) async {
+    final query = request.url.queryParameters['q'] ?? '';
+    if (query.trim().isEmpty) {
+      return _view(request, pages.search(query, null), query: query);
+    }
+    final found = await searchLibrary(state, query);
+    // Search reaches journal entries and archived notes on the phone only.
+    final visible = (
+      notes: found.notes.where(state.isWebVisibleNote).toList(),
+      cards: found.cards,
+    );
+    return _view(request, pages.search(query, visible), query: query);
+  }
+
+  /// A `[[Title]]` link: to the note or spark it names, or a page saying it
+  /// lives on the phone. A missing item and a hidden one look the same.
+  Response _link(Request request) {
+    final title = request.url.queryParameters['to'] ?? '';
+    final ref = title.trim().isEmpty ? null : state.resolveLink(title);
+    if (ref != null) {
+      if (ref.kind == LinkKind.note && _visibleNote(ref.id) != null) {
+        return Response.found('/notes/${Uri.encodeComponent(ref.id)}');
+      }
+      if (ref.kind == LinkKind.card && _visibleSpark(ref.id) != null) {
+        return Response.found('/sparks/${Uri.encodeComponent(ref.id)}');
+      }
+    }
+    return _view(request, pages.notAvailable(title));
+  }
+
+  static final _imageNamePattern = RegExp(r'^[A-Za-z0-9._-]+$');
+
+  static const _imageTypes = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'heic': 'image/heic',
+    'heif': 'image/heif',
+    'bmp': 'image/bmp',
+  };
+
+  /// `/img/<name>`: only a plain file name, only an image a web-visible item
+  /// uses, and only from the images folder. A Crypt image stays private even
+  /// when its name is known.
+  Future<Response> _image(Request request, String name) async {
+    if (!_imageNamePattern.hasMatch(name) ||
+        name.startsWith('.') ||
+        !state.webImageNames.contains(name)) {
+      return _failure(request, 404);
+    }
+    final dir = await _imagesDir();
+    final file = File('${dir.path}${Platform.pathSeparator}$name');
+    if (!await file.exists()) return _failure(request, 404);
+    final dot = name.lastIndexOf('.');
+    final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+    return Response.ok(
+      file.openRead(),
+      headers: {
+        'content-type': _imageTypes[ext] ?? 'application/octet-stream',
+        'content-length': '${await file.length()}',
+        // Image names are UUIDs and never change content.
+        'cache-control': 'private, max-age=31536000, immutable',
+      },
+    );
+  }
+
+  Response _noteMeta(Request request, String id) {
+    final n = _visibleNote(id);
+    if (n == null) return _failure(request, 404);
+    return _json(200, {
+      'updatedAt': n.updatedAt.millisecondsSinceEpoch,
+      'leaseHolder': null,
+    });
+  }
+
+  Response _sparkMeta(Request request, String id) {
+    final c = _visibleSpark(id);
+    if (c == null) return _failure(request, 404);
+    return _json(200, {'updatedAt': c.updatedAt.millisecondsSinceEpoch});
+  }
 
   Future<Response> _logout(Request request) async {
     await logOut(_session(request).id);

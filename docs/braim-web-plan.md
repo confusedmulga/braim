@@ -784,12 +784,14 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webPairNewAddress` | If your phone's address changes, you'll need to link again. |
 | `webPairLink` | Link |
 | `webPairExpired` | That code has expired. Use the new one on your phone. |
-| `webLinkedPlaceholder` | This browser is linked. Your library will appear here. (Phase 1 home page; remove in Phase 3) |
 | `webNotFound` / `webError` | Not found / Something went wrong |
 | `webBrowserOn` / `webUnknownBrowser` | {browser} on {os} / Browser (linked-browser labels) |
 | `webNoBrowsers` | No browser is linked yet. |
 | `webLastSeen` | Last used {when} |
 | `webStartFailed` | Braim Web couldn't start. Try again. |
+| `webSearch` / `webSearchPrompt` | Search / Search your notes and sparks. |
+| `webFeedEmpty` / `webSparksEmpty` | No notes yet. / No sparks yet. |
+| `webPinned` / `webConnected` | Pinned / Connected to your phone |
 | `webTabNotes` / `webTabSparks` / `webTabCircuits` / `webTabBooks` | Notes / Sparks / Circuits / Books |
 | `webNewNote` / `webNewMarkdown` / `webAddLink` / `webNewCircuit` | New note / New Markdown note / Add a link / New circuit |
 | `webEditingOnPhone` | Being edited on your phone |
@@ -900,13 +902,13 @@ Phase 2 notes (2026-10-01):
   after, so Settings updates without waiting for the disk.
 
 ### Phase 3: Reading
-- [ ] Layout, tabs, CSS, `app.js`, light and dark.
-- [ ] Delta to HTML (9.1) with checklists, wiki-links and highlights.
-- [ ] Markdown to sanitised HTML (5.5).
-- [ ] Notes feed, note view, Sparks list and view, images, `/link`.
-- [ ] `searchLibrary` extraction (10) and the search page.
-- [ ] Event stream and page refresh (8.4), pings.
-- [ ] Tests:
+- [x] Layout, tabs, CSS, `app.js`, light and dark.
+- [x] Delta to HTML (9.1) with checklists, wiki-links and highlights.
+- [x] Markdown to sanitised HTML (5.5).
+- [x] Notes feed, note view, Sparks list and view, images, `/link`.
+- [x] `searchLibrary` extraction (10) and the search page.
+- [x] Event stream and page refresh (8.4), pings.
+- [x] Tests:
   - Delta to HTML for every format in the table, and legacy plain text;
   - sanitiser strips `<script>`, `<img onerror>`, `javascript:` links and raw
     HTML blocks, and keeps the allowed tags;
@@ -916,7 +918,33 @@ Phase 2 notes (2026-10-01):
   - `searchLibrary` returns what the widget showed before the extraction;
   - `/img` rejects path traversal and names not in `webImageNames`;
   - the event hub throttles to one event per 500 ms.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Analyzer, tests, emulator build, owner test script.
+
+Phase 3 notes (2026-10-01):
+
+- Tests: `test/web_render_test.dart` (Delta, Markdown sanitiser, scraped
+  text, `safeUrl`) and `test/web_reading_test.dart` (pages, partial refresh,
+  `/link`, `/img`, Crypt, deleted, archived and journal items, and
+  `searchLibrary` against a verbatim copy of the widget's old merge). The
+  throttle test is `web_events_test.dart` from Phase 1. "Any map" in the
+  Crypt test waits for the map itself (Phase 5).
+- `library_search.dart` has two parts: `matchLibrary` (synchronous, which the
+  phone widget calls from `build` with its cached index hits, unchanged) and
+  `searchLibrary` (async, which the web calls).
+- `WebPages` (`web_pages.dart`) builds each page's main area as a `WebView`;
+  the server wraps it in the shell or, for `?partial=1`, returns it alone.
+  Note bodies and card snippets are cached by a signature of the note's
+  content, not only `updatedAt`.
+- Only the Notes and Sparks tabs exist; Circuits and Books join in Phases 5
+  and 6. "New note", "Add a link" and edit buttons arrive with Phase 4, and
+  checklist boxes render disabled until then.
+- `GET /api/sparks/<id>/meta` (`{updatedAt}`) backs the spark page's live
+  refresh, like the note meta route.
+- A Markdown note's title is its own first heading, so the note page draws
+  no separate `h1` for it.
+- The note body font comes from `body[data-font]` and a fixed set of
+  `@font-face` rules in `app.css`; only the face in use is downloaded.
+- Sizes now: `app.css` 13.9 KB, `app.js` 7.4 KB (budgets 15 KB each).
 
 ### Phase 4: Editing notes and Sparks
 - [ ] Edit leases in AppState (11), with the phone editors taking and
@@ -1120,6 +1148,9 @@ adb -s emulator-5554 forward tcp:8420 tcp:8420
 | Cookie lifetime (added Phase 1) | Renewed on every page load, so a browser in use never has to pair again; the phone still drops a session after 30 idle days |
 | Event streams and auto-off (added Phase 1) | Opening or reconnecting an event stream is not activity: it neither resets auto-off nor updates "last seen". Page loads, API calls and visibility pings do |
 | Pairing with five browsers linked (added Phase 1) | Refused before the code is checked, so the code is not used up and no miss is counted |
+| Markdown sanitiser, script-like tags (added Phase 3) | `script`, `style`, `iframe`, `object`, `embed`, `template`, `svg` and similar are removed with their contents, not unwrapped: their text is code, not prose. Other disallowed tags keep their text, as 5.5 says |
+| Markdown links that are neither web, mail nor `/` paths (added Phase 3) | Dropped, keeping the link text (a `notes.md` link has nowhere to go) |
+| A `[[link]]` to a title that doesn't exist (added Phase 3) | The same "Open this on your phone" page as a hidden item, so the web never reveals whether a hidden note has that title |
 | Wi-Fi lost while on (added Phase 2) | Braim Web stays on and Settings shows "Connect to Wi-Fi or turn on your hotspot first" in place of the address; nothing can reach it meanwhile, and auto-off still applies |
 
 ---

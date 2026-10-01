@@ -4330,12 +4330,6 @@ abstract class AppLocalizations {
   /// **'If your phone\'s address changes, you\'ll need to link again.'**
   String get webPairNewAddress;
 
-  /// No description provided for @webLinkedPlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'This browser is linked. Your library will appear here.'**
-  String get webLinkedPlaceholder;
-
   /// No description provided for @webOffline.
   ///
   /// In en, this message translates to:
@@ -4449,6 +4443,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Braim Web turned off after 30 minutes without use'**
   String get webAutoOff;
+
+  /// No description provided for @webTabNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get webTabNotes;
+
+  /// No description provided for @webTabSparks.
+  ///
+  /// In en, this message translates to:
+  /// **'Sparks'**
+  String get webTabSparks;
+
+  /// No description provided for @webSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get webSearch;
+
+  /// No description provided for @webSearchPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Search your notes and sparks.'**
+  String get webSearchPrompt;
+
+  /// No description provided for @webFeedEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No notes yet.'**
+  String get webFeedEmpty;
+
+  /// No description provided for @webSparksEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No sparks yet.'**
+  String get webSparksEmpty;
+
+  /// No description provided for @webPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get webPinned;
+
+  /// No description provided for @webConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to your phone'**
+  String get webConnected;
+
+  /// No description provided for @webDeletedOnPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted on your phone'**
+  String get webDeletedOnPhone;
+
+  /// No description provided for @webNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this on your phone'**
+  String get webNotAvailable;
 }
 
 class _AppLocalizationsDelegate

@@ -1037,7 +1037,6 @@
   },
   "webPairFull": "Too many linked browsers. Log one out on your phone.",
   "webPairNewAddress": "If your phone's address changes, you'll need to link again.",
-  "webLinkedPlaceholder": "This browser is linked. Your library will appear here.",
   "webOffline": "Braim Web is off, or your phone is out of reach.",
   "webNotFound": "Not found",
   "webError": "Something went wrong",
@@ -1072,5 +1071,15 @@
   "webStartFailed": "Braim Web couldn't start. Try again.",
   "webNotificationTitle": "Braim Web is on",
   "webTurnOff": "Turn off",
-  "webAutoOff": "Braim Web turned off after 30 minutes without use"
+  "webAutoOff": "Braim Web turned off after 30 minutes without use",
+  "webTabNotes": "Notes",
+  "webTabSparks": "Sparks",
+  "webSearch": "Search",
+  "webSearchPrompt": "Search your notes and sparks.",
+  "webFeedEmpty": "No notes yet.",
+  "webSparksEmpty": "No sparks yet.",
+  "webPinned": "Pinned",
+  "webConnected": "Connected to your phone",
+  "webDeletedOnPhone": "Deleted on your phone",
+  "webNotAvailable": "Open this on your phone"
 }

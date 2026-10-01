@@ -9,6 +9,7 @@ import '../screens/card_detail_screen.dart';
 import '../screens/note_open.dart';
 import '../screens/space_detail_screen.dart';
 import '../services/db/db_store.dart';
+import '../services/library_search.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
@@ -63,58 +64,17 @@ class _UniversalSearchResultsState extends State<UniversalSearchResults> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final q = widget.query.toLowerCase().trim();
-    // A "#tag" query matches on tags too (with or without the leading #).
-    final qTag = q.replaceAll('#', '');
     final hits = _hitsFor == q ? _hits : null;
 
     final spaces =
         state.spaces.where((s) => s.name.toLowerCase().contains(q)).toList();
 
-    bool noteMatches(Note n) {
-      final space = state.spaceById(n.spaceId);
-      return n.title.toLowerCase().contains(q) ||
-          n.textPreview.toLowerCase().contains(q) ||
-          (qTag.isNotEmpty && n.tags.any((t) => t.contains(qTag))) ||
-          (space?.name.toLowerCase().contains(q) ?? false);
-    }
-
-    bool cardMatches(TweetCard c) {
-      return c.text.toLowerCase().contains(q) ||
-          c.noteTitle.toLowerCase().contains(q) ||
-          c.authorName.toLowerCase().contains(q) ||
-          c.authorHandle.toLowerCase().contains(q) ||
-          c.url.toLowerCase().contains(q);
-    }
-
-    // Index hits first, in rank order, then whatever the substring filter
-    // finds that the index didn't. Only items already visible in [visible]
-    // can surface, so crypt and deleted content stay hidden.
-    List<T> merge<T>(List<T> visible, String kind, bool Function(T) matches,
-        String Function(T) idOf) {
-      if (hits == null) return visible.where(matches).toList();
-      final byId = {for (final v in visible) idOf(v): v};
-      final out = <T>[];
-      final seen = <String>{};
-      for (final h in hits) {
-        if (h.kind != kind) continue;
-        final v = byId[h.id];
-        if (v != null && seen.add(h.id)) out.add(v);
-      }
-      for (final v in visible) {
-        if (matches(v) && seen.add(idOf(v))) out.add(v);
-      }
-      return out;
-    }
-
-    // Search over the *searchable* population, not the Home feed: it reaches
-    // into hidden folds (feed lists exclude those) and ignores the transient
-    // tag filter, while still keeping Crypt and deleted content out.
-    final notes = merge(state.searchableNotes, 'note', noteMatches, (n) => n.id);
-    final cards = merge(state.searchableCards, 'card', cardMatches, (c) => c.id);
-    final archivedNotes =
-        merge(state.archivedNotes, 'note', noteMatches, (n) => n.id);
-    final archivedCards =
-        merge(state.archivedCards, 'card', cardMatches, (c) => c.id);
+    // The same merge Braim Web's search uses (library_search.dart).
+    final found = matchLibrary(state, q, hits);
+    final notes = found.notes;
+    final cards = found.cards;
+    final archivedNotes = found.archivedNotes;
+    final archivedCards = found.archivedCards;
     final archivedCount = archivedNotes.length + archivedCards.length;
 
     if (spaces.isEmpty &&

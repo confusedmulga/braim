@@ -2407,10 +2407,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'If your phone\'s address changes, you\'ll need to link again.';
 
   @override
-  String get webLinkedPlaceholder =>
-      'This browser is linked. Your library will appear here.';
-
-  @override
   String get webOffline => 'Braim Web is off, or your phone is out of reach.';
 
   @override
@@ -2474,4 +2470,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webAutoOff => 'Braim Web turned off after 30 minutes without use';
+
+  @override
+  String get webTabNotes => 'Notes';
+
+  @override
+  String get webTabSparks => 'Sparks';
+
+  @override
+  String get webSearch => 'Search';
+
+  @override
+  String get webSearchPrompt => 'Search your notes and sparks.';
+
+  @override
+  String get webFeedEmpty => 'No notes yet.';
+
+  @override
+  String get webSparksEmpty => 'No sparks yet.';
+
+  @override
+  String get webPinned => 'Pinned';
+
+  @override
+  String get webConnected => 'Connected to your phone';
+
+  @override
+  String get webDeletedOnPhone => 'Deleted on your phone';
+
+  @override
+  String get webNotAvailable => 'Open this on your phone';
 }
