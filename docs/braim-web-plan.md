@@ -502,10 +502,19 @@ the actual sizes in this file at the end of Phase 7.
 - Light and dark from `prefers-color-scheme`, with colours taken from
   `AppPalette` so it looks like Braim. Note colour tags use `NoteColors`
   swatches.
-- Fonts from the phone's bundle through `/fonts/<file>`: Lora for headings,
-  and the user's note body font (`activeBodyFont`) for note bodies, with
-  `font-display: swap` and a system fallback. Everything else uses the system
-  font stack. `font-weight` never exceeds 700.
+- Fonts from the phone's bundle through `/fonts/<file>`, with
+  `font-display: swap`. **Changed by the owner on 2026-10-01:** Lora is the
+  one face for the whole site, chrome and note bodies alike; the phone's body
+  font setting does not apply on the web. Code blocks use the laptop's own
+  monospace face. `font-weight` never exceeds 700.
+- **Design language (owner, 2026-10-01):** follow a clean, native
+  look. Content first; a translucent navigation bar with a hairline
+  edge; Notes and Sparks as a segmented control; one tint colour for
+  everything interactive; grouping by fill and soft shadow rather than
+  outlines; large titles; inset grouped lists with chevrons for search; notes
+  and sparks on raised sheets with a back button; 44 px touch targets on
+  touch screens; focus rings; `prefers-reduced-motion` honoured. Keep new
+  pages in this language.
 - Keyboard: `/` focuses search, `e` edits the open item, `Ctrl+S` saves,
   `Esc` leaves the editor.
 
@@ -792,6 +801,10 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webSearch` / `webSearchPrompt` | Search / Search your notes and sparks. |
 | `webFeedEmpty` / `webSparksEmpty` | No notes yet. / No sparks yet. |
 | `webPinned` / `webConnected` | Pinned / Connected to your phone |
+| `webEditingElsewhere` | Being edited in another browser |
+| `webAddLinkHint` | Paste a link |
+| `webSaving` / `webSaved` / `webSaveFailed` | Saving… / Saved / Not saved. Check the connection and try again. |
+| `webMarkdownSource` / `webPreview` / `webSubheading` / `webDeleteNote` | Markdown / Preview / Sub-heading / Delete note |
 | `webTabNotes` / `webTabSparks` / `webTabCircuits` / `webTabBooks` | Notes / Sparks / Circuits / Books |
 | `webNewNote` / `webNewMarkdown` / `webAddLink` / `webNewCircuit` | New note / New Markdown note / Add a link / New circuit |
 | `webEditingOnPhone` | Being edited on your phone |
@@ -945,18 +958,24 @@ Phase 3 notes (2026-10-01):
 - The note body font comes from `body[data-font]` and a fixed set of
   `@font-face` rules in `app.css`; only the face in use is downloaded.
 - Sizes now: `app.css` 13.9 KB, `app.js` 7.4 KB (budgets 15 KB each).
+- Design pass (2026-10-01, after Phase 3): restyled to the design language
+  in 8.2 and switched to Lora throughout. Also fixed: the pairing boxes had
+  `maxlength="1"`, so a pasted or autofilled code kept only its first digit.
+  `app.css` 15.0 KB, `app.js` 7.5 KB. A local preview with the sample library
+  can be run with `flutter test --no-pub build/web_preview/web_preview_test.dart`
+  (git-ignored; it prints the address and a pairing code).
 
 ### Phase 4: Editing notes and Sparks
-- [ ] Edit leases in AppState (11), with the phone editors taking and
+- [x] Edit leases in AppState (11), with the phone editors taking and
       releasing them and `CardDetailScreen` refreshing.
-- [ ] Vendor Quill 2 (latest 2.x) into `assets/web/vendor/` with its licence;
+- [x] Vendor Quill 2 (latest 2.x) into `assets/web/vendor/` with its licence;
       record the version in `VERSIONS`.
-- [ ] `editor.js`: one Quill per text block, Braim's toolbar and highlight,
+- [x] `editor.js`: one Quill per text block, Braim's toolbar and highlight,
       format allowlist, lease renewals, save, 409 handling, `Ctrl+S`.
-- [ ] Create, save and delete notes; checklist ticks from the view page.
-- [ ] Markdown editor and preview.
-- [ ] Sparks: add from URL, edit, delete.
-- [ ] Tests:
+- [x] Create, save and delete notes; checklist ticks from the view page.
+- [x] Markdown editor and preview.
+- [x] Sparks: add from URL, edit, delete.
+- [x] Tests:
   - a Delta with every allowed format, as Quill 2 produces it, saves and reads
     back through `richToStyledLines` and `flutter_quill`'s
     `Document.fromJson` unchanged;
@@ -967,7 +986,43 @@ Phase 3 notes (2026-10-01):
     item; the phone cannot enter editing while the web holds the lease;
   - a web-created note is not added until it has content;
   - Markdown save updates the title from the first heading.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Analyzer, tests, emulator build, owner test script.
+
+Phase 4 notes (2026-10-01; analyzer clean, 334 tests passing):
+
+- Files: `lib/web/web_api.dart` (JSON handlers and `sanitizeDelta`),
+  `assets/web/editor.js`, `assets/web/editor.css` (edit pages only, so
+  `app.css` stays near budget), `assets/web/vendor/` (Quill 2.0.3: `quill.js`,
+  `quill.core.css`, `LICENSE-quill.txt`, `VERSIONS` with the npm integrity
+  hash). Tests: `test/web_editing_test.dart` (API, sanitiser, round trip
+  through `richToStyledLines` and `flutter_quill`'s `Document.fromJson`) and
+  `test/phone_lease_test.dart` (the phone editors under a browser's lease).
+- Quill's licence is registered in `main.dart` (`registerWebLicenses`), so it
+  appears with the app's other licences. **Release check (Phase 7):**
+  `quill.js` also bundles parchment (BSD-3-Clause), quill-delta, eventemitter3
+  and lodash-es (MIT); `LICENSE-quill.txt` names them, but their full
+  copyright notices still need adding before release.
+- Leases: `AppState.acquireEditLease` and friends, holder `kPhoneLease` or
+  `web:<sessionId>`, web leases 60 s (`webLeaseTtl`), renewed every 20 s by
+  `editor.js`, released on `pagehide` and on log out. The phone editors take
+  the lease when editing starts and release it on Done, on close (after the
+  delayed save, so a browser can't slip in before it), and on dispose. While
+  a browser holds it, they stay in reading mode and say "Being edited on your
+  computer"; read-view checklist ticks are refused the same way.
+- Phone-side fix found while wiring leases: the phone editors used to copy
+  their title field back into the note on several read-mode paths (wiki-link
+  taps, copy, size), which would have undone a rename made in the browser.
+  `_collect()` now does nothing while reading, and starting to edit refreshes
+  the fields from the live note.
+- Editing on the web saves itself 1.5 s after typing stops; Done, `Esc` and
+  `Ctrl+S` save at once. `e` on a note or spark page opens its editor.
+- A save may send a block without an `id`: it becomes a new text block at
+  the end (a new note, or a spark that had no note of its own).
+- Extra routes: `POST /api/sparks/<id>/check` (ticks in a spark's note) and
+  `leaseHolder` on `GET /api/sparks/<id>/meta`. Meta answers `phone`, `web`
+  (another browser) or `you`, never another session's id.
+- Sizes now: `app.css` 15.8 KB, `app.js` 9.9 KB, `editor.js` 14.1 KB (over the
+  10 KB budget, about 4 KB gzipped), `editor.css` 4.0 KB, Quill 209 KB.
 
 ### Phase 5: Circuits
 - [ ] Circuits list and map (9.3), `map.js`.
@@ -1150,7 +1205,12 @@ adb -s emulator-5554 forward tcp:8420 tcp:8420
 | Pairing with five browsers linked (added Phase 1) | Refused before the code is checked, so the code is not used up and no miss is counted |
 | Markdown sanitiser, script-like tags (added Phase 3) | `script`, `style`, `iframe`, `object`, `embed`, `template`, `svg` and similar are removed with their contents, not unwrapped: their text is code, not prose. Other disallowed tags keep their text, as 5.5 says |
 | Markdown links that are neither web, mail nor `/` paths (added Phase 3) | Dropped, keeping the link text (a `notes.md` link has nowhere to go) |
+| Note body font on the web (owner, 2026-10-01) | Lora everywhere; the phone's body font setting (Caveat by default) is not used on the web |
 | A `[[link]]` to a title that doesn't exist (added Phase 3) | The same "Open this on your phone" page as a hidden item, so the web never reveals whether a hidden note has that title |
+| An emptied rich note saved from the web (added Phase 4) | Kept, not deleted: the web only deletes with the Delete button. (An emptied Markdown note is deleted on leaving the editor, as on the phone) |
+| Deleting circuit notes and book pages from the web (added Phase 4) | Refused (400 `not_here`) until Phase 5 brings the circuit rules; book pages stay phone-only |
+| Web edits autosave (added Phase 4) | 1.5 s after typing stops, plus Done, `Esc` and `Ctrl+S` |
+| Indent deeper than three levels (added Phase 4) | Saved as level 3, the phone's deepest |
 | Wi-Fi lost while on (added Phase 2) | Braim Web stays on and Settings shows "Connect to Wi-Fi or turn on your hotspot first" in place of the address; nothing can reach it meanwhile, and auto-off still applies |
 
 ---

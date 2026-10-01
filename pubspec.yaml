@@ -106,9 +106,10 @@ flutter:
   assets:
     - assets/
     - assets/wallpapers/
-    # Braim Web's CSS and scripts. assets/web/vendor/ (Quill) is listed here
-    # once it exists; asset folders don't include their subfolders.
+    # Braim Web's CSS and scripts, and the editor it vendors (Quill). Asset
+    # folders don't include their subfolders, so each is listed.
     - assets/web/
+    - assets/web/vendor/
     # OFL requires the license to travel with the font.
     - assets/fonts/OFL-SpaceGrotesk.txt
     - assets/fonts/OFL-Lora.txt

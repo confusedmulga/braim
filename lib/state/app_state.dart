@@ -28,6 +28,10 @@ import '../theme/app_theme.dart';
 /// Reserved space id for the locked Crypt folder.
 const String kCryptSpaceId = '__crypt__';
 
+/// The edit-lease holder for the phone's own editors (see
+/// [AppState.acquireEditLease]); browsers hold `web:<sessionId>`.
+const String kPhoneLease = 'phone';
+
 const _uuid = Uuid();
 
 /// Default title for a new note created inside a circuit: "Note #1", "Note #2"…
@@ -732,6 +736,55 @@ class AppState extends ChangeNotifier {
     final book = bookById(n.bookId!);
     return book != null && !book.archived && book.deletedAt == null;
   }
+
+  // ---- Edit leases (Braim Web) ----------------------------------------------
+  //
+  // The phone and a linked browser must never edit the same note or spark at
+  // once, or one side's autosave overwrites the other. Whoever starts editing
+  // takes the item's lease; the other side reads until it is released. Kept in
+  // memory only: nothing about leases survives a restart.
+
+  final Map<String, ({String holder, DateTime? until})> _leases = {};
+
+  /// The clock web leases expire by (tests replace it).
+  @visibleForTesting
+  DateTime Function() leaseClock = DateTime.now;
+
+  ({String holder, DateTime? until})? _lease(String itemId) {
+    final lease = _leases[itemId];
+    final until = lease?.until;
+    if (until != null && !leaseClock().isBefore(until)) {
+      _leases.remove(itemId);
+      return null;
+    }
+    return lease;
+  }
+
+  /// Takes, or renews, the edit lease on [itemId] for [holder]: [kPhoneLease]
+  /// or `web:<sessionId>`. A lease with a [ttl] expires unless renewed; the
+  /// phone's never does and is released explicitly. False when someone else
+  /// holds it.
+  bool acquireEditLease(String itemId, String holder, {Duration? ttl}) {
+    final current = _lease(itemId);
+    if (current != null && current.holder != holder) return false;
+    _leases[itemId] = (
+      holder: holder,
+      until: ttl == null ? null : leaseClock().add(ttl),
+    );
+    return true;
+  }
+
+  /// Gives up [holder]'s lease on [itemId] (no-op if it holds none).
+  void releaseEditLease(String itemId, String holder) {
+    if (_leases[itemId]?.holder == holder) _leases.remove(itemId);
+  }
+
+  /// Gives up every lease [holder] holds, as when a browser is logged out.
+  void releaseEditLeasesOf(String holder) =>
+      _leases.removeWhere((_, lease) => lease.holder == holder);
+
+  /// Who is editing [itemId] now, or null when it is free.
+  String? editLeaseHolder(String itemId) => _lease(itemId)?.holder;
 
   int _webNotesRev = -1;
   List<Note>? _webNotesCache;

@@ -73,6 +73,49 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   /// This screen's route, registered in [OpenNoteScreens] while it is open.
   ModalRoute<Object?>? _route;
 
+  /// The library, kept for [dispose], where the context may no longer be used.
+  late final AppState _appState;
+
+  /// Whether this screen holds the note's edit lease, so a browser on Braim
+  /// Web can't edit it at the same time.
+  bool _holdsLease = false;
+
+  /// Takes the edit lease; false, with a message, while a browser holds it.
+  bool _takeLease() {
+    if (_appState.acquireEditLease(_note.id, kPhoneLease)) {
+      _holdsLease = true;
+      return true;
+    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(context.t.webEditingOnComputer)));
+    return false;
+  }
+
+  void _releaseLease() {
+    if (!_holdsLease) return;
+    _holdsLease = false;
+    _appState.releaseEditLease(_note.id, kPhoneLease);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _appState = context.read<AppState>();
+    if (_editing) {
+      if (_appState.acquireEditLease(_note.id, kPhoneLease)) {
+        _holdsLease = true;
+      } else {
+        _editing = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                SnackBar(content: Text(context.t.webEditingOnComputer)));
+          }
+        });
+      }
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -88,6 +131,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   void dispose() {
     final route = _route;
     if (route != null) OpenNoteScreens.unregister(_note.id, route);
+    _releaseLease();
     _ctrl.dispose();
     super.dispose();
   }
@@ -126,6 +170,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   /// Back button: persist any edits, then leave.
   Future<void> _leave() async {
     if (_editing) await _save();
+    _releaseLease();
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -164,6 +209,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
 
   Future<void> _done() async {
     await _save();
+    _releaseLease();
     if (!mounted) return;
     FocusScope.of(context).unfocus();
     setState(() {
@@ -172,10 +218,15 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     });
   }
 
-  void _startEditing() => setState(() {
-        _editing = true;
-        _preview = false;
-      });
+  void _startEditing() {
+    if (!_takeLease()) return;
+    // A browser may have changed the source while it was being read here.
+    if (_ctrl.text != _note.markdownSource) _ctrl.text = _note.markdownSource;
+    setState(() {
+      _editing = true;
+      _preview = false;
+    });
+  }
 
   // ---- Circuit map --------------------------------------------------------
 

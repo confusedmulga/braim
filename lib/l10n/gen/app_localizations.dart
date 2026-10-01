@@ -4503,6 +4503,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open this on your phone'**
   String get webNotAvailable;
+
+  /// No description provided for @webEditingOnComputer.
+  ///
+  /// In en, this message translates to:
+  /// **'Being edited on your computer'**
+  String get webEditingOnComputer;
+
+  /// No description provided for @webEditingOnPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Being edited on your phone'**
+  String get webEditingOnPhone;
+
+  /// No description provided for @webEditingElsewhere.
+  ///
+  /// In en, this message translates to:
+  /// **'Being edited in another browser'**
+  String get webEditingElsewhere;
+
+  /// No description provided for @webTryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get webTryAgain;
+
+  /// No description provided for @webChangedOnPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed on your phone'**
+  String get webChangedOnPhone;
+
+  /// No description provided for @webReload.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get webReload;
+
+  /// No description provided for @webKeepEditing.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get webKeepEditing;
+
+  /// No description provided for @webCopyText.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy my text'**
+  String get webCopyText;
+
+  /// No description provided for @webNewNote.
+  ///
+  /// In en, this message translates to:
+  /// **'New note'**
+  String get webNewNote;
+
+  /// No description provided for @webNewMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'New Markdown note'**
+  String get webNewMarkdown;
+
+  /// No description provided for @webAddLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a link'**
+  String get webAddLink;
+
+  /// No description provided for @webAddLinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste a link'**
+  String get webAddLinkHint;
+
+  /// No description provided for @webSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get webSaving;
+
+  /// No description provided for @webSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get webSaved;
+
+  /// No description provided for @webSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not saved. Check the connection and try again.'**
+  String get webSaveFailed;
+
+  /// No description provided for @webMarkdownSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown'**
+  String get webMarkdownSource;
+
+  /// No description provided for @webPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get webPreview;
+
+  /// No description provided for @webSubheading.
+  ///
+  /// In en, this message translates to:
+  /// **'Sub-heading'**
+  String get webSubheading;
+
+  /// No description provided for @webDeleteNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete note'**
+  String get webDeleteNote;
 }
 
 class _AppLocalizationsDelegate

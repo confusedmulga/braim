@@ -1,0 +1,126 @@
+/* Braim Web's editor pages: the note sheet becomes the writing surface, with
+   a format bar that stays in reach while you scroll. Same design language as
+   app.css. */
+
+.edit-bar { position: sticky; top: 60px; z-index: 8; }
+.save-state { font-size: 13px; color: var(--label-2); }
+
+.edit-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--raised);
+  box-shadow: var(--shadow-hover), var(--edge);
+  font-weight: 600;
+}
+.edit-banner > span { margin-right: auto; }
+.edit-banner-actions { display: flex; gap: 8px; }
+
+.editor.sheet { padding-top: 20px; }
+.editor.locked .rich, .editor.locked .title-input, .editor.locked .md-source { opacity: 0.6; }
+
+/* The format bar: icon buttons in a translucent capsule. */
+.toolbar {
+  position: sticky;
+  top: 112px;
+  z-index: 7;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 0 -12px 18px;
+  padding: 5px;
+  border-radius: 14px;
+  background: var(--bar);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 0 0 0.5px var(--separator), 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+.tool {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--label);
+  font: 600 15px/1 var(--ui);
+}
+.tool.text { font-size: 13px; font-weight: 500; }
+.tool svg { width: 18px; height: 18px; }
+.tool:hover { background: var(--fill); filter: none; }
+.tool.on { background: var(--tint); color: var(--on-tint); }
+.tool-sep { width: 1px; height: 20px; margin: 0 4px; background: var(--separator); }
+
+.title-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--label);
+  font: 700 34px/1.2 var(--serif);
+  letter-spacing: -0.01em;
+}
+.title-input::placeholder { color: var(--label-3); }
+.title-input:focus-visible { box-shadow: none; }
+
+/* Quill's writing surface, set like the reading view. */
+.rich { margin: 0 0 12px; }
+.rich .ql-editor {
+  padding: 0;
+  min-height: 3.2em;
+  font: var(--body-size)/1.6 var(--ui);
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+.rich .ql-editor:focus-visible { box-shadow: none; }
+.rich .ql-editor p { margin: 0 0 0.35em; }
+.rich .ql-editor h1 { font: 600 1.45em/1.22 var(--serif); margin: 0.6em 0 0.25em; }
+.rich .ql-editor h2 { font: 600 1.2em/1.22 var(--serif); margin: 0.5em 0 0.2em; }
+.rich .ql-editor blockquote { margin: 0.25em 0; padding-left: 0.9em; border-left: 3px solid var(--separator); font-style: italic; opacity: 0.8; }
+.rich .ql-editor a { color: var(--link); }
+.rich .ql-editor li[data-list=checked] { text-decoration: line-through; opacity: 0.55; }
+.rich .ql-editor li > .ql-ui:before { color: var(--tint); }
+.rich .ql-editor.ql-blank::before { left: 0; right: 0; color: var(--label-3); font-style: normal; }
+
+/* Markdown: the source, and a preview to flip to. */
+.segmented { display: inline-flex; padding: 2px; margin: 0 0 14px; border-radius: 9px; background: var(--fill); }
+.segmented button {
+  min-height: 28px;
+  padding: 0 16px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--label);
+  font-size: 13px;
+  font-weight: 500;
+}
+.segmented button.current { background: var(--selected); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.md-source {
+  display: block;
+  width: 100%;
+  min-height: 60vh;
+  padding: 0;
+  border: 0;
+  resize: vertical;
+  background: transparent;
+  color: var(--label);
+  font: 15px/1.65 var(--mono);
+  tab-size: 2;
+}
+.md-source:focus-visible { box-shadow: none; }
+
+.danger-row { max-width: 760px; margin: 24px auto; text-align: center; }
+button.danger { background: transparent; color: var(--error); }
+button.danger:hover { background: var(--fill); }
+
+@media (max-width: 720px) {
+  .edit-bar { position: static; }
+  .toolbar { top: 104px; margin: 0 -8px 16px; }
+  .title-input { font-size: 28px; }
+}

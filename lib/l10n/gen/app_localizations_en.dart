@@ -2500,4 +2500,61 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webNotAvailable => 'Open this on your phone';
+
+  @override
+  String get webEditingOnComputer => 'Being edited on your computer';
+
+  @override
+  String get webEditingOnPhone => 'Being edited on your phone';
+
+  @override
+  String get webEditingElsewhere => 'Being edited in another browser';
+
+  @override
+  String get webTryAgain => 'Try again';
+
+  @override
+  String get webChangedOnPhone => 'Changed on your phone';
+
+  @override
+  String get webReload => 'Reload';
+
+  @override
+  String get webKeepEditing => 'Keep editing';
+
+  @override
+  String get webCopyText => 'Copy my text';
+
+  @override
+  String get webNewNote => 'New note';
+
+  @override
+  String get webNewMarkdown => 'New Markdown note';
+
+  @override
+  String get webAddLink => 'Add a link';
+
+  @override
+  String get webAddLinkHint => 'Paste a link';
+
+  @override
+  String get webSaving => 'Saving…';
+
+  @override
+  String get webSaved => 'Saved';
+
+  @override
+  String get webSaveFailed => 'Not saved. Check the connection and try again.';
+
+  @override
+  String get webMarkdownSource => 'Markdown';
+
+  @override
+  String get webPreview => 'Preview';
+
+  @override
+  String get webSubheading => 'Sub-heading';
+
+  @override
+  String get webDeleteNote => 'Delete note';
 }

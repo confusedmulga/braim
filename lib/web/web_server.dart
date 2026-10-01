@@ -19,6 +19,7 @@ import '../state/app_state.dart';
 import '../models/note.dart';
 import '../models/tweet_card.dart';
 import '../services/wiki_links.dart';
+import 'web_api.dart';
 import 'web_assets.dart';
 import 'web_auth.dart';
 import 'web_events.dart';
@@ -39,6 +40,7 @@ class BraimWebServer {
        l10n = lookupAppLocalizations(const Locale('en')) {
     events = WebEventHub(source: state, revision: () => state.revision);
     pages = WebPages(l10n: l10n, assets: this.assets, state: state);
+    api = WebApi(state: state, l10n: l10n);
   }
 
   /// Tried in order until one is free.
@@ -55,6 +57,7 @@ class BraimWebServer {
   final AppLocalizations l10n;
   late final WebEventHub events;
   late final WebPages pages;
+  late final WebApi api;
   final Future<Directory> Function() _imagesDir;
 
   /// Called on every request from a linked browser, and on pairing; the
@@ -128,11 +131,15 @@ class BraimWebServer {
   Future<void> logOut(String sessionId) {
     final saved = sessions.remove(sessionId);
     events.closeSession(sessionId);
+    state.releaseEditLeasesOf(webLeaseHolder(sessionId));
     return saved;
   }
 
   /// Logs every linked browser out.
   Future<void> logOutAll() {
+    for (final s in sessions.sessions) {
+      state.releaseEditLeasesOf(webLeaseHolder(s.id));
+    }
     final saved = sessions.removeAll();
     events.closeAll();
     return saved;
@@ -171,7 +178,7 @@ class BraimWebServer {
         .addMiddleware(_csrfCheck)
         .addHandler(_routes().call);
     final open = Router(notFoundHandler: signedIn)
-      ..get('/assets/<name>', _asset)
+      ..get('/assets/<name|.+>', _asset)
       ..get('/fonts/<name>', _font)
       ..get('/pair', _pairPage)
       ..post('/api/pair', _pair);
@@ -189,9 +196,49 @@ class BraimWebServer {
 
   Router _routes() => Router(notFoundHandler: (r) => _failure(r, 404))
     ..get('/', _feed)
+    ..get('/notes/new', _newNote)
     ..get('/notes/<id>', _note)
+    ..get('/notes/<id>/edit', _editNote)
     ..get('/sparks', _sparks)
     ..get('/sparks/<id>', _spark)
+    ..get('/sparks/<id>/edit', _editSpark)
+    ..post('/api/notes', (Request r) => api.createNote(r))
+    ..put(
+      '/api/notes/<id>',
+      (Request r, String id) => api.saveNote(r, id, _sid(r)),
+    )
+    ..delete(
+      '/api/notes/<id>',
+      (Request r, String id) => api.deleteNote(id, _sid(r)),
+    )
+    ..post(
+      '/api/notes/<id>/check',
+      (Request r, String id) => api.checkLine(r, id, _sid(r)),
+    )
+    ..post('/api/notes/<id>/lease', _takeNoteLease)
+    ..delete(
+      '/api/notes/<id>/lease',
+      (Request r, String id) => api.releaseLease(id, _sid(r)),
+    )
+    ..post('/api/markdown/preview', (Request r) => api.markdownPreview(r))
+    ..post('/api/sparks', (Request r) => api.addSpark(r))
+    ..put(
+      '/api/sparks/<id>',
+      (Request r, String id) => api.saveSpark(r, id, _sid(r)),
+    )
+    ..delete(
+      '/api/sparks/<id>',
+      (Request r, String id) => api.deleteSpark(id, _sid(r)),
+    )
+    ..post(
+      '/api/sparks/<id>/check',
+      (Request r, String id) => api.checkSparkLine(r, id, _sid(r)),
+    )
+    ..post('/api/sparks/<id>/lease', _takeSparkLease)
+    ..delete(
+      '/api/sparks/<id>/lease',
+      (Request r, String id) => api.releaseLease(id, _sid(r)),
+    )
     ..get('/search', _search)
     ..get('/link', _link)
     ..get('/img/<name>', _image)
@@ -335,6 +382,7 @@ class BraimWebServer {
   // ---- Signed-in routes -----------------------------------------------------
 
   WebSession _session(Request r) => r.context[_sessionKey] as WebSession;
+  String _sid(Request r) => _session(r).id;
   String _csrf(Request r) => r.context[_csrfKey] as String;
 
   /// A signed-in page, or just its main area when a list page refreshes
@@ -344,12 +392,19 @@ class BraimWebServer {
     WebView view, {
     String tab = '',
     String query = '',
+    bool editor = false,
   }) {
     if (request.url.queryParameters['partial'] == '1') {
       return _html(view.main);
     }
     return _html(
-      pages.page(view, csrf: _csrf(request), tab: tab, query: query),
+      pages.page(
+        view,
+        csrf: _csrf(request),
+        tab: tab,
+        query: query,
+        editor: editor,
+      ),
     );
   }
 
@@ -357,20 +412,42 @@ class BraimWebServer {
 
   /// The live note [id] if the web may show it. Anything else, the Crypt
   /// included, is indistinguishable from a note that doesn't exist.
-  Note? _visibleNote(String id) {
-    final n = state.noteById(id);
-    return n != null && state.isWebVisibleNote(n) ? n : null;
-  }
+  Note? _visibleNote(String id) => api.visibleNote(id);
 
   /// The spark [id] if it is in the Sparks feed's population.
-  TweetCard? _visibleSpark(String id) {
-    final c = state.cardById(id);
-    if (c == null) return null;
-    for (final s in state.searchableCards) {
-      if (identical(s, c)) return c;
-    }
-    return null;
+  TweetCard? _visibleSpark(String id) => api.visibleSpark(id);
+
+  Response _newNote(Request request) => _view(
+    request,
+    pages.noteEditor(
+      null,
+      markdown: request.url.queryParameters['kind'] == 'markdown',
+    ),
+    tab: 'notes',
+    editor: true,
+  );
+
+  Response _editNote(Request request, String id) {
+    final n = _visibleNote(id);
+    if (n == null) return _failure(request, 404);
+    return _view(request, pages.noteEditor(n), tab: 'notes', editor: true);
   }
+
+  Response _editSpark(Request request, String id) {
+    final c = _visibleSpark(id);
+    if (c == null) return _failure(request, 404);
+    return _view(request, pages.sparkEditor(c), tab: 'sparks', editor: true);
+  }
+
+  Response _takeNoteLease(Request request, String id) =>
+      _visibleNote(id) == null
+      ? _failure(request, 404)
+      : api.takeLease(id, _sid(request));
+
+  Response _takeSparkLease(Request request, String id) =>
+      _visibleSpark(id) == null
+      ? _failure(request, 404)
+      : api.takeLease(id, _sid(request));
 
   Response _note(Request request, String id) {
     final n = _visibleNote(id);
@@ -460,14 +537,17 @@ class BraimWebServer {
     if (n == null) return _failure(request, 404);
     return _json(200, {
       'updatedAt': n.updatedAt.millisecondsSinceEpoch,
-      'leaseHolder': null,
+      'leaseHolder': api.leaseHolderFor(id, _sid(request)),
     });
   }
 
   Response _sparkMeta(Request request, String id) {
     final c = _visibleSpark(id);
     if (c == null) return _failure(request, 404);
-    return _json(200, {'updatedAt': c.updatedAt.millisecondsSinceEpoch});
+    return _json(200, {
+      'updatedAt': c.updatedAt.millisecondsSinceEpoch,
+      'leaseHolder': api.leaseHolderFor(id, _sid(request)),
+    });
   }
 
   Future<Response> _logout(Request request) async {

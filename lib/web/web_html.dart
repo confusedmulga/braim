@@ -17,14 +17,16 @@ String esc(String s) => const HtmlEscape().convert(s);
 
 /// A whole page: the head with the stylesheet, the deferred script and, for a
 /// signed-in browser, the CSRF token; then [body]. [body] must already be
-/// escaped. [bodyAttrs] are written as they are, so they must be too.
+/// escaped. [styles] and [scripts] name extra files from [WebAssets.files]
+/// that only this page needs (the editor's, say); scripts run in order.
 String htmlPage({
   required WebAssets assets,
   required String title,
   required String body,
   String? csrf,
   String bodyClass = '',
-  String bodyAttrs = '',
+  List<String> styles = const [],
+  List<String> scripts = const [],
 }) {
   final out = StringBuffer()
     ..write('<!doctype html>\n<html lang="en">\n<head>\n')
@@ -39,12 +41,18 @@ String htmlPage({
   }
   out
     ..write('<title>${esc(title)}</title>\n')
-    ..write('<link rel="stylesheet" href="${esc(assets.url('app.css'))}">\n')
-    ..write('<script src="${esc(assets.url('app.js'))}" defer></script>\n')
+    ..write('<link rel="stylesheet" href="${esc(assets.url('app.css'))}">\n');
+  for (final name in styles) {
+    out.write('<link rel="stylesheet" href="${esc(assets.url(name))}">\n');
+  }
+  out.write('<script src="${esc(assets.url('app.js'))}" defer></script>\n');
+  for (final name in scripts) {
+    out.write('<script src="${esc(assets.url(name))}" defer></script>\n');
+  }
+  out
     ..write('</head>\n')
     ..write('<body')
     ..write(bodyClass.isEmpty ? '' : ' class="${esc(bodyClass)}"')
-    ..write(bodyAttrs.isEmpty ? '' : ' $bodyAttrs')
     ..write('>\n')
     ..write(body)
     ..write('\n</body>\n</html>\n');

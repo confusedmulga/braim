@@ -62,6 +62,8 @@
     }
 
     boxes.forEach(function (box, i) {
+      // Typing into a filled box replaces its digit.
+      box.addEventListener('focus', function () { box.select(); });
       box.addEventListener('input', function () {
         var digits = box.value.replace(/[^0-9]/g, '');
         box.value = '';
@@ -154,9 +156,60 @@
   }
 
   function onChanged() {
+    // Edit pages decide for themselves (editor.js); they never reload.
+    document.dispatchEvent(new CustomEvent('braim:changed'));
     if (!main) return;
     if (main.hasAttribute('data-list')) refreshList();
     else if (main.hasAttribute('data-watch')) checkView();
+  }
+
+  // ---- Ticking a checklist on a note or spark page ----------------------------
+
+  function setUpTicks() {
+    var url = main && main.getAttribute('data-check');
+    if (!url) return;
+    main.addEventListener('change', function (e) {
+      var box = e.target;
+      if (!box.matches('input[type=checkbox][data-line]')) return;
+      box.disabled = true;
+      post(url, {
+        block: Number(box.getAttribute('data-block')),
+        line: Number(box.getAttribute('data-line')),
+        baseUpdatedAt: Number(main.getAttribute('data-updated'))
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (b) {
+          if (res.ok) {
+            main.setAttribute('data-updated', String(b.updatedAt));
+            var li = box.closest('li');
+            if (li) li.classList.toggle('done', box.checked);
+            return;
+          }
+          if (res.status === 401) { location.replace('/pair'); return; }
+          box.checked = !box.checked;
+          showBanner(b.message || '');
+        });
+      }).catch(function () {
+        box.checked = !box.checked;
+        showBanner(banner.getAttribute('data-offline'));
+      }).then(function () { box.disabled = false; });
+    });
+  }
+
+  // ---- Adding a spark ---------------------------------------------------------------
+
+  function setUpAddLink(form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = form.querySelector('input');
+      var button = form.querySelector('button');
+      button.disabled = true;
+      post('/api/sparks', { url: input.value.trim() }).then(function (res) {
+        if (res.status === 401) { location.replace('/pair'); return; }
+        if (res.ok) { input.value = ''; refreshList(); }
+      }).catch(function () {
+        showBanner(banner.getAttribute('data-offline'));
+      }).then(function () { button.disabled = false; });
+    });
   }
 
   var source = null;
@@ -211,6 +264,9 @@
 
   var pairForm = document.getElementById('pair-form');
   if (pairForm) setUpPairing(pairForm);
+  var addLink = document.getElementById('add-link');
+  if (addLink) setUpAddLink(addLink);
+  setUpTicks();
   document.querySelectorAll('[data-action="logout"]').forEach(setUpLogout);
 
   if (csrf) {
@@ -219,13 +275,20 @@
     document.addEventListener('visibilitychange', ping);
   }
 
+  // Keys: "/" searches, "e" edits the open note or spark.
   var search = document.querySelector('.search input');
   document.addEventListener('keydown', function (e) {
-    if (e.key !== '/' || !search || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-    e.preventDefault();
-    search.focus();
-    search.select();
+    var edit = main && main.getAttribute('data-edit');
+    if (e.key === '/' && search) {
+      e.preventDefault();
+      search.focus();
+      search.select();
+    } else if ((e.key === 'e' || e.key === 'E') && edit) {
+      e.preventDefault();
+      location.href = edit;
+    }
   });
 })();

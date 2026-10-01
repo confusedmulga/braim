@@ -221,7 +221,7 @@ void main() {
         expect(html, contains('Readme'));
         expect(html, contains('href="&#47;notes&#47;visible"'));
         expect(html, contains('src="&#47;img&#47;visible.jpg"'));
-        expect(html, contains('--tint:#fff1b8'));
+        expect(html, contains('--note:#fff1b8'));
         expect(html, contains('<span class="tag">#home</span>'));
         expect(html, contains('<main data-list>'));
       },
@@ -229,7 +229,7 @@ void main() {
 
     test('?partial=1 returns only the main area, for live refresh', () async {
       final html = await body('/?partial=1');
-      expect(html, startsWith('<h1 class="page-title">'));
+      expect(html, startsWith('<div class="title-row"><h1 class="page-title">'));
       expect(html, isNot(contains('<html')));
       expect(html, contains('Groceries'));
     });

@@ -54,9 +54,20 @@ void registerFontLicenses() {
   });
 }
 
+/// Braim Web's note editor (Quill) ships inside the app; its licence is listed
+/// with the others.
+void registerWebLicenses() {
+  LicenseRegistry.addLicense(() async* {
+    final text =
+        await rootBundle.loadString('assets/web/vendor/LICENSE-quill.txt');
+    yield LicenseEntryWithLineBreaks(['Quill (Braim Web editor)'], text);
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerFontLicenses();
+  registerWebLicenses();
   // Best-effort; reminders simply don't fire if this fails.
   NotificationService.onSelect = _onNotificationTap;
   await NotificationService.instance.init();

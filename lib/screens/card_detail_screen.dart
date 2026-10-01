@@ -88,7 +88,38 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   /// mode on an already-deactivated element.
   late final AnimationController _expand;
 
+  /// The library, kept for [dispose], where the context may no longer be used.
+  late final AppState _appState;
+
+  /// Whether this screen holds the spark's edit lease, so a browser on Braim
+  /// Web can't edit it at the same time.
+  bool _holdsLease = false;
+
+  /// Set when a delayed save is pending: it releases the lease after saving.
+  bool _saveReleasesLease = false;
+
+  /// Takes the edit lease; false, with a message, while a browser holds it.
+  bool _takeLease() {
+    if (_appState.acquireEditLease(_card.id, kPhoneLease)) {
+      _holdsLease = true;
+      return true;
+    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(context.t.webEditingOnComputer)));
+    return false;
+  }
+
+  void _releaseLease() {
+    if (!_holdsLease) return;
+    _holdsLease = false;
+    _appState.releaseEditLease(_card.id, kPhoneLease);
+  }
+
   void _startEditing() {
+    if (!_takeLease()) return;
+    // A browser may have changed the spark while it was being read here.
+    _titleCtrl.text = _card.noteTitle;
+    _savedFingerprint = _fingerprint();
     setState(() => _editing = true);
     _expand.forward(from: 0);
   }
@@ -100,6 +131,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     setState(() => _editing = false);
     _savedFingerprint = _fingerprint();
     state.updateCard(_card);
+    _releaseLease();
   }
 
   void _autosaveTick() {
@@ -120,6 +152,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
       value: 1,
     );
     _card = widget.card;
+    _appState = context.read<AppState>();
     _titleCtrl = TextEditingController(text: _card.noteTitle);
     _savedFingerprint = _fingerprint();
     _autosave = Timer.periodic(
@@ -176,6 +209,7 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   @override
   void dispose() {
     _autosave?.cancel();
+    if (!_saveReleasesLease) _releaseLease();
     _expand.dispose();
     _titleCtrl.dispose();
     _titleFocus.dispose();
@@ -183,7 +217,11 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     super.dispose();
   }
 
+  /// Writes the title field and editors back into the card. Reading, there
+  /// is nothing to write: the field may be older than the card, which a
+  /// browser on Braim Web can change meanwhile.
   void _collect() {
+    if (_readOnly) return;
     _card.noteTitle = _titleCtrl.text;
     _editorKey.currentState?.sync();
   }
@@ -198,9 +236,15 @@ class _CardDetailScreenState extends State<CardDetailScreen>
     _collect();
     setState(() => _closing = true);
     Navigator.of(context).pop();
-    // Persist after the close animation so the write can't jank it.
-    Future.delayed(const Duration(milliseconds: 380), () {
-      state.updateCard(_card);
+    // Persist after the close animation so the write can't jank it; only then
+    // may a browser take the spark.
+    _saveReleasesLease = true;
+    Future.delayed(const Duration(milliseconds: 380), () async {
+      try {
+        await state.updateCard(_card);
+      } finally {
+        _releaseLease();
+      }
     });
   }
 
@@ -418,9 +462,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
 
   Future<void> _openRef(LinkRef ref) async {
     final state = context.read<AppState>();
-    _editorKey.currentState?.sync();
-    _card.noteTitle = _titleCtrl.text;
-    state.updateCard(_card);
+    if (_editing) {
+      _collect();
+      state.updateCard(_card);
+    }
     if (!mounted) return;
     if (ref.kind == LinkKind.card) {
       final card = state.cardById(ref.id);
@@ -438,9 +483,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
 
   Future<void> _createAndOpenLinkedNote(String title) async {
     final state = context.read<AppState>();
-    _editorKey.currentState?.sync();
-    _card.noteTitle = _titleCtrl.text;
-    state.updateCard(_card);
+    if (_editing) {
+      _collect();
+      state.updateCard(_card);
+    }
     final created = await state.createLinkedNote(title);
     if (!mounted) return;
     await Navigator.of(context)
@@ -460,6 +506,12 @@ class _CardDetailScreenState extends State<CardDetailScreen>
   /// Ticks a checklist item straight from the read view and saves the card.
   void _toggleCheck(int blockIndex, int lineIndex, bool nowChecked) {
     if (blockIndex < 0 || blockIndex >= _card.blocks.length) return;
+    final holder = _appState.editLeaseHolder(_card.id);
+    if (holder != null && holder != kPhoneLease) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(context.t.webEditingOnComputer)));
+      return;
+    }
     final b = _card.blocks[blockIndex];
     if (!b.isText) return;
     final updated = toggleChecklistLine(b.text, lineIndex);
@@ -471,6 +523,10 @@ class _CardDetailScreenState extends State<CardDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild when the spark changes elsewhere, such as a save from a browser
+    // on Braim Web, so the reading view never shows stale text.
+    context.select<AppState, int?>(
+        (s) => s.cardById(_card.id)?.updatedAt.millisecondsSinceEpoch);
     final topInset = MediaQuery.of(context).padding.top + kToolbarHeight;
     final Widget topActions = BubblePill(
       children: [

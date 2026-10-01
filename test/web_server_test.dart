@@ -636,7 +636,7 @@ void main() {
       expect(r.statusCode, 200);
       expect(r.mimeType, 'text/css');
       expect(r.headers['cache-control'], contains('immutable'));
-      expect(await r.readAsString(), contains('--surface'));
+      expect(await r.readAsString(), contains('--raised'));
 
       final s = await send('GET', js);
       expect(s.mimeType, 'text/javascript');

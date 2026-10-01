@@ -18,6 +18,11 @@ class WebAssets {
   static const files = <String, String>{
     'app.css': 'text/css; charset=utf-8',
     'app.js': 'text/javascript; charset=utf-8',
+    // Edit pages only.
+    'editor.css': 'text/css; charset=utf-8',
+    'editor.js': 'text/javascript; charset=utf-8',
+    'vendor/quill.core.css': 'text/css; charset=utf-8',
+    'vendor/quill.js': 'text/javascript; charset=utf-8',
   };
 
   /// Served at `/fonts/<name>` from `assets/fonts/<name>`.

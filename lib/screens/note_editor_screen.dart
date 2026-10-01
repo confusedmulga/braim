@@ -115,7 +115,38 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   /// mode on an already-deactivated element.
   late final AnimationController _expand;
 
+  /// The library, kept for [dispose], where the context may no longer be used.
+  late final AppState _appState;
+
+  /// Whether this screen holds the note's edit lease (see
+  /// [AppState.acquireEditLease]), so a browser on Braim Web can't edit it too.
+  bool _holdsLease = false;
+
+  /// Set when a delayed save is pending: it releases the lease after saving.
+  bool _saveReleasesLease = false;
+
+  /// Takes the edit lease; false, with a message, while a browser holds it.
+  bool _takeLease() {
+    if (_appState.acquireEditLease(_note.id, kPhoneLease)) {
+      _holdsLease = true;
+      return true;
+    }
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(context.t.webEditingOnComputer)));
+    return false;
+  }
+
+  void _releaseLease() {
+    if (!_holdsLease) return;
+    _holdsLease = false;
+    _appState.releaseEditLease(_note.id, kPhoneLease);
+  }
+
   void _startEditing() {
+    if (!_takeLease()) return;
+    // A browser may have changed the note while it was being read here.
+    _titleCtrl.text = _note.title;
+    _savedFingerprint = _fingerprint();
     setState(() => _editing = true);
     _expand.forward(from: 0);
   }
@@ -130,12 +161,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
       _persisted = true;
       state.upsertNote(_note);
     }
+    _releaseLease();
   }
 
   /// Ticks a checklist item straight from the read view (no need to enter the
   /// editor). Mutates the block's delta in place and persists at once.
   void _toggleCheck(int blockIndex, int lineIndex, bool nowChecked) {
     if (blockIndex < 0 || blockIndex >= _note.blocks.length) return;
+    final holder = _appState.editLeaseHolder(_note.id);
+    if (holder != null && holder != kPhoneLease) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(context.t.webEditingOnComputer)));
+      return;
+    }
     final b = _note.blocks[blockIndex];
     if (!b.isText) return;
     final updated = toggleChecklistLine(b.text, lineIndex);
@@ -413,11 +451,25 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
       value: 1,
     );
     _note = widget.note;
+    _appState = context.read<AppState>();
     _titleCtrl = TextEditingController(text: _note.title);
     _savedFingerprint = _fingerprint();
     // Saved notes open as a page to read; a note being created — or a circuit
-    // note opened fresh from the map — opens ready to write.
+    // note opened fresh from the map — opens ready to write, unless a browser
+    // is editing it on Braim Web.
     _editing = widget.isNew || widget.startEditing;
+    if (_editing &&
+        !_appState.acquireEditLease(_note.id, kPhoneLease)) {
+      _editing = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(content: Text(context.t.webEditingOnComputer)));
+        }
+      });
+    } else if (_editing) {
+      _holdsLease = true;
+    }
     _autosave = Timer.periodic(
         const Duration(seconds: 3), (_) => _autosaveTick());
     // Snapshot a book chapter's pre-edit state when a writing session opens,
@@ -465,6 +517,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final route = _route;
     if (route != null) OpenNoteScreens.unregister(_note.id, route);
     _autosave?.cancel();
+    // A pending delayed save hands the lease back itself, once it has saved.
+    if (!_saveReleasesLease) _releaseLease();
     _expand.dispose();
     _titleCtrl.dispose();
     _titleFocus.dispose();
@@ -472,8 +526,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     super.dispose();
   }
 
-  /// Writes the live editors back into [_note] (cheap, synchronous).
+  /// Writes the live editors back into [_note] (cheap, synchronous). Reading,
+  /// there is nothing to write: the fields may be older than the note, which
+  /// a browser on Braim Web can change meanwhile.
   void _collect() {
+    if (_readOnly) return;
     _note.title = _titleCtrl.text;
     _editorKey.currentState?.sync();
   }
@@ -481,7 +538,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   /// Persists after the close animation so the JSON encode + file write + feed
   /// rebuild don't jank the pop transition.
   void _persistLater(AppState state, {bool delete = false}) {
+    _saveReleasesLease = true;
     Future.delayed(const Duration(milliseconds: 380), () async {
+      try {
+        await _persistNow(state, delete: delete);
+      } finally {
+        // Only now may a browser take the note: its edits must start from
+        // what was just saved.
+        _releaseLease();
+      }
+    });
+  }
+
+  Future<void> _persistNow(AppState state, {required bool delete}) async {
       if (delete) {
         await state.deleteNote(_note.id);
         return;
@@ -509,7 +578,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         return;
       }
       await state.upsertNote(_note);
-    });
   }
 
   void _close() {

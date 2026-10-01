@@ -1,0 +1,5 @@
+quill 2.0.3
+source https://registry.npmjs.org/quill/-/quill-2.0.3.tgz
+integrity sha512-xEYQBqfYx/sfb33VJiKnSJp8ehloavImQ2A6564GAbqG55PGw1dAWUn1MUbQB62t0azawUS2CZZhWCjO8gRvTw==
+files dist/quill.js, dist/quill.core.css, LICENSE (as LICENSE-quill.txt)
+vendored 2026-10-01
