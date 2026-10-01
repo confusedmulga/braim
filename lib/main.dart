@@ -14,6 +14,7 @@ import 'services/notification_service.dart';
 import 'state/app_state.dart';
 import 'state/pomodoro_controller.dart';
 import 'theme/app_theme.dart';
+import 'web/web_controller.dart';
 
 /// Root navigator, so a tapped notification can open a screen without a
 /// BuildContext.
@@ -86,8 +87,16 @@ class BraimApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AppState()..init(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppState()..init()),
+        // Braim Web: created when Settings first reads it, and always off at
+        // launch. It shares the one AppState, so web edits go where phone
+        // edits go.
+        ChangeNotifierProvider(
+          create: (context) => BraimWebController(context.read<AppState>()),
+        ),
+      ],
       child: const _ThemedApp(),
     );
   }

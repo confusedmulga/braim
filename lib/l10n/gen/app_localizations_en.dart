@@ -2426,4 +2426,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webUnknownBrowser => 'Browser';
+
+  @override
+  String get webToggle => 'Open Braim on your computer';
+
+  @override
+  String get webHint =>
+      'Works on the same Wi-Fi, or when your computer joins this phone\'s hotspot.';
+
+  @override
+  String get webAddressLabel => 'Open this address on your computer';
+
+  @override
+  String webCodeExpires(int seconds) {
+    return 'New code in ${seconds}s';
+  }
+
+  @override
+  String get webLinkedBrowsers => 'Linked browsers';
+
+  @override
+  String get webNoBrowsers => 'No browser is linked yet.';
+
+  @override
+  String webLastSeen(String when) {
+    return 'Last used $when';
+  }
+
+  @override
+  String get webLogOutAll => 'Log out all';
+
+  @override
+  String get webTrustNote =>
+      'Your notes stay on this phone. Anyone on this Wi-Fi could read the traffic, so use it on networks you trust.';
+
+  @override
+  String get webNoNetwork => 'Connect to Wi-Fi or turn on your hotspot first';
+
+  @override
+  String get webStartFailed => 'Braim Web couldn\'t start. Try again.';
+
+  @override
+  String get webNotificationTitle => 'Braim Web is on';
+
+  @override
+  String get webTurnOff => 'Turn off';
+
+  @override
+  String get webAutoOff => 'Braim Web turned off after 30 minutes without use';
 }

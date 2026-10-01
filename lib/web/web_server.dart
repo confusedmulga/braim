@@ -113,16 +113,19 @@ class BraimWebServer {
     await sessions.flush();
   }
 
-  /// Logs one linked browser out, ending its open event streams.
-  Future<void> logOut(String sessionId) async {
-    await sessions.remove(sessionId);
+  /// Logs one linked browser out, ending its open event streams. The session
+  /// is gone at once; the returned future waits for the file write.
+  Future<void> logOut(String sessionId) {
+    final saved = sessions.remove(sessionId);
     events.closeSession(sessionId);
+    return saved;
   }
 
   /// Logs every linked browser out.
-  Future<void> logOutAll() async {
-    await sessions.removeAll();
+  Future<void> logOutAll() {
+    final saved = sessions.removeAll();
     events.closeAll();
+    return saved;
   }
 
   /// The phone's private, non-loopback IPv4 addresses (Wi-Fi and hotspot can

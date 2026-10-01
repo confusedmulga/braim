@@ -14,6 +14,7 @@ import '../services/image_service.dart';
 import '../services/notification_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/braim_web_settings.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/tutorial_dialog.dart';
@@ -819,6 +820,9 @@ class SettingsScreen extends StatelessWidget {
                         _DeviceBackupRestoreTile(
                           onRestore: () => _restoreFromDevice(context),
                         ),
+                        const SizedBox(height: 24),
+                        _SectionLabel(context.t.webSection),
+                        const BraimWebSettings(),
                         const SizedBox(height: 24),
                         _SectionLabel(context.t.storageSection),
                         GlassPanel(

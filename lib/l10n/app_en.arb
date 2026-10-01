@@ -1048,5 +1048,29 @@
       "os": { "type": "String" }
     }
   },
-  "webUnknownBrowser": "Browser"
+  "webUnknownBrowser": "Browser",
+  "webToggle": "Open Braim on your computer",
+  "webHint": "Works on the same Wi-Fi, or when your computer joins this phone's hotspot.",
+  "webAddressLabel": "Open this address on your computer",
+  "webCodeExpires": "New code in {seconds}s",
+  "@webCodeExpires": {
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
+  "webLinkedBrowsers": "Linked browsers",
+  "webNoBrowsers": "No browser is linked yet.",
+  "webLastSeen": "Last used {when}",
+  "@webLastSeen": {
+    "placeholders": {
+      "when": { "type": "String" }
+    }
+  },
+  "webLogOutAll": "Log out all",
+  "webTrustNote": "Your notes stay on this phone. Anyone on this Wi-Fi could read the traffic, so use it on networks you trust.",
+  "webNoNetwork": "Connect to Wi-Fi or turn on your hotspot first",
+  "webStartFailed": "Braim Web couldn't start. Try again.",
+  "webNotificationTitle": "Braim Web is on",
+  "webTurnOff": "Turn off",
+  "webAutoOff": "Braim Web turned off after 30 minutes without use"
 }

@@ -787,6 +787,9 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webLinkedPlaceholder` | This browser is linked. Your library will appear here. (Phase 1 home page; remove in Phase 3) |
 | `webNotFound` / `webError` | Not found / Something went wrong |
 | `webBrowserOn` / `webUnknownBrowser` | {browser} on {os} / Browser (linked-browser labels) |
+| `webNoBrowsers` | No browser is linked yet. |
+| `webLastSeen` | Last used {when} |
+| `webStartFailed` | Braim Web couldn't start. Try again. |
 | `webTabNotes` / `webTabSparks` / `webTabCircuits` / `webTabBooks` | Notes / Sparks / Circuits / Books |
 | `webNewNote` / `webNewMarkdown` / `webAddLink` / `webNewCircuit` | New note / New Markdown note / Add a link / New circuit |
 | `webEditingOnPhone` | Being edited on your phone |
@@ -859,16 +862,42 @@ Phase 1 notes (2026-09-30; analyzer clean, 260 tests passing):
   Browsers decode it; tests that look for URLs in HTML must decode it too.
 
 ### Phase 2: Phone switch
-- [ ] `BraimWebController`, provided in `main.dart`.
-- [ ] Settings section (6.3) and its strings.
-- [ ] `BraimWebService`, manifest entries, `braim/web` channel, Turn off
+- [x] `BraimWebController`, provided in `main.dart`.
+- [x] Settings section (6.3) and its strings.
+- [x] `BraimWebService`, manifest entries, `braim/web` channel, Turn off
       action, `stopWithTask`.
-- [ ] Auto-off after 30 minutes; interface refresh every 30 seconds.
-- [ ] Tests for the controller's start, stop and auto-off timing with a fake
+- [x] Auto-off after 30 minutes; interface refresh every 30 seconds.
+- [x] Tests for the controller's start, stop and auto-off timing with a fake
       clock.
-- [ ] Analyzer, tests, emulator build, owner test script: turn on, pair from
+- [x] Analyzer, tests, emulator build, owner test script: turn on, pair from
       the laptop through `adb forward`, see the placeholder page, log out from
-      the phone, auto-off.
+      the phone, auto-off. (2026-10-01: analyzer clean, 276 tests passing,
+      installed on braim_test; script handed to the owner.)
+
+Phase 2 notes (2026-10-01):
+
+- Files: `lib/web/web_controller.dart`, `lib/services/braim_web_service.dart`
+  (the `braim/web` channel; a no-op off Android),
+  `lib/widgets/braim_web_settings.dart` (the Settings panel), and
+  `android/app/src/main/kotlin/com/solo/braim/BraimWebService.kt`.
+- One 30-second tick does both jobs: it re-reads the phone's addresses and
+  checks auto-off. Auto-off can therefore land up to 30 seconds late. Tests
+  drive the tick through `debugTick()` with an injected clock.
+- The service is started with the platform `startForeground(id,
+  notification, type)` on API 29+, not `ServiceCompat`, so it does not depend
+  on which `androidx.core` version the plugins bring in.
+- An address change updates the notification with `NotificationManager.notify`
+  (method `update`), never a second `startForegroundService`, which Android
+  may refuse while the app is in the background.
+- `MainActivity.onDestroy` stops the service: the Flutter engine and the
+  server die with the activity, so the notification must not stay behind.
+- Confirmed 2026-10-01 against the Android foreground-service types page:
+  `connectedDevice` needs `FOREGROUND_SERVICE_CONNECTED_DEVICE` plus one of
+  `CHANGE_NETWORK_STATE`, `CHANGE_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`,
+  `NFC`, `TRANSMIT_IR` (or a Bluetooth, UWB or USB grant). No timeout applies.
+- Extra strings: `webNoBrowsers`, `webLastSeen`, `webStartFailed`.
+- Logging a browser out drops it from memory at once and writes the file
+  after, so Settings updates without waiting for the disk.
 
 ### Phase 3: Reading
 - [ ] Layout, tabs, CSS, `app.js`, light and dark.
@@ -1091,6 +1120,7 @@ adb -s emulator-5554 forward tcp:8420 tcp:8420
 | Cookie lifetime (added Phase 1) | Renewed on every page load, so a browser in use never has to pair again; the phone still drops a session after 30 idle days |
 | Event streams and auto-off (added Phase 1) | Opening or reconnecting an event stream is not activity: it neither resets auto-off nor updates "last seen". Page loads, API calls and visibility pings do |
 | Pairing with five browsers linked (added Phase 1) | Refused before the code is checked, so the code is not used up and no miss is counted |
+| Wi-Fi lost while on (added Phase 2) | Braim Web stays on and Settings shows "Connect to Wi-Fi or turn on your hotspot first" in place of the address; nothing can reach it meanwhile, and auto-off still applies |
 
 ---
 

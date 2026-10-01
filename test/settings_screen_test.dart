@@ -12,6 +12,7 @@ import 'package:braim/l10n/gen/app_localizations.dart';
 import 'package:braim/screens/settings_screen.dart';
 import 'package:braim/state/app_state.dart';
 import 'package:braim/theme/app_theme.dart';
+import 'package:braim/web/web_controller.dart';
 
 class _FakePathProvider extends PathProviderPlatform {
   _FakePathProvider(this.root);
@@ -63,8 +64,11 @@ void main() {
     await tester.runAsync(() => state.setDarkFollowSystem(false));
     await tester.runAsync(() => state.setDarkMode(dark));
     await tester.pumpWidget(RepaintBoundary(
-      child: ChangeNotifierProvider.value(
-        value: state,
+      child: MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: state),
+          ChangeNotifierProvider(create: (_) => BraimWebController(state)),
+        ],
         child: MaterialApp(
           theme: buildTheme(dark),
           scrollBehavior: const _Bouncy(),

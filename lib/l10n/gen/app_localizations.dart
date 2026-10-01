@@ -4365,6 +4365,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Browser'**
   String get webUnknownBrowser;
+
+  /// No description provided for @webToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Braim on your computer'**
+  String get webToggle;
+
+  /// No description provided for @webHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Works on the same Wi-Fi, or when your computer joins this phone\'s hotspot.'**
+  String get webHint;
+
+  /// No description provided for @webAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this address on your computer'**
+  String get webAddressLabel;
+
+  /// No description provided for @webCodeExpires.
+  ///
+  /// In en, this message translates to:
+  /// **'New code in {seconds}s'**
+  String webCodeExpires(int seconds);
+
+  /// No description provided for @webLinkedBrowsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked browsers'**
+  String get webLinkedBrowsers;
+
+  /// No description provided for @webNoBrowsers.
+  ///
+  /// In en, this message translates to:
+  /// **'No browser is linked yet.'**
+  String get webNoBrowsers;
+
+  /// No description provided for @webLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Last used {when}'**
+  String webLastSeen(String when);
+
+  /// No description provided for @webLogOutAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Log out all'**
+  String get webLogOutAll;
+
+  /// No description provided for @webTrustNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Your notes stay on this phone. Anyone on this Wi-Fi could read the traffic, so use it on networks you trust.'**
+  String get webTrustNote;
+
+  /// No description provided for @webNoNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to Wi-Fi or turn on your hotspot first'**
+  String get webNoNetwork;
+
+  /// No description provided for @webStartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim Web couldn\'t start. Try again.'**
+  String get webStartFailed;
+
+  /// No description provided for @webNotificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim Web is on'**
+  String get webNotificationTitle;
+
+  /// No description provided for @webTurnOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get webTurnOff;
+
+  /// No description provided for @webAutoOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim Web turned off after 30 minutes without use'**
+  String get webAutoOff;
 }
 
 class _AppLocalizationsDelegate
