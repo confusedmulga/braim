@@ -1,6 +1,6 @@
 # Privacy Policy for Braim
 
-**Last updated:** September 28, 2026
+**Last updated:** October 2, 2026
 
 Braim ("the App") is developed and published by Kalpesh Nichal, an individual
 developer based in India ("we," "us," "our"). This policy explains what happens
@@ -12,7 +12,9 @@ Braim is a local-first notes app. It does not require an account, does not use
 analytics, advertising or crash-reporting SDKs, and has no backend server that
 we operate. We never receive your content. The App does connect to other
 websites when you save or view links, as described under
-[Link, Tweet and YouTube Previews](#link-tweet-and-youtube-previews).
+[Link, Tweet and YouTube Previews](#link-tweet-and-youtube-previews). If you
+turn on [Braim Web](#braim-web), your phone shows your library to your own
+browser on your local network.
 
 ## Data We Collect
 
@@ -52,6 +54,34 @@ Crypt items included) in that backup and restore it to a new phone. Google
 handles that backup under its own terms and privacy policy; it does not pass
 through us and we cannot access it. Braim excludes its own backup zips from this
 cloud copy. You can turn Android backup off in your device settings.
+
+## Braim Web
+
+Braim Web lets you open your library in a browser on your own computer. It is
+**off by default** and runs only while you have it switched on in Settings.
+
+- **Your phone is the server.** The pages go from your phone to your browser
+  over your local network (the same Wi-Fi, or your phone's hotspot). Nothing is
+  sent to us or to any other server, and no internet service is involved.
+- **Only browsers you pair can see it.** A browser must enter the six-digit
+  code shown on your phone before it can open anything. Each linked browser
+  keeps a random sign-in token in a cookie; your phone stores only a hash of
+  it, with the browser's name (for example, "Chrome on Windows") and when it
+  was linked and last used, so you can tell your linked browsers apart. This
+  record stays on your phone and is left out of Android's system backup. You can log any of
+  them out from Settings at any time, and a browser unused for thirty days is
+  logged out by itself.
+- **The Crypt is never served.** Crypt notes, sparks and images are not
+  available to the browser and do not appear in its search.
+- **The connection is not encrypted.** Braim Web uses plain HTTP on your local
+  network, so someone else on the same network could read the pages as they
+  pass. Use it on networks you trust, such as your home Wi-Fi or your phone's
+  own hotspot, and not on public Wi-Fi.
+- **It turns itself off** after thirty minutes without use, when you tap
+  **Turn off** in its notification, or when you close Braim.
+
+Changes you make in the browser are saved into the App on your phone, exactly
+as if you had made them there.
 
 ## Link, Tweet and YouTube Previews
 
@@ -103,7 +133,13 @@ purpose and never transmitted to us:
 - **Do Not Disturb access** (optional) — if you use the focus timer's Do Not
   Disturb option, to silence interruptions during a session. Braim only switches
   the filter on and off; it reads nothing.
-- **Network/Internet** — to fetch the previews described above.
+- **Network/Internet** — to fetch the previews described above, and, when you
+  turn on Braim Web, to serve your library to your own browser on your local
+  network.
+- **Foreground service (connected device) and Wi-Fi state** — to keep Braim Web
+  reachable while your screen is off, with a notification showing it is on.
+  Android requires the Wi-Fi permission for this kind of service; Braim does
+  not turn Wi-Fi on or off or scan for networks.
 - **Share intent** — to let you save shared content (links, text, Markdown files
   and images) into Braim from other apps.
 
@@ -113,7 +149,8 @@ Braim does not integrate any third-party analytics, advertising, or
 crash-reporting SDKs. Its only outbound network activity is the preview traffic
 described above: the linked website itself, X oEmbed, unavatar.io, and YouTube
 (its oEmbed endpoint and thumbnail host). None of it sends data to a server operated
-by us.
+by us. Braim Web, when you turn it on, answers only browsers on your local
+network that you have paired.
 
 ## Children's Privacy
 

@@ -244,6 +244,66 @@ Recently Deleted, and are never placed in the Crypt.
 shows the circuit notes as ordinary loose notes in the feed. Nothing is lost;
 reopening that backup in a current build restores the tree.
 
+### 3-11. BRAIM WEB
+
+Braim Web opens the library in a browser on a computer. The phone itself is the
+server: the pages travel over the local network from the phone to the computer
+and nowhere else, so the phone must be switched on, in reach, and running Braim
+while the computer is in use.
+
+**Starting.** In Settings, under **Braim Web**, switch on **Open Braim on your
+computer**. The phone and the computer must be on the same Wi-Fi network. The
+panel shows an address such as `http://192.168.1.23:8420`; type it into the
+computer's browser. While Braim Web is on, a notification stays in the phone's
+shade with a **Turn off** button.
+
+**Pairing.** The first visit from a browser asks for the six-digit pairing code
+shown in the panel. A code lasts two minutes and is replaced by a fresh one after
+each use. Five wrong entries lock pairing for thirty seconds. A paired browser
+stays linked until it goes thirty days unused, and at most five browsers may be
+linked at once. **Linked browsers** in the panel lists them, with **Log out** for
+each and **Log out all**; a browser logged out is returned to the pairing page.
+If the phone's address changes (another network, or a new address from the
+router), open the new address and pair again.
+
+**Auto-off.** Braim Web turns itself off after thirty minutes without use. A tab
+left open and in view counts as use; a hidden tab does not. Swiping Braim away
+from Recents also turns it off.
+
+**On the computer.** The site is laid out as a classic desktop: a menu bar with
+the Braim logo, a **File** menu and one title for each section, **Notes**,
+**Sparks**, **Circuits** and **Books**, and every item in a window of its own.
+
+- Notes and sparks are read, created, edited and deleted. Checklists tick from
+  the reading view. Markdown notes are edited as source, with a preview.
+- Circuits open on their map, which drags to pan and zooms with the wheel or a
+  pinch, switches between the three layouts, and carries each note's actions on
+  its menu: add, rename, move up or down, delete, and the placeholder actions.
+- Books open on their contents, where chapters are added, moved up or down, read
+  in the book's typeface, and edited.
+- Search covers notes and sparks. Changes made on the phone appear on the
+  computer within a second or two.
+- Keys: `/` searches, `e` edits the open note or spark, `Ctrl+S` saves, and
+  `Esc` leaves the editor. Editing saves itself a moment after typing stops.
+
+**One editor at a time.** A note, spark or book page open for editing on one
+side opens read-only on the other, and says where it is being edited, so neither
+side's autosave can overwrite the other. It frees up when that editor closes.
+
+**Not on the computer.** The Crypt is never served: its notes, sparks and images
+answer as if they did not exist, and never appear in search. Journal entries,
+archived items, Recently Deleted, reflexes, settings, workshop notes, covers and
+exports stay on the phone, as do deleting book pages and the circuit actions not
+listed above. Images are shown but cannot be added from the computer.
+
+> **TIP.** Where there is no shared Wi-Fi, turn on the phone's hotspot and join
+> it from the computer. Braim Web works over the hotspot the same way.
+
+> **WARNING.** The connection is plain HTTP and is not encrypted. Anyone on the
+> same network could read the pages as they pass. Use Braim Web only on networks
+> the operator trusts, such as a home network or the phone's own hotspot, and
+> never on public Wi-Fi.
+
 ---
 
 ## SECTION IV. NORMAL OPERATION
@@ -280,6 +340,9 @@ lib/
                  book export (PDF/Markdown/ePub), notifications,
                  Do Not Disturb, focus media, seed data, wiki links
   state/         AppState (ChangeNotifier) and the Pomodoro controller
+  web/           Braim Web: the HTTP server, pairing and sessions, the page
+                 builders and JSON API, live updates, and the controller the
+                 Settings switch drives
   theme/         palette, note colours, and ThemeData
   widgets/       navigation island, top bar, search, note/card/folder tiles,
                  Markdown view, frosted chrome, sheets, and the open/close morph
@@ -311,6 +374,14 @@ falling back to an in-memory filter where FTS5 is unavailable.
 5-5. Label contrast uses `palette_generator` to find a thumbnail's dominant
 colour. A luminance above 0.5 gives black text, otherwise white, cached per
 image.
+
+5-6. Braim Web (3-11) is a `shelf` HTTP server running in the application's
+main isolate beside `AppState`, so a change made in the browser goes through the
+same methods as a tap on the phone. A foreground service of type
+`connectedDevice` keeps it reachable while the screen is off. The browser side is
+plain HTML, CSS and a few small scripts in `assets/web/`, with the Quill editor
+vendored in `assets/web/vendor/`; there is no build step. Full detail is in
+[docs/braim-web-plan.md](docs/braim-web-plan.md).
 
 ---
 
@@ -355,7 +426,10 @@ not cover:
 - **Bundled fonts** (Lora, Caveat, Space Grotesk, EB Garamond, Merriweather,
   Inter, Nunito, JetBrains Mono), distributed under the SIL Open Font License
   with their license files under `assets/fonts/`. JetBrains Mono is used only for
-  code in exported PDFs.
+  code, in exported PDFs and on Braim Web.
+- **Quill** (`assets/web/vendor/`), the editor Braim Web uses, under the BSD
+  3-Clause License, with the notices of the packages its build bundles, in
+  `assets/web/vendor/LICENSE-quill.txt`.
 - **Bundled photographs** (the note backgrounds and feed wallpapers), which
   remain the work of their photographers under their own licenses.
 - **Dart and Flutter packages**, each under its own license, listed in the app

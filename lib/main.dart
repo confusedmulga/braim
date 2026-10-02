@@ -58,9 +58,17 @@ void registerFontLicenses() {
 /// with the others.
 void registerWebLicenses() {
   LicenseRegistry.addLicense(() async* {
-    final text =
-        await rootBundle.loadString('assets/web/vendor/LICENSE-quill.txt');
-    yield LicenseEntryWithLineBreaks(['Quill (Braim Web editor)'], text);
+    final text = await rootBundle.loadString(
+      'assets/web/vendor/LICENSE-quill.txt',
+    );
+    // Quill's file also carries the notices of the packages its build bundles.
+    yield LicenseEntryWithLineBreaks([
+      'Quill (Braim Web editor)',
+      'parchment',
+      'quill-delta',
+      'eventemitter3',
+      'lodash-es',
+    ], text);
   });
 }
 
@@ -76,12 +84,14 @@ Future<void> main() async {
   // Draw behind the status bar and the gesture-nav pill, and turn off the
   // system's auto contrast scrim so no white/black band paints behind the pill.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarContrastEnforced: false,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
   runApp(const BraimApp());
 }
 
@@ -149,10 +159,7 @@ class _ThemedApp extends StatelessWidget {
       ),
       // Remount the tree when the theme flips so every widget re-reads
       // the mode-aware palette.
-      home: KeyedSubtree(
-        key: ValueKey(dark),
-        child: const _Root(),
-      ),
+      home: KeyedSubtree(key: ValueKey(dark), child: const _Root()),
     );
   }
 }
@@ -165,7 +172,10 @@ class _NoStretchScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildOverscrollIndicator(
-      BuildContext context, Widget child, ScrollableDetails details) {
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
     return child;
   }
 
@@ -181,9 +191,7 @@ class _Root extends StatelessWidget {
   Widget build(BuildContext context) {
     final loaded = context.select<AppState, bool>((s) => s.loaded);
     if (!loaded) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return const RootShell();
   }

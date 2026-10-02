@@ -494,6 +494,25 @@ leases (11), 400 for malformed input.
 No framework, no bundler and no build step. Scripts load with `defer`. Record
 the actual sizes in this file at the end of Phase 7.
 
+**Measured at the end of Phase 7 (2026-10-02).** Raw size, then gzip -9, which
+is about what the server's compression sends:
+
+| Piece | Raw | Compressed | Against the budget |
+|---|---|---|---|
+| A page's HTML (sample library) | 2.3 to 11.1 KB | 1.1 to 2.8 KB | Within; the largest is a circuit map |
+| `app.css` | 19.2 KB | 5.0 KB | Over 15 KB raw (the retro design) |
+| `app.js` | 16.2 KB | 4.7 KB | Over 15 KB raw (dialogs, circuit and book buttons) |
+| `editor.css` / `editor.js` | 3.2 / 13.9 KB | 1.2 / 4.2 KB | `editor.js` over 10 KB raw |
+| `map.css` / `map.js` | 3.2 / 11.6 KB | 1.3 / 3.7 KB | `map.js` over 8 KB raw |
+| `books.css` | 4.5 KB | 1.4 KB | No budget set; book pages only |
+| `logo.svg` | 5.2 KB | 2.7 KB | Every signed-in page, cached |
+| Quill (`quill.js`, `quill.core.css`) | 204.4 / 10.0 KB | 57.6 / 1.7 KB | As expected; edit pages only |
+| Fonts | Lora 46 KB a weight, Space Grotesk 112 KB a weight, JetBrains Mono 264 KB | 27, 55 and 125 KB | Space Grotesk over 120 KB raw; JetBrains Mono loads only where code shows |
+
+Every asset is versioned and cached for a year, so after the first visit a page
+costs only its HTML. The scripts that run over budget do so by a few KB, all
+under 5 KB compressed; splitting them would add requests for no real gain.
+
 ### 8.2 Layout and look
 
 - A menu bar: the Braim logo (`assets/web/logo.svg`) in the left corner, a
@@ -1013,10 +1032,9 @@ Phase 4 notes (2026-10-01; analyzer clean, 334 tests passing):
   through `richToStyledLines` and `flutter_quill`'s `Document.fromJson`) and
   `test/phone_lease_test.dart` (the phone editors under a browser's lease).
 - Quill's licence is registered in `main.dart` (`registerWebLicenses`), so it
-  appears with the app's other licences. **Release check (Phase 7):**
-  `quill.js` also bundles parchment (BSD-3-Clause), quill-delta, eventemitter3
-  and lodash-es (MIT); `LICENSE-quill.txt` names them, but their full
-  copyright notices still need adding before release.
+  appears with the app's other licences. `quill.js` also bundles parchment,
+  quill-delta, eventemitter3 and lodash-es; their full notices were added to
+  `LICENSE-quill.txt` in Phase 7.
 - Leases: `AppState.acquireEditLease` and friends, holder `kPhoneLease` or
   `web:<sessionId>`, web leases 60 s (`webLeaseTtl`), renewed every 20 s by
   `editor.js`, released on `pagehide` and on log out. The phone editors take
@@ -1131,13 +1149,41 @@ Phase 6 notes (2026-10-02; analyzer clean, 368 tests passing):
 - Sizes now: `app.js` 16.6 KB, `books.css` 4.6 KB.
 
 ### Phase 7: Release preparation
-- [ ] README: section "3-11. BRAIM WEB" in the handbook voice, including the
+- [x] README: section "3-11. BRAIM WEB" in the handbook voice, including the
       same-network rule, pairing, auto-off, the hotspot tip and the
       trusted-network warning.
-- [ ] `PRIVACY.md`: a Braim Web section (16).
-- [ ] Play Console items (16).
-- [ ] Measure and record asset sizes against 8.1.
-- [ ] Full owner test script on a real phone (14).
+- [x] `PRIVACY.md`: a Braim Web section (16).
+- [ ] Play Console items (16). Prepared below; the owner submits them.
+- [x] Measure and record asset sizes against 8.1.
+- [ ] Full owner test script on a real phone (14). Handed to the owner.
+
+Phase 7 notes (2026-10-02):
+
+- README: section 3-11 in the handbook voice, a `web/` line in the Section V
+  tree, paragraph 5-6 on how Braim Web is built, and two LICENSE NOTE changes
+  (Quill and its bundled packages; JetBrains Mono now also shows code on the
+  web).
+- `PRIVACY.md`: a "Braim Web" section (off by default, phone as the server,
+  pairing, what a linked browser's record holds and that it stays out of
+  Android backup, Crypt never served, unencrypted local traffic, auto-off),
+  the foreground-service and Wi-Fi permissions, and the date.
+- Licences: `assets/web/vendor/LICENSE-quill.txt` now carries the full notices
+  of parchment (BSD-3-Clause), quill-delta (BSD-3-Clause per its LICENSE
+  file, though its package.json says MIT), eventemitter3 (MIT) and lodash-es
+  (MIT), with copyright lines taken from each package's LICENSE on unpkg.
+  `registerWebLicenses` lists all five names, so each shows in the app's
+  licences page.
+- **Play Console, for the owner** (App content):
+  1. Foreground service permissions: declare **Connected device** with the
+     description in 16, and a short video if Play asks: turn on Braim Web,
+     open the address on a laptop, pair, browse, then turn it off from the
+     notification.
+  2. Data safety: no change expected. Braim Web sends data only to the user's
+     own browser on the user's own network, never to the developer or a third
+     party; check the form's wording against Google's current definitions.
+  3. Privacy policy: publish the updated `PRIVACY.md` at the listed URL.
+  4. Release notes: mention Braim Web, that it is off until switched on, and
+     the trusted-network warning.
 
 ### Phase 8: Optional polish
 - [ ] Upload images from the laptop into a note (multipart, saved with
