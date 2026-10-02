@@ -2131,7 +2131,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutLine.
   ///
   /// In en, this message translates to:
-  /// **'A notes app · v1.0'**
+  /// **'A notes app'**
   String get aboutLine;
 
   /// No description provided for @privacyPolicy.

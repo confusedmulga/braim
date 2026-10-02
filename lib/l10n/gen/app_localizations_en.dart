@@ -1154,7 +1154,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutSection => 'About';
 
   @override
-  String get aboutLine => 'A notes app · v1.0';
+  String get aboutLine => 'A notes app';
 
   @override
   String get privacyPolicy => 'Privacy policy';
