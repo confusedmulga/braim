@@ -6,14 +6,27 @@ import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
 
 /// The quick actions offered when a note/card is long-pressed.
-enum QuickAction { move, select, pin, theme, archive, delete, hideFromFeed }
+enum QuickAction {
+  move,
+  select,
+  pin,
+  theme,
+  archive,
+  delete,
+  hideFromFeed,
+  shareCircuit,
+}
 
 /// A frosted, rounded list of the quick actions, shown on long-press. [pinned]
 /// picks the Pin vs Unpin label. When [circuitBranch] is set (a branch shown in
 /// the feed), Folder and Archive — which follow the first note — are replaced by
-/// Hide from Home feed. Returns the chosen action, or null if dismissed.
+/// Hide from Home feed. [circuitRoot] (a circuit's card) adds Share circuit,
+/// which sends the whole circuit as a file. Returns the chosen action, or null
+/// if dismissed.
 Future<QuickAction?> showQuickActions(BuildContext context,
-    {bool pinned = false, bool circuitBranch = false}) {
+    {bool pinned = false,
+    bool circuitBranch = false,
+    bool circuitRoot = false}) {
   return showModalBottomSheet<QuickAction>(
     context: context,
     backgroundColor: Colors.transparent,
@@ -48,6 +61,9 @@ Future<QuickAction?> showQuickActions(BuildContext context,
                       QuickAction.pin),
                   _row(context, Icons.palette_outlined, context.t.chooseTheme,
                       QuickAction.theme),
+                  if (circuitRoot)
+                    _row(context, Icons.ios_share_rounded,
+                        context.t.circuitShareFile, QuickAction.shareCircuit),
                   if (circuitBranch)
                     _row(context, Icons.visibility_off_outlined,
                         context.t.circuitHideFromFeed, QuickAction.hideFromFeed)

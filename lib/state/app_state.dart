@@ -14,6 +14,7 @@ import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../services/backup_service.dart';
 import '../services/book_text_ops.dart';
+import '../services/circuit_file.dart';
 import '../services/external_links.dart';
 import '../services/link_preview_service.dart';
 import '../services/youtube_service.dart';
@@ -47,6 +48,12 @@ String defaultPlaceholderTitle(int n) => 'Placeholder #$n';
 /// member whose parent is not itself in the group (the root of the deleted
 /// subtree); [key] identifies the group for restore / permanent delete.
 typedef TrashGroup = ({String key, Note top, List<Note> members});
+
+/// [encodeCircuitFile] run by [compute]: a top-level function, so nothing
+/// but its argument record is sent to the background isolate.
+List<int> _encodeCircuitInBackground(
+        (Note, List<Note>, String, Map<String, List<int>>) a) =>
+    encodeCircuitFile(root: a.$1, nodes: a.$2, source: a.$3, images: a.$4);
 
 /// How long deleted notes stay in Recently Deleted before being purged.
 const Duration kTrashRetention = Duration(days: 30);
@@ -2236,6 +2243,85 @@ class AppState extends ChangeNotifier {
       parentSibs[i].circuitOrder = i;
     }
     await _persist();
+  }
+
+  // ---- Sharing a circuit as a file ----
+
+  /// The bytes of a `.braim` file holding circuit [rootId]: its live notes and
+  /// their images (see [encodeCircuitFile]). Images are read here; the zipping
+  /// runs off the UI thread.
+  Future<List<int>> exportCircuitBytes(String rootId) async {
+    final root = noteById(rootId);
+    if (root == null || !root.isCircuitRoot) {
+      throw StateError('exportCircuitBytes: $rootId is not a circuit');
+    }
+    final nodes = circuitNodes(rootId);
+    final images = <String, List<int>>{};
+    for (final n in nodes) {
+      for (final path in n.imagePaths) {
+        if (images.containsKey(path)) continue;
+        try {
+          images[path] = await File(path).readAsBytes();
+        } catch (_) {
+          // A missing image file is simply left out of the share.
+        }
+      }
+    }
+    // A copy that is shared on keeps its original's identity, so whoever
+    // receives it can still recognise the same circuit.
+    final source = root.circuitSource ?? root.id;
+    return compute(_encodeCircuitInBackground, (root, nodes, source, images));
+  }
+
+  /// Reads and checks a received `.braim` file. Throws [CircuitFileException]
+  /// when it can't be imported. The checks run off the UI thread.
+  Future<CircuitBundle> readCircuitFile(String path) async {
+    final List<int> bytes;
+    try {
+      final file = File(path);
+      if (await file.length() > CircuitFile.maxFileBytes) {
+        throw const CircuitFileException(CircuitFileProblem.tooLarge);
+      }
+      bytes = await file.readAsBytes();
+    } on CircuitFileException {
+      rethrow;
+    } catch (_) {
+      throw const CircuitFileException(CircuitFileProblem.notACircuit);
+    }
+    return compute(decodeCircuitFile, bytes);
+  }
+
+  /// The live circuit a received file is a copy of, if this library has it:
+  /// an earlier import of the same original, or the original itself.
+  Note? circuitMatching(String source) {
+    for (final n in _notes) {
+      if (n.isCircuitRoot &&
+          n.deletedAt == null &&
+          (n.circuitSource == source || n.id == source)) {
+        return n;
+      }
+    }
+    return null;
+  }
+
+  /// Adds a received circuit to the library, on Home, as a new circuit with
+  /// its own ids (nothing already here is touched). With [replaceRootId], that
+  /// circuit moves to Recently Deleted once the new one is ready — so a
+  /// replace can be undone from there. Returns the new first note.
+  Future<Note> importCircuit(CircuitBundle bundle,
+      {String? replaceRootId}) async {
+    final notes = await materializeCircuit(
+      bundle,
+      saveImage: (name, bytes) {
+        final dot = name.lastIndexOf('.');
+        return _storage.saveImageBytes(bytes,
+            ext: dot < 0 ? '.jpg' : name.substring(dot));
+      },
+    );
+    if (replaceRootId != null) await deleteCircuit(replaceRootId);
+    _notes.addAll(notes);
+    await _persist();
+    return notes.first;
   }
 
   // ---- 6.5 Deletion and trash ----

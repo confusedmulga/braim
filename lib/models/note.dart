@@ -335,6 +335,7 @@ class Note {
     this.circuitPlaceholder = false,
     this.circuitPlaceholderFor,
     this.circuitLayout = 'ltr',
+    this.circuitSource,
     this.trashGroupId,
     this.archived = false,
     this.pinned = false,
@@ -479,6 +480,11 @@ class Note {
   /// First note only: the map layout, one of 'ltr', 'ttb' or 'radial'.
   String circuitLayout;
 
+  /// First note only, on a circuit imported from a shared file: the id of the
+  /// original circuit it is a copy of (carried through re-shares), so importing
+  /// the same circuit again can offer to replace this copy.
+  String? circuitSource;
+
   /// Shared by notes deleted together (one trash group); cleared on restore.
   String? trashGroupId;
 
@@ -557,6 +563,7 @@ class Note {
         if (circuitPlaceholderFor != null)
           'circuitPlaceholderFor': circuitPlaceholderFor,
         if (circuitLayout != 'ltr') 'circuitLayout': circuitLayout,
+        if (circuitSource != null) 'circuitSource': circuitSource,
         if (trashGroupId != null) 'trashGroupId': trashGroupId,
         'archived': archived,
         'pinned': pinned,
@@ -600,6 +607,7 @@ class Note {
         circuitPlaceholder: (json['circuitPlaceholder'] as bool?) ?? false,
         circuitPlaceholderFor: json['circuitPlaceholderFor'] as String?,
         circuitLayout: (json['circuitLayout'] as String?) ?? 'ltr',
+        circuitSource: json['circuitSource'] as String?,
         trashGroupId: json['trashGroupId'] as String?,
         archived: (json['archived'] as bool?) ?? false,
         pinned: (json['pinned'] as bool?) ?? false,

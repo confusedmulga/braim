@@ -10,12 +10,14 @@ import 'package:provider/provider.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../models/note.dart';
+import '../services/circuit_file.dart';
 import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bubble_button.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
+import '../widgets/circuit_sheets.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/island_nav.dart';
 import '../widgets/side_pane.dart';
@@ -26,6 +28,7 @@ import 'archive_screen.dart';
 import 'book_screen.dart';
 import 'books_screen.dart';
 import 'cards_screen.dart';
+import 'circuit_map_screen.dart';
 import 'daily_day_screen.dart';
 import 'home_screen.dart';
 import 'journal_screen.dart';
@@ -498,16 +501,40 @@ class _RootShellState extends State<RootShell>
   Future<void> _importFile() async {
     FilePickerResult? result;
     try {
+      // `braim` isn't a type Android knows, so the picker shows every file;
+      // the choice is sorted out below by what the file actually is.
       result = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['md', 'markdown', 'txt', 'text'],
+        allowedExtensions: const [
+          'md',
+          'markdown',
+          'txt',
+          'text',
+          CircuitFile.extension,
+        ],
       );
     } catch (_) {
       return;
     }
     if (result == null || result.files.isEmpty) return;
     final path = result.files.first.path;
-    if (path == null) return;
+    if (path == null || !mounted) return;
+    // Markdown and text become a Markdown node, as before. Anything else is
+    // tried as a shared circuit file — judged by its contents, not its name,
+    // since messengers and drives sometimes rename a file on the way.
+    final dot = path.lastIndexOf('.');
+    final ext = dot < 0 ? '' : path.substring(dot + 1).toLowerCase();
+    if (!const {'md', 'markdown', 'txt', 'text'}.contains(ext)) {
+      await importCircuitFile(context, path, onOpen: (root) {
+        if (!mounted) return;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => CircuitMapScreen(circuitId: root.id),
+        ));
+      });
+      // The circuit lands on Home; show it there.
+      if (mounted) _selectTab(0);
+      return;
+    }
     String content;
     try {
       content = await File(path).readAsString();

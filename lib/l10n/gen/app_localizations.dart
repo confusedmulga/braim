@@ -4713,6 +4713,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That isn\'t a web link. Paste one that starts with http:// or https://.'**
   String get webBadLink;
+
+  /// No description provided for @circuitShareFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Share circuit'**
+  String get circuitShareFile;
+
+  /// No description provided for @circuitImported.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported \"{title}\" · {count, plural, =1{1 note} other{{count} notes}}'**
+  String circuitImported(String title, int count);
+
+  /// No description provided for @circuitImportExistsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You already have \"{title}\"'**
+  String circuitImportExistsTitle(String title);
+
+  /// No description provided for @circuitImportExistsBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace it with this copy, or keep both? A replaced circuit goes to Recently deleted, so you can bring it back.'**
+  String get circuitImportExistsBody;
+
+  /// No description provided for @circuitImportReplace.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get circuitImportReplace;
+
+  /// No description provided for @circuitImportKeepBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep both'**
+  String get circuitImportKeepBoth;
+
+  /// No description provided for @circuitImportNotCircuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim can\'t import this file. Choose a Markdown, text or Braim circuit file.'**
+  String get circuitImportNotCircuit;
+
+  /// No description provided for @circuitImportNewer.
+  ///
+  /// In en, this message translates to:
+  /// **'This circuit was made by a newer version of Braim. Update the app to import it.'**
+  String get circuitImportNewer;
+
+  /// No description provided for @circuitImportDamaged.
+  ///
+  /// In en, this message translates to:
+  /// **'This circuit file is damaged and can\'t be imported.'**
+  String get circuitImportDamaged;
+
+  /// No description provided for @circuitImportTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'This circuit file is too large to import.'**
+  String get circuitImportTooLarge;
 }
 
 class _AppLocalizationsDelegate

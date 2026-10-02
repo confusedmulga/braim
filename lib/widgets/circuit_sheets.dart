@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
+import '../services/circuit_file.dart';
+import '../services/file_names.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
@@ -103,6 +109,7 @@ enum CircuitNodeAction {
   addExisting,
   toggleFeed,
   remove,
+  shareFile,
   shareOutline,
   sharePdf,
   delete,
@@ -211,6 +218,8 @@ Future<CircuitNodeAction?> showCircuitNodeSheet(
                     _act(sheetCtx, Icons.link_off_rounded, t.circuitRemove,
                         CircuitNodeAction.remove),
                   if (isRoot) ...[
+                    _act(sheetCtx, Icons.account_tree_rounded,
+                        t.circuitShareFile, CircuitNodeAction.shareFile),
                     _act(sheetCtx, Icons.ios_share_rounded,
                         t.circuitShareOutline, CircuitNodeAction.shareOutline),
                     _act(sheetCtx, Icons.picture_as_pdf_outlined,
@@ -571,4 +580,105 @@ String? circuitBulkDeleteWarning(BuildContext context, Iterable<String> ids) {
     notes += branches + 1;
   }
   return circuits == 0 ? null : context.t.circuitBulkDeleteBody(circuits, notes);
+}
+
+// ---- Sharing a circuit as a file ------------------------------------------
+
+/// Sends circuit [root] as a `.braim` file through the share sheet (WhatsApp,
+/// Drive, email…), for another phone's Braim to import exactly as it is.
+Future<void> shareCircuitFile(BuildContext context, Note root) async {
+  final state = context.read<AppState>();
+  final messenger = ScaffoldMessenger.of(context);
+  final failed = context.t.shareFailed;
+  try {
+    final bytes = await state.exportCircuitBytes(root.id);
+    final dir = Directory('${(await getTemporaryDirectory()).path}/circuits');
+    await dir.create(recursive: true);
+    final name = safeFileBase(root.title, fallback: 'circuit');
+    final file = File('${dir.path}/$name.${CircuitFile.extension}');
+    await file.writeAsBytes(bytes, flush: true);
+    await SharePlus.instance.share(ShareParams(files: [
+      XFile(file.path, mimeType: 'application/octet-stream'),
+    ]));
+  } catch (_) {
+    messenger.showSnackBar(SnackBar(content: Text(failed)));
+  }
+}
+
+/// The answer to "you already have this circuit".
+enum CircuitImportChoice { replace, keepBoth }
+
+/// Asked when a received circuit is already in the library (an earlier import
+/// of it, or its original): replace that one, or keep both? Null = cancel.
+Future<CircuitImportChoice?> showCircuitImportConflictDialog(
+    BuildContext context,
+    {required String title}) {
+  final t = context.t;
+  return showDialog<CircuitImportChoice>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(t.circuitImportExistsTitle(
+          title.trim().isEmpty ? t.untitledCircuit : title.trim())),
+      content: Text(t.circuitImportExistsBody),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(t.cancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, CircuitImportChoice.keepBoth),
+          child: Text(t.circuitImportKeepBoth),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, CircuitImportChoice.replace),
+          child: Text(t.circuitImportReplace),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Imports a received circuit file at [path] onto Home. Says why when it
+/// can't, asks replace-or-keep-both when the circuit is already here, and
+/// confirms with a snackbar whose Open action calls [onOpen] with the new
+/// circuit's first note.
+Future<void> importCircuitFile(BuildContext context, String path,
+    {required void Function(Note root) onOpen}) async {
+  final state = context.read<AppState>();
+  final messenger = ScaffoldMessenger.of(context);
+  final t = context.t;
+  final CircuitBundle bundle;
+  try {
+    bundle = await state.readCircuitFile(path);
+  } on CircuitFileException catch (e) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(switch (e.problem) {
+        CircuitFileProblem.notACircuit => t.circuitImportNotCircuit,
+        CircuitFileProblem.newerVersion => t.circuitImportNewer,
+        CircuitFileProblem.damaged => t.circuitImportDamaged,
+        CircuitFileProblem.tooLarge => t.circuitImportTooLarge,
+      }),
+    ));
+    return;
+  }
+
+  String? replaceRootId;
+  final existing = state.circuitMatching(bundle.source);
+  if (existing != null) {
+    if (!context.mounted) return;
+    final choice =
+        await showCircuitImportConflictDialog(context, title: existing.title);
+    if (choice == null) return;
+    if (choice == CircuitImportChoice.replace) replaceRootId = existing.id;
+  }
+
+  final root = await state.importCircuit(bundle, replaceRootId: replaceRootId);
+  final count =
+      state.circuitNodes(root.id).where((n) => !n.circuitPlaceholder).length;
+  messenger.showSnackBar(SnackBar(
+    content: Text(t.circuitImported(
+        root.title.trim().isEmpty ? t.untitledCircuit : root.title.trim(),
+        count)),
+    action: SnackBarAction(label: t.circuitOpen, onPressed: () => onOpen(root)),
+  ));
 }

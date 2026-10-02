@@ -124,4 +124,12 @@ void main() {
     final placeholder = Note(title: 'Placeholder #1');
     expect(placeholder.isEmpty, isFalse);
   });
+
+  test('circuitSource is written only when set, and round-trips', () {
+    final plain = Note(title: 'x')..circuitId = 'r';
+    expect(plain.toJson().containsKey('circuitSource'), isFalse);
+    final imported = Note(title: 'x')..circuitSource = 'origin-id';
+    expect(imported.toJson()['circuitSource'], 'origin-id');
+    expect(Note.fromJson(imported.toJson()).circuitSource, 'origin-id');
+  });
 }

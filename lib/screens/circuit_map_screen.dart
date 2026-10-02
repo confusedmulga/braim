@@ -474,6 +474,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         await state.setCircuitShowInFeed(id, !note.circuitShowInFeed);
       case CircuitNodeAction.remove:
         await state.removeFromCircuit(id);
+      case CircuitNodeAction.shareFile:
+        await shareCircuitFile(context, note);
       case CircuitNodeAction.shareOutline:
         await _shareOutline();
       case CircuitNodeAction.sharePdf:

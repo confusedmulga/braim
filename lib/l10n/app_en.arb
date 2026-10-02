@@ -1121,5 +1121,26 @@
   },
   "webImageTooBig": "Images can be up to 10 MB.",
   "webImageType": "Use a JPEG, PNG, GIF or WebP image.",
-  "webBadLink": "That isn't a web link. Paste one that starts with http:// or https://."
+  "webBadLink": "That isn't a web link. Paste one that starts with http:// or https://.",
+  "circuitShareFile": "Share circuit",
+  "circuitImported": "Imported \"{title}\" · {count, plural, =1{1 note} other{{count} notes}}",
+  "@circuitImported": {
+    "placeholders": {
+      "title": { "type": "String" },
+      "count": { "type": "int" }
+    }
+  },
+  "circuitImportExistsTitle": "You already have \"{title}\"",
+  "@circuitImportExistsTitle": {
+    "placeholders": {
+      "title": { "type": "String" }
+    }
+  },
+  "circuitImportExistsBody": "Replace it with this copy, or keep both? A replaced circuit goes to Recently deleted, so you can bring it back.",
+  "circuitImportReplace": "Replace",
+  "circuitImportKeepBoth": "Keep both",
+  "circuitImportNotCircuit": "Braim can't import this file. Choose a Markdown, text or Braim circuit file.",
+  "circuitImportNewer": "This circuit was made by a newer version of Braim. Update the app to import it.",
+  "circuitImportDamaged": "This circuit file is damaged and can't be imported.",
+  "circuitImportTooLarge": "This circuit file is too large to import."
 }

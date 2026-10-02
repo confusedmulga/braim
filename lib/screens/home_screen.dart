@@ -52,7 +52,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _showActions(Note n) async {
     final action = await showQuickActions(context,
-        pinned: n.pinned, circuitBranch: n.isCircuitNode);
+        pinned: n.pinned,
+        circuitBranch: n.isCircuitNode,
+        circuitRoot: n.isCircuitRoot);
     if (action == null || !mounted) return;
     switch (action) {
       case QuickAction.move:
@@ -67,6 +69,8 @@ class _HomeScreenState extends State<HomeScreen> {
         await _archiveOne(n);
       case QuickAction.hideFromFeed:
         await context.read<AppState>().setCircuitShowInFeed(n.id, false);
+      case QuickAction.shareCircuit:
+        await shareCircuitFile(context, n);
       case QuickAction.delete:
         if (n.inCircuit) {
           await confirmAndDeleteCircuitNote(context, n);

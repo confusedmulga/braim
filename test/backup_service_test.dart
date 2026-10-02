@@ -102,4 +102,44 @@ void main() {
         reason: 'progress reaches total');
     img.deleteSync();
   });
+
+  test('restore never writes outside the images folder (zip slip)', () async {
+    // Unique per run: an escape must not be confused with a leftover file.
+    final outside = 'way_out_${DateTime.now().microsecondsSinceEpoch}.txt';
+    // A crafted "backup", as one received from someone else might be.
+    final data = {
+      'notes': [
+        {
+          'id': 'n1',
+          'title': 'sneaky',
+          'blocks': [
+            {'id': 'b1', 'type': 'image', 'text': '', 'imagePath': '..'},
+          ],
+        },
+      ],
+      'spaces': <Object>[],
+      'cards': <Object>[],
+    };
+    final archive = Archive()
+      ..addFile(ArchiveFile('data.json', 0, utf8.encode(jsonEncode(data))))
+      ..addFile(ArchiveFile('images/fine.jpg', 3, [1, 2, 3]))
+      ..addFile(ArchiveFile('images/../escaped.txt', 3, [6, 6, 6]))
+      ..addFile(ArchiveFile('images/../../$outside', 3, [6, 6, 6]))
+      ..addFile(ArchiveFile('images/sub/nested.jpg', 3, [6, 6, 6]))
+      ..addFile(ArchiveFile(r'images/..\back.txt', 3, [6, 6, 6]))
+      ..addFile(ArchiveFile('images/..', 3, [6, 6, 6]));
+    await BackupService.instance
+        .restoreFromZipBytes(ZipEncoder().encode(archive));
+
+    // The honest image is restored...
+    expect(File('${root.path}/images/fine.jpg').existsSync(), isTrue);
+    // ...and nothing escaped the images folder or made sub-folders.
+    expect(File('${root.path}/escaped.txt').existsSync(), isFalse);
+    expect(File('${root.parent.path}/$outside').existsSync(), isFalse);
+    expect(Directory('${root.path}/images/sub').existsSync(), isFalse);
+    expect(File('${root.path}/back.txt').existsSync(), isFalse);
+    // A note can't be pointed at a folder through "..".
+    final restored = await StorageService.instance.load();
+    expect(restored.notes.single.blocks.single.imagePath, isEmpty);
+  });
 }

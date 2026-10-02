@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'archive_safety.dart';
 import 'storage_service.dart';
 
 /// One backup zip sitting in the on-device Backups folder.
@@ -214,9 +215,12 @@ class BackupService {
       if (!f.isFile) continue;
       if (f.name == 'data.json') {
         dataJson = utf8.decode(f.content as List<int>);
-      } else if (f.name.startsWith('images/')) {
-        final base = f.name.substring('images/'.length);
-        if (base.isEmpty) continue;
+      } else {
+        // An image goes in only under a plain file name: a backup can come
+        // from someone else, and a crafted entry name must never write
+        // outside the images folder.
+        final base = safeEntryFileName(f.name, folder: 'images/');
+        if (base == null) continue;
         await File('${imagesDir.path}/$base')
             .writeAsBytes(f.content as List<int>);
       }
@@ -244,8 +248,14 @@ class BackupService {
   /// Points every stored image path at this device's images folder using the
   /// original file name, so a backup restores correctly on any install.
   void _rewritePaths(Map<String, dynamic> map, String imagesPath) {
-    String fix(String? p) =>
-        (p == null || p.isEmpty) ? '' : '$imagesPath/${_base(p)}';
+    String fix(String? p) {
+      if (p == null || p.isEmpty) return '';
+      final base = _base(p);
+      // "." or ".." would point the note at a folder, not an image.
+      return (base.isEmpty || base == '.' || base == '..')
+          ? ''
+          : '$imagesPath/$base';
+    }
 
     void fixBlocks(List? blocks) {
       if (blocks == null) return;

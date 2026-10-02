@@ -2609,4 +2609,49 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get webBadLink =>
       'That isn\'t a web link. Paste one that starts with http:// or https://.';
+
+  @override
+  String get circuitShareFile => 'Share circuit';
+
+  @override
+  String circuitImported(String title, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count notes',
+      one: '1 note',
+    );
+    return 'Imported \"$title\" · $_temp0';
+  }
+
+  @override
+  String circuitImportExistsTitle(String title) {
+    return 'You already have \"$title\"';
+  }
+
+  @override
+  String get circuitImportExistsBody =>
+      'Replace it with this copy, or keep both? A replaced circuit goes to Recently deleted, so you can bring it back.';
+
+  @override
+  String get circuitImportReplace => 'Replace';
+
+  @override
+  String get circuitImportKeepBoth => 'Keep both';
+
+  @override
+  String get circuitImportNotCircuit =>
+      'Braim can\'t import this file. Choose a Markdown, text or Braim circuit file.';
+
+  @override
+  String get circuitImportNewer =>
+      'This circuit was made by a newer version of Braim. Update the app to import it.';
+
+  @override
+  String get circuitImportDamaged =>
+      'This circuit file is damaged and can\'t be imported.';
+
+  @override
+  String get circuitImportTooLarge =>
+      'This circuit file is too large to import.';
 }
