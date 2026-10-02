@@ -81,7 +81,7 @@ class _BraimWebSettingsState extends State<BraimWebSettings> {
               style: TextStyle(color: AppPalette.inkPrimary),
             ),
             subtitle: Text(
-              web.running ? t.webHint : _offLine(context, web),
+              web.running ? t.webKeepOpen : _offLine(context, web),
               style: problem
                   ? TextStyle(color: AppPalette.scheme.error)
                   : _subtitle,

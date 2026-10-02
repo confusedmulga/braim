@@ -110,7 +110,11 @@ class BraimApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AppState()..init()),
+        ChangeNotifierProvider(create: (_) {
+          final state = AppState()..init();
+          NotificationService.onExactAlarmsGranted = state.rescheduleReminders;
+          return state;
+        }),
         // Braim Web: created when Settings first reads it, and always off at
         // launch. It shares the one AppState, so web edits go where phone
         // edits go.

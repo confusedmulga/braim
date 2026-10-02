@@ -116,6 +116,12 @@ Laptop browser                         Phone (Braim app process)
   persistent "Braim Web is on" notification stops Android from freezing or
   killing Braim while the phone screen is off. The service holds no data and
   runs no server; it only keeps the process alive.
+  *Update, 3 Oct 2026 (versionCode 17):* the service was removed, because
+  its `FOREGROUND_SERVICE_CONNECTED_DEVICE` permission needs a Play Console
+  declaration that slows review. Braim Web now keeps the screen on instead
+  (`FLAG_KEEP_SCREEN_ON` through the `braim/screen` channel), so it works
+  while Braim is open on the phone. The service sections below describe the
+  earlier design; to bring it back, revert the commit that removed it.
 - **Pages are built on the phone.** The phone renders HTML. The laptop receives
   finished pages plus a few small scripts. This reuses Braim's existing Dart
   code: the rich-text line parser, the Markdown package, the circuit layout

@@ -17,6 +17,7 @@ import '../theme/app_theme.dart';
 import '../widgets/braim_web_settings.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
+import '../widgets/reminder_hint.dart';
 import '../widgets/tutorial_dialog.dart';
 
 const _privacyPolicyUrl =
@@ -263,16 +264,14 @@ class SettingsScreen extends StatelessWidget {
   /// Turns the nightly journal nudge on/off, asking for the notification
   /// permission the first time it's switched on.
   Future<void> _setJournalReminder(BuildContext context, bool on) async {
-    final t = context.t;
-    final messenger = ScaffoldMessenger.of(context);
     final appState = context.read<AppState>();
     // Flip the switch first so it reflects the change immediately, then ask
     // for the permission (its dialog would otherwise stall the toggle).
     await appState.setJournalReminder(on: on);
     if (on) {
       final granted = await NotificationService.instance.requestPermission();
-      if (!granted && context.mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(t.notifPermNeeded)));
+      if (context.mounted) {
+        await showReminderHint(context, notificationsAllowed: granted);
       }
     }
   }

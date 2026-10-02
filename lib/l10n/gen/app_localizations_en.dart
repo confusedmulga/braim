@@ -81,6 +81,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notifPermNeeded => 'Turn on notifications to get reminders.';
 
   @override
+  String get reminderMayBeLate =>
+      'Reminders may arrive a few minutes late while exact alarms are off.';
+
+  @override
+  String get reminderAllowExact => 'Turn on';
+
+  @override
   String get testNotification => 'Test notifications';
 
   @override
@@ -2398,7 +2405,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'If your phone\'s address changes, you\'ll need to link again.';
 
   @override
-  String get webOffline => 'Braim Web is off, or your phone is out of reach.';
+  String get webOffline =>
+      'Can\'t reach your phone. Check that Braim is open on it and Braim Web is on.';
 
   @override
   String get webNotFound => 'Not found';
@@ -2454,10 +2462,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get webStartFailed => 'Braim Web couldn\'t start. Try again.';
 
   @override
-  String get webNotificationTitle => 'Braim Web is on';
-
-  @override
-  String get webTurnOff => 'Turn off';
+  String get webKeepOpen =>
+      'Keep Braim open on this phone while you use it. The screen stays on until you turn this off.';
 
   @override
   String get webAutoOff => 'Braim Web turned off after 30 minutes without use';

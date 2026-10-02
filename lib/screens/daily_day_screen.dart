@@ -12,6 +12,7 @@ import '../services/notification_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
+import '../widgets/reminder_hint.dart';
 import '../widgets/text_prompt.dart';
 import 'impulse_analytics_screen.dart';
 
@@ -1620,9 +1621,8 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
       });
       if (needPermission) {
         final granted = await NotificationService.instance.requestPermission();
-        if (!granted && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(context.t.notifPermNeeded)));
+        if (mounted) {
+          await showReminderHint(context, notificationsAllowed: granted);
         }
       }
     } else {
@@ -1662,15 +1662,12 @@ class _TaskDetailSheetState extends State<_TaskDetailSheet> {
   /// Turns the thread's start-time notification on/off, asking for the OS
   /// permission the first time it's enabled.
   Future<void> _setNotify(bool value) async {
-    if (value) {
-      final granted = await NotificationService.instance.requestPermission();
-      if (!granted && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.t.notifPermNeeded)),
-        );
-      }
-    }
+    final granted =
+        value ? await NotificationService.instance.requestPermission() : true;
     _persist((t) => t.notify = value);
+    if (value && mounted) {
+      await showReminderHint(context, notificationsAllowed: granted);
+    }
   }
 
   Future<void> _editDescription() async {

@@ -385,8 +385,9 @@ image.
 
 5-6. Braim Web (3-11) is a `shelf` HTTP server running in the application's
 main isolate beside `AppState`, so a change made in the browser goes through the
-same methods as a tap on the phone. A foreground service of type
-`connectedDevice` keeps it reachable while the screen is off. The browser side is
+same methods as a tap on the phone. It works while Braim is open on the phone,
+which keeps its screen on while Braim Web runs (a window flag; there is no
+background service). The browser side is
 plain HTML, CSS and a few small scripts in `assets/web/`, with the Quill editor
 vendored in `assets/web/vendor/`; there is no build step. Full detail is in
 [docs/braim-web-plan.md](docs/braim-web-plan.md).

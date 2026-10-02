@@ -238,6 +238,18 @@ abstract class AppLocalizations {
   /// **'Turn on notifications to get reminders.'**
   String get notifPermNeeded;
 
+  /// No description provided for @reminderMayBeLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders may arrive a few minutes late while exact alarms are off.'**
+  String get reminderMayBeLate;
+
+  /// No description provided for @reminderAllowExact.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get reminderAllowExact;
+
   /// No description provided for @testNotification.
   ///
   /// In en, this message translates to:
@@ -4315,7 +4327,7 @@ abstract class AppLocalizations {
   /// No description provided for @webOffline.
   ///
   /// In en, this message translates to:
-  /// **'Braim Web is off, or your phone is out of reach.'**
+  /// **'Can\'t reach your phone. Check that Braim is open on it and Braim Web is on.'**
   String get webOffline;
 
   /// No description provided for @webNotFound.
@@ -4408,17 +4420,11 @@ abstract class AppLocalizations {
   /// **'Braim Web couldn\'t start. Try again.'**
   String get webStartFailed;
 
-  /// No description provided for @webNotificationTitle.
+  /// No description provided for @webKeepOpen.
   ///
   /// In en, this message translates to:
-  /// **'Braim Web is on'**
-  String get webNotificationTitle;
-
-  /// No description provided for @webTurnOff.
-  ///
-  /// In en, this message translates to:
-  /// **'Turn off'**
-  String get webTurnOff;
+  /// **'Keep Braim open on this phone while you use it. The screen stays on until you turn this off.'**
+  String get webKeepOpen;
 
   /// No description provided for @webAutoOff.
   ///

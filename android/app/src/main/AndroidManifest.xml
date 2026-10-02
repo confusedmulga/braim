@@ -15,13 +15,9 @@
     <!-- Focus timer's Do Not Disturb: a single one-time "DND access" grant the
          user gives in system settings; nothing is read, only the filter set. -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
-    <!-- Braim Web: a foreground service keeps the app alive while a browser on
-         the same Wi-Fi reads the library. connectedDevice also needs one of a
-         set of permissions; CHANGE_WIFI_STATE is the normal one with no prompt.
-         None of these ask the user for anything. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+    <!-- Braim Web has no foreground service: one would need a Play Console
+         declaration that slows review. Instead the screen stays on while it's
+         on (a window flag, no permission), so it works while Braim is open. -->
     <application
         android:label="Braim"
         android:name="${applicationName}"
@@ -91,13 +87,6 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
-        <!-- Braim Web's keep-alive service. stopWithTask: swiping Braim away
-             from Recents ends the Dart side, so the service goes too. -->
-        <service
-            android:name=".BraimWebService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice"
-            android:stopWithTask="true" />
         <!-- flutter_local_notifications: fire scheduled reminders and reschedule
              them after a reboot or an app update. -->
         <receiver

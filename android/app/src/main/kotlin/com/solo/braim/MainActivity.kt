@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -18,7 +19,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
     private val dndChannel = "braim/dnd"
     private val mediaChannel = "braim/media"
-    private val webChannel = "braim/web"
+    private val screenChannel = "braim/screen"
     private var focusMedia: FocusMedia? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,58 +41,27 @@ class MainActivity : FlutterFragmentActivity() {
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
     }
 
-    override fun onDestroy() {
-        // The Flutter engine, and the Braim Web server in it, goes with this
-        // activity; the service must not outlive them and claim a server that
-        // no longer exists.
-        BraimWebService.stopListener = null
-        BraimWebService.stop(applicationContext)
-        super.onDestroy()
-    }
-
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Braim Web's foreground service. The server itself runs in Dart; the
-        // service only keeps the process alive while the screen is off.
-        val web = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, webChannel)
-        BraimWebService.stopListener = {
-            runOnUiThread { web.invokeMethod("stopRequested", null) }
-        }
-        web.setMethodCallHandler { call, result ->
-            when (call.method) {
-                "start" -> {
-                    try {
-                        BraimWebService.start(
-                            applicationContext,
-                            call.argument<String>("url") ?: "",
-                            call.argument<String>("title") ?: "",
-                            call.argument<String>("turnOff") ?: "",
-                            call.argument<String>("channelName") ?: "",
-                        )
-                        result.success(true)
-                    } catch (e: Exception) {
-                        // Android refused the foreground service (for example,
-                        // started from the background).
-                        result.error("start_failed", e.message, null)
+        // Braim Web's server runs in Dart, inside this app, and Android pauses
+        // the app soon after the screen goes off; so while it's on, the screen
+        // stays on. A window flag: no permission, and it only holds while
+        // Braim is the app on screen.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, screenChannel)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "keepOn") {
+                    val flag = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    if (call.argument<Boolean>("on") == true) {
+                        window.addFlags(flag)
+                    } else {
+                        window.clearFlags(flag)
                     }
-                }
-                "update" -> {
-                    BraimWebService.update(
-                        applicationContext,
-                        call.argument<String>("url") ?: "",
-                        call.argument<String>("title") ?: "",
-                        call.argument<String>("turnOff") ?: "",
-                    )
                     result.success(true)
+                } else {
+                    result.notImplemented()
                 }
-                "stop" -> {
-                    BraimWebService.stop(applicationContext)
-                    result.success(true)
-                }
-                else -> result.notImplemented()
             }
-        }
 
         // Pomodoro media notification (MediaSession-backed).
         val media = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, mediaChannel)

@@ -40,6 +40,7 @@ import '../widgets/note_link_picker.dart';
 import '../widgets/note_links_section.dart';
 import '../widgets/note_read_body.dart';
 import '../widgets/note_tags_editor.dart';
+import '../widgets/reminder_hint.dart';
 import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
 import 'reflexes_screen.dart';
@@ -690,8 +691,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   }
 
   Future<void> _setReminder(DateTime? at) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final permText = context.t.notifPermNeeded;
     final granted = at == null
         ? true
         : await NotificationService.instance.requestPermission();
@@ -701,8 +700,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     _persisted = true;
     context.read<AppState>().upsertNote(_note);
     await NotificationService.instance.syncNote(_note);
-    if (at != null && !granted && mounted) {
-      messenger.showSnackBar(SnackBar(content: Text(permText)));
+    if (at != null && mounted) {
+      await showReminderHint(context, notificationsAllowed: granted);
     }
   }
 

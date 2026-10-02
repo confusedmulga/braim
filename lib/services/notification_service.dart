@@ -49,6 +49,11 @@ class NotificationService {
   /// notification can open the timer or toggle play/pause.
   static void Function(String? payload, String? actionId)? onSelect;
 
+  /// Called when the user allows exact alarms from inside Braim. Reminders
+  /// already scheduled keep the inexact mode they were armed with, so the app
+  /// re-arms them all to make them exact too.
+  static void Function()? onExactAlarmsGranted;
+
   Future<void> init() async {
     // Attempt the platform setup at most once; if it fails (e.g. no plugin in
     // a test), every later call quietly no-ops instead of retrying.
@@ -109,7 +114,41 @@ class NotificationService {
       final marker = File('${dir.path}/exact_alarms.asked');
       if (await marker.exists()) return;
       await marker.writeAsString('1', flush: true);
-      await android.requestExactAlarmsPermission();
+      if (await android.requestExactAlarmsPermission() ?? false) {
+        onExactAlarmsGranted?.call();
+      }
+    } catch (_) {}
+  }
+
+  /// Whether reminders will fire on time. False only on Android with exact
+  /// alarms off; elsewhere (or with no notification support) there is nothing
+  /// the user could switch on, so it reports true.
+  Future<bool> exactAlarmsAllowed() async {
+    if (!_ready) await init();
+    if (!_ready) return true;
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (android == null) return true;
+      return await android.canScheduleExactNotifications() ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Opens Android's "Alarms & reminders" screen for Braim (the user asked,
+  /// so unlike [_askExactAlarmsOnce] this isn't limited to once), and re-arms
+  /// reminders if they come back with it allowed.
+  Future<void> requestExactAlarms() async {
+    if (!_ready) await init();
+    if (!_ready) return;
+    try {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (android == null) return;
+      if (await android.requestExactAlarmsPermission() ?? false) {
+        onExactAlarmsGranted?.call();
+      }
     } catch (_) {}
   }
 

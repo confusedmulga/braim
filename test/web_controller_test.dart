@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
-import 'package:braim/services/braim_web_service.dart';
+import 'package:braim/services/screen_awake.dart';
 import 'package:braim/state/app_state.dart';
 import 'package:braim/web/web_assets.dart';
 import 'package:braim/web/web_auth.dart';
@@ -24,50 +24,19 @@ class _FakePathProvider extends PathProviderPlatform {
   Future<String?> getTemporaryPath() async => '$root/tmp';
 }
 
-/// Records what the controller asks of the Android service.
-class _FakeService implements BraimWebService {
+/// Records when the controller keeps the screen on and lets it go.
+class _FakeScreen implements ScreenAwake {
   final calls = <String>[];
-  final started = <Map<String, String>>[];
-  Object? failStart;
-  void Function()? stopRequested;
 
-  /// Whether the server was already listening when the service was started.
-  bool? serverUpWhenStarted;
+  /// Whether the server was already listening when the screen was kept on.
+  bool? serverUpWhenKept;
   bool Function()? serverUp;
 
   @override
-  set onStopRequested(void Function()? callback) => stopRequested = callback;
-
-  @override
-  Future<void> start({
-    required String url,
-    required String title,
-    required String turnOff,
-    required String channelName,
-  }) async {
-    calls.add('start');
-    serverUpWhenStarted = serverUp?.call();
-    final fail = failStart;
-    if (fail != null) throw fail;
-    started.add({
-      'url': url,
-      'title': title,
-      'turnOff': turnOff,
-      'channelName': channelName,
-    });
+  Future<void> keepOn(bool on) async {
+    if (on) serverUpWhenKept = serverUp?.call();
+    calls.add(on ? 'on' : 'off');
   }
-
-  @override
-  Future<void> update({
-    required String url,
-    required String title,
-    required String turnOff,
-  }) async {
-    calls.add('update $url');
-  }
-
-  @override
-  Future<void> stop() async => calls.add('stop');
 }
 
 Future<ByteData> _loadFromDisk(String key) async =>
@@ -77,7 +46,7 @@ void main() {
   late Directory root;
   late DateTime now;
   late List<String> ips;
-  late _FakeService service;
+  late _FakeScreen screen;
   late AppState state;
   late BraimWebController web;
   late HttpClient client;
@@ -105,21 +74,21 @@ void main() {
       ),
       assets: WebAssets(load: _loadFromDisk),
       pairing: WebPairing(now: () => now),
-      service: service,
+      screen: screen,
       listAddresses: () async => ips,
       now: () => now,
       tick: tick,
       bindAddress: InternetAddress.loopbackIPv4,
       ports: ports ?? const [0],
     );
-    service.serverUp = () => c.debugServer?.running ?? false;
+    screen.serverUp = () => c.debugServer?.running ?? false;
     return c;
   }
 
   setUp(() {
     now = DateTime(2026, 10, 1, 9);
     ips = ['192.168.1.23'];
-    service = _FakeService();
+    screen = _FakeScreen();
     final f = File('${root.path}/${WebSessionStore.fileName}');
     if (f.existsSync()) f.deleteSync();
     state = AppState();
@@ -196,11 +165,11 @@ void main() {
     expect(web.startError, WebStartError.noNetwork);
     expect(web.pairingCode, isNull);
     expect(web.addresses, isEmpty);
-    expect(service.calls, isEmpty);
+    expect(screen.calls, isEmpty);
   });
 
   test(
-    'start runs the server first, then the service, with a fresh code',
+    'start runs the server first, then keeps the screen on, with a fresh code',
     () async {
       final changes = <bool>[];
       web.addListener(() => changes.add(web.running));
@@ -215,13 +184,8 @@ void main() {
       expect(web.sessions, isEmpty);
       expect(changes.last, isTrue);
 
-      expect(service.serverUpWhenStarted, isTrue);
-      expect(service.started.single, {
-        'url': 'http://192.168.1.23:${web.port}',
-        'title': 'Braim Web is on',
-        'turnOff': 'Turn off',
-        'channelName': 'Braim Web',
-      });
+      expect(screen.serverUpWhenKept, isTrue);
+      expect(screen.calls, ['on']);
 
       expect(await status('GET', '/pair'), 200);
 
@@ -229,7 +193,7 @@ void main() {
       final port = web.port;
       await web.start();
       expect(web.port, port);
-      expect(service.calls.where((c) => c == 'start'), hasLength(1));
+      expect(screen.calls, ['on']);
     },
   );
 
@@ -241,31 +205,13 @@ void main() {
       await web.start();
       expect(web.running, isFalse);
       expect(web.startError, WebStartError.failed);
-      expect(service.calls, isEmpty);
+      expect(screen.calls, isEmpty);
     } finally {
       await busy.close();
     }
   });
 
-  test(
-    'if Android refuses the service, the server is stopped as well',
-    () async {
-      service.failStart = PlatformException(code: 'start_failed');
-      await web.start();
-      expect(web.running, isFalse);
-      expect(web.startError, WebStartError.failed);
-      expect(web.port, isNull);
-      expect(web.debugServer!.running, isFalse);
-
-      // Trying again once Android allows it works.
-      service.failStart = null;
-      await web.start();
-      expect(web.running, isTrue);
-      expect(web.startError, isNull);
-    },
-  );
-
-  test('stop closes the server, every open page and the service', () async {
+  test('stop closes the server and every page; the screen can sleep', () async {
     await web.start();
     final port = web.port!;
     final token = await pair();
@@ -284,7 +230,7 @@ void main() {
     expect(web.stopReason, WebStopReason.user);
     expect(web.pairingCode, isNull);
     expect(web.addresses, isEmpty);
-    expect(service.calls.last, 'stop');
+    expect(screen.calls.last, 'off');
     await ended.future.timeout(const Duration(seconds: 2));
 
     await expectLater(
@@ -303,7 +249,7 @@ void main() {
     await web.debugTick();
     expect(web.running, isFalse);
     expect(web.stopReason, WebStopReason.autoOff);
-    expect(service.calls.last, 'stop');
+    expect(screen.calls.last, 'off');
   });
 
   test(
@@ -352,22 +298,8 @@ void main() {
       'http://10.0.0.5:$port',
       'http://192.168.43.1:$port',
     ]);
-    expect(service.calls.last, 'update http://10.0.0.5:$port');
     expect(await status('GET', '/pair', host: '192.168.43.1'), 200);
     expect(await status('GET', '/pair', host: '192.168.1.23'), 421);
-
-    // Unchanged addresses don't touch the notification.
-    await web.debugTick();
-    expect(service.calls.where((c) => c.startsWith('update')), hasLength(1));
-  });
-
-  test('Turn off in the notification stops everything', () async {
-    await web.start();
-    service.stopRequested!();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(web.running, isFalse);
-    expect(web.stopReason, WebStopReason.notification);
-    expect(service.calls.last, 'stop');
   });
 
   test('lists linked browsers, logs one out, and logs out all', () async {

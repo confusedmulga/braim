@@ -617,29 +617,7 @@ class AppState extends ChangeNotifier {
     await _importSharedInbox();
     _loaded = true;
     notifyListeners();
-    // Make sure any pending reminders are (re)scheduled with the OS.
-    for (final n in _notes) {
-      if (n.reminderAt != null && n.deletedAt == null) {
-        unawaited(NotificationService.instance.syncNote(n));
-      }
-    }
-    // …and the gentle daily-task reminders on live reflexes.
-    for (final i in _impulses) {
-      if (i.deletedAt != null || i.archived) continue;
-      for (final t in i.allThreads) {
-        final m = t.reminderMinutes;
-        if (!t.notify || m == null) continue;
-        unawaited(NotificationService.instance.scheduleThreadReminder(
-          threadId: t.id,
-          title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
-          body: 'From your daily day',
-          hour: m ~/ 60,
-          minute: m % 60,
-          weekdays: t.days,
-        ));
-      }
-    }
-    unawaited(_syncJournalReminder());
+    rescheduleReminders();
 
     // Cards saved by the share popup arrive without a preview; enrich them in
     // the background now. Capped so a dead link doesn't refetch every launch.
@@ -3138,6 +3116,34 @@ class AppState extends ChangeNotifier {
     }
     await _persist();
     await _syncJournalReminder();
+  }
+
+  /// (Re)arms every reminder with the OS: note reminders, the daily-task
+  /// reminders on live reflexes, and the journal nudge. Run at launch, and
+  /// again when exact alarms are allowed, since an alarm keeps the precision
+  /// it was armed with.
+  void rescheduleReminders() {
+    for (final n in _notes) {
+      if (n.reminderAt != null && n.deletedAt == null) {
+        unawaited(NotificationService.instance.syncNote(n));
+      }
+    }
+    for (final i in _impulses) {
+      if (i.deletedAt != null || i.archived) continue;
+      for (final t in i.allThreads) {
+        final m = t.reminderMinutes;
+        if (!t.notify || m == null) continue;
+        unawaited(NotificationService.instance.scheduleThreadReminder(
+          threadId: t.id,
+          title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
+          body: 'From your daily day',
+          hour: m ~/ 60,
+          minute: m % 60,
+          weekdays: t.days,
+        ));
+      }
+    }
+    unawaited(_syncJournalReminder());
   }
 
   Future<void> _syncJournalReminder() async {

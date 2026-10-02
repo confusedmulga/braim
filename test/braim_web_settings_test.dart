@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'package:shelf/shelf.dart' show Request;
 
 import 'package:braim/l10n/gen/app_localizations.dart';
-import 'package:braim/services/braim_web_service.dart';
 import 'package:braim/state/app_state.dart';
 import 'package:braim/theme/app_theme.dart';
 import 'package:braim/web/web_assets.dart';
@@ -26,29 +25,6 @@ class _FakePathProvider extends PathProviderPlatform {
 
   @override
   Future<String?> getTemporaryPath() async => '$root/tmp';
-}
-
-class _QuietService implements BraimWebService {
-  @override
-  set onStopRequested(void Function()? callback) {}
-
-  @override
-  Future<void> start({
-    required String url,
-    required String title,
-    required String turnOff,
-    required String channelName,
-  }) async {}
-
-  @override
-  Future<void> update({
-    required String url,
-    required String title,
-    required String turnOff,
-  }) async {}
-
-  @override
-  Future<void> stop() async {}
 }
 
 Future<ByteData> _loadFromDisk(String key) async =>
@@ -78,7 +54,6 @@ void main() {
       openSessions: () async =>
           WebSessionStore(File('${root.path}/${WebSessionStore.fileName}')),
       assets: WebAssets(load: _loadFromDisk),
-      service: _QuietService(),
       listAddresses: () async => ips,
       bindAddress: InternetAddress.loopbackIPv4,
       ports: const [0],
@@ -160,6 +135,13 @@ void main() {
       await tester.pump();
 
       expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+      expect(
+        find.text(
+          'Keep Braim open on this phone while you use it. The screen stays '
+          'on until you turn this off.',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Open this address on your computer'), findsOneWidget);
       expect(find.text('http://192.168.1.23:${web.port}'), findsOneWidget);
       final code = web.pairingCode!;
@@ -173,8 +155,7 @@ void main() {
         find.textContaining('Anyone on this Wi-Fi could read the traffic'),
         findsOneWidget,
       );
-      // The code never leaves Settings for the notification: the panel is the
-      // only place it is drawn.
+      // The panel is the only place the code is drawn.
       expect(find.textContaining(code.substring(0, 3)), findsOneWidget);
 
       // A browser pairs; the panel lists it within a second.

@@ -679,6 +679,8 @@ Future<void> importCircuitFile(BuildContext context, String path,
     content: Text(t.circuitImported(
         root.title.trim().isEmpty ? t.untitledCircuit : root.title.trim(),
         count)),
+    // An action makes a snack bar stay until dismissed; this one is a heads-up.
+    persist: false,
     action: SnackBarAction(label: t.circuitOpen, onPressed: () => onOpen(root)),
   ));
 }

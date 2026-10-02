@@ -143,10 +143,6 @@ purpose and never transmitted to us:
 - **Network/Internet** — to fetch the previews described above, and, when you
   turn on Braim Web, to serve your library to your own browser on your local
   network.
-- **Foreground service (connected device) and Wi-Fi state** — to keep Braim Web
-  reachable while your screen is off, with a notification showing it is on.
-  Android requires the Wi-Fi permission for this kind of service; Braim does
-  not turn Wi-Fi on or off or scan for networks.
 - **Share intent** — to let you save shared content (links, text, Markdown files
   and images) into Braim from other apps.
 

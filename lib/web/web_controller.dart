@@ -1,15 +1,13 @@
-// Braim Web's phone-side switch: starts and stops the server and the
-// foreground service, turns itself off when unused, and tells Settings what to
+// Braim Web's phone-side switch: starts and stops the server, keeps the screen
+// on while it runs, turns itself off when unused, and tells Settings what to
 // show. See docs/braim-web-plan.md, section 6.1.
 
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show Locale;
 
-import '../l10n/l10n.dart';
-import '../services/braim_web_service.dart';
+import '../services/screen_awake.dart';
 import '../state/app_state.dart';
 import 'web_assets.dart';
 import 'web_auth.dart';
@@ -20,12 +18,12 @@ enum WebStartError {
   /// No Wi-Fi and no hotspot: no private address to serve on.
   noNetwork,
 
-  /// No free port, or Android refused the foreground service.
+  /// No free port.
   failed,
 }
 
 /// Why Braim Web last stopped.
-enum WebStopReason { user, autoOff, notification }
+enum WebStopReason { user, autoOff }
 
 /// A linked browser as Settings shows it.
 @immutable
@@ -49,7 +47,7 @@ class BraimWebController extends ChangeNotifier {
     Future<WebSessionStore> Function()? openSessions,
     WebAssets? assets,
     WebPairing? pairing,
-    BraimWebService? service,
+    ScreenAwake? screen,
     Future<List<String>> Function()? listAddresses,
     DateTime Function()? now,
     this.autoOffAfter = const Duration(minutes: 30),
@@ -59,15 +57,11 @@ class BraimWebController extends ChangeNotifier {
   }) : _openSessions = openSessions ?? WebSessionStore.inDocuments,
        _assets = assets,
        _pairing = pairing,
-       _service = service ?? BraimWebService(),
+       _screen = screen ?? ScreenAwake(),
        _listAddresses = listAddresses ?? BraimWebServer.privateAddresses,
        _now = now ?? DateTime.now,
        _bindAddress = bindAddress,
-       _ports = ports {
-    _service.onStopRequested = () {
-      unawaited(stop(reason: WebStopReason.notification));
-    };
-  }
+       _ports = ports;
 
   final AppState state;
 
@@ -81,13 +75,11 @@ class BraimWebController extends ChangeNotifier {
   final Future<WebSessionStore> Function() _openSessions;
   final WebAssets? _assets;
   final WebPairing? _pairing;
-  final BraimWebService _service;
+  final ScreenAwake _screen;
   final Future<List<String>> Function() _listAddresses;
   final DateTime Function() _now;
   final InternetAddress? _bindAddress;
   final List<int>? _ports;
-
-  final AppLocalizations _l10n = lookupAppLocalizations(const Locale('en'));
 
   BraimWebServer? _server;
   Timer? _ticker;
@@ -151,8 +143,8 @@ class BraimWebController extends ChangeNotifier {
   @visibleForTesting
   BraimWebServer? get debugServer => _server;
 
-  /// Starts the server, then the foreground service, and shows a fresh code.
-  /// If either fails, nothing is left running and [startError] says why.
+  /// Starts the server, keeps the screen on, and shows a fresh code. If the
+  /// server can't start, nothing is left running and [startError] says why.
   Future<void> start() async {
     if (_running || _busy) return;
     _busy = true;
@@ -181,19 +173,7 @@ class BraimWebController extends ChangeNotifier {
         return;
       }
       _ips = ips;
-      try {
-        await _service.start(
-          url: _urls(server.port!).first,
-          title: _l10n.webNotificationTitle,
-          turnOff: _l10n.webTurnOff,
-          channelName: _l10n.webSection,
-        );
-      } catch (_) {
-        await server.stop();
-        _ips = const [];
-        _startError = WebStartError.failed;
-        return;
-      }
+      await _screen.keepOn(true);
       server.pairing.rotate();
       _running = true;
       _lastActivity = _now();
@@ -204,7 +184,8 @@ class BraimWebController extends ChangeNotifier {
     }
   }
 
-  /// Stops the server (closing every page's event stream) and the service.
+  /// Stops the server (closing every page's event stream) and lets the screen
+  /// time out again.
   Future<void> stop({WebStopReason reason = WebStopReason.user}) async {
     if (!_running) return;
     _running = false;
@@ -214,7 +195,7 @@ class BraimWebController extends ChangeNotifier {
     _ips = const [];
     _notify();
     await _server?.stop();
-    await _service.stop();
+    await _screen.keepOn(false);
   }
 
   /// Logs one linked browser out; its open pages go back to pairing.
@@ -249,13 +230,6 @@ class BraimWebController extends ChangeNotifier {
     _ips = ips;
     _server?.addresses = ips;
     _notify();
-    if (ips.isNotEmpty) {
-      await _service.update(
-        url: addresses.first,
-        title: _l10n.webNotificationTitle,
-        turnOff: _l10n.webTurnOff,
-      );
-    }
   }
 
   void _notify() {
@@ -265,7 +239,6 @@ class BraimWebController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _service.onStopRequested = null;
     unawaited(stop());
     super.dispose();
   }
