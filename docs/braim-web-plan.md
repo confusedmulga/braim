@@ -1096,11 +1096,39 @@ Phase 5 notes (2026-10-02; analyzer clean, 357 tests passing):
   budget, about 3.5 KB compressed), `map.css` 3.3 KB.
 
 ### Phase 6: Books
-- [ ] Shelf, contents with reordering and Add chapter, reader, page editor.
-- [ ] Tests: reorder keeps `bookOrder` consistent; a new chapter gets the
+- [x] Shelf, contents with reordering and Add chapter, reader, page editor.
+- [x] Tests: reorder keeps `bookOrder` consistent; a new chapter gets the
       next Roman numeral; an archived or deleted book answers 404; workshop
       notes never appear.
-- [ ] Analyzer, tests, emulator build, owner test script.
+- [x] Analyzer, tests, emulator build, owner test script.
+
+Phase 6 notes (2026-10-02; analyzer clean, 368 tests passing):
+
+- Files: the book handlers in `lib/web/web_api.dart` (`visibleBook`,
+  `bookPage`, `addChapter`, `moveBookPage`), the shelf, contents and reader in
+  `lib/web/web_pages.dart`, `assets/web/books.css` (loaded on the Books tab's
+  pages; it holds the `@font-face` rules for EB Garamond, Merriweather and
+  Caveat). Tests: `test/web_books_test.dart`.
+- A book's typeface reaches its pages by setting `--serif` on the window, so
+  the contents, the reader, a page's view and its editor (title included) all
+  read in it. Caveat is set larger, as on the phone.
+- The ↑ and ↓ move a page one place among the pages the contents lists, so
+  the Contents page keeps its place; the server turns that into
+  `reorderBookPages` indexes. A move re-dates every page that changes place
+  (AppState does), so it is refused (409 `leased`) while any of them is being
+  edited elsewhere.
+- A book's Contents page opens as the book's contents (`/notes/<id>` and its
+  editor redirect there). Book pages keep their own view at `/notes/<id>`,
+  with "In {book}" and Read under the title bar and the close box going back
+  to the contents; their editor's Done goes back to the contents too.
+- The author shown is the book's own `author`; the phone's fallback to the
+  signed-in account no longer applies (sign-in was removed).
+- Strings: only `webTabBooks` is new. The rest reuse the phone's keys
+  (`untitledBook`, `contentsPage`, `addChapter`, `readBook`, `editAction`,
+  `chaptersCount`, `wordsCount`, `booksEmptyTitle`, `untitledEntry`), the
+  circuit keys `circuitMoveUp`, `circuitMoveDown` and `circuitIn` ("In
+  {title}"), whose wording matches.
+- Sizes now: `app.js` 16.6 KB, `books.css` 4.6 KB.
 
 ### Phase 7: Release preparation
 - [ ] README: section "3-11. BRAIM WEB" in the handbook voice, including the
@@ -1258,6 +1286,8 @@ adb -s emulator-5554 forward tcp:8420 tcp:8420
 | Images from the laptop | Phase 8 |
 | Circuit editing on the web | Add, rename, reorder, delete, placeholders, layout; the rest phone-only |
 | Book editing on the web | Pages, chapters, reorder; the rest phone-only |
+| A book's Contents page on the web (added Phase 6) | Shown as the book's contents; its own note never opens. It keeps its place when pages move |
+| Moving book pages while one is open elsewhere (added Phase 6) | Refused while any page whose place would change is being edited elsewhere, since moving re-dates them |
 | Sessions file in Android's system backup (added Phase 1) | Excluded. `data_extraction_rules.xml` (cloud and device transfer) and `backup_rules.xml` leave out `braim_web_sessions.json`, so a restored phone never trusts browsers linked to the old one |
 | Cookie lifetime (added Phase 1) | Renewed on every page load, so a browser in use never has to pair again; the phone still drops a session after 30 idle days |
 | Event streams and auto-off (added Phase 1) | Opening or reconnecting an event stream is not activity: it neither resets auto-off nor updates "last seen". Page loads, API calls and visibility pings do |

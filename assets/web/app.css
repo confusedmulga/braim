@@ -423,7 +423,8 @@ main.desk-center { width: 100%; max-width: 480px; padding: 24px 16px; }
   /* Two rows is too tall to keep pinned on a phone. */
   .bar { position: relative; flex-wrap: wrap; height: auto; padding: 0 4px; }
   .logo, .menu summary, .tab { min-height: 42px; }
-  .menu summary, .tab { padding: 0 10px; font-size: 16px; }
+  .menu summary, .tab { padding: 0 8px; font-size: 15px; }
+  .logo { padding: 0 8px; }
   .bar-end { order: 5; width: 100%; margin: 0; padding: 6px 6px 8px; border-top: 2px solid var(--ink); }
   .search { flex: 1; }
   .search input { width: 100%; }

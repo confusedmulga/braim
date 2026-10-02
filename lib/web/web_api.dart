@@ -1,5 +1,5 @@
-// Braim Web's JSON API for editing: notes, Markdown notes, sparks and
-// circuits, their edit leases and checklist ticks. Every change goes through AppState on the
+// Braim Web's JSON API for editing: notes, Markdown notes, sparks, circuits
+// and books, their edit leases and checklist ticks. Every change goes through AppState on the
 // live objects, so the phone, the database and backups see it at once. See
 // docs/braim-web-plan.md, sections 7.3, 9 and 11.
 
@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 
 import '../l10n/l10n.dart';
+import '../models/book.dart';
 import '../models/note.dart';
 import '../models/note_block.dart';
 import '../models/tweet_card.dart';
@@ -811,5 +812,82 @@ class WebApi {
       'rename': {'title': l10n.circuitRename, 'value': node.title.trim()},
       'delete': {...delete, 'count': count},
     });
+  }
+
+  // ---- Books (section 9.4) ---------------------------------------------------------
+
+  /// A live book: on the shelf, not archived or deleted.
+  Book? visibleBook(String id) {
+    final b = state.bookById(id);
+    return b != null && !b.archived && b.deletedAt == null ? b : null;
+  }
+
+  /// A page of book [bookId] as the web lists it: a manuscript page the web
+  /// may show, other than the book's Contents page (which the contents page
+  /// stands in for). Workshop notes are never manuscript pages.
+  Note? bookPage(String bookId, String pageId) {
+    if (visibleBook(bookId) == null) return null;
+    final n = state.noteById(pageId);
+    if (n == null ||
+        n.bookId != bookId ||
+        n.bookPageKind == BookPageKind.contents ||
+        !state.isWebVisibleNote(n)) {
+      return null;
+    }
+    return n;
+  }
+
+  /// A book page's editor.
+  static String bookPageEditHref(Note page) =>
+      '/books/${Uri.encodeComponent(page.bookId ?? '')}'
+      '/pages/${Uri.encodeComponent(page.id)}/edit';
+
+  /// `POST /api/books/<id>/chapters`: a new "Chapter N" at the end, numbered
+  /// as the phone numbers it.
+  Future<Response> addChapter(String bookId) async {
+    if (visibleBook(bookId) == null) return _notFound();
+    final chapter = await state.addBookChapter(bookId);
+    return jsonResponse(201, {
+      'id': chapter.id,
+      'edit': bookPageEditHref(chapter),
+    });
+  }
+
+  /// `POST /api/books/<id>/pages/<pageId>/move`: one place up (-1) or down
+  /// (1) among the pages the contents lists, so the Contents page itself
+  /// stays where it is. Moving re-dates every page that changes place, so it
+  /// is refused while any of them is being edited elsewhere.
+  Future<Response> moveBookPage(
+    Request request,
+    String bookId,
+    String pageId,
+    String sessionId,
+  ) async {
+    final page = bookPage(bookId, pageId);
+    if (page == null) return _notFound();
+    final delta = (await _body(request))?['delta'];
+    if (delta is! int || (delta != -1 && delta != 1)) return _bad();
+    final all = state.bookPages(bookId);
+    final listed = [
+      for (final p in all)
+        if (p.bookPageKind != BookPageKind.contents) p,
+    ];
+    final j = listed.indexOf(page) + delta;
+    if (j < 0 || j >= listed.length) return _bad('edge');
+    final from = all.indexOf(page);
+    final to = all.indexOf(listed[j]);
+    final after = List.of(all)
+      ..removeAt(from)
+      ..insert(to, page);
+    final holder = webLeaseHolder(sessionId);
+    for (var i = 0; i < after.length; i++) {
+      if (after[i].bookOrder == i) continue;
+      final conflict = _leaseConflict(after[i].id, holder);
+      if (conflict != null) return conflict;
+    }
+    // `reorderBookPages` takes a list's drop index, which counts the moved
+    // page's old slot when moving down.
+    await state.reorderBookPages(bookId, from, to > from ? to + 1 : to);
+    return _ok();
   }
 }

@@ -4653,6 +4653,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Centre'**
   String get webCentre;
+
+  /// No description provided for @webTabBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'Books'**
+  String get webTabBooks;
 }
 
 class _AppLocalizationsDelegate

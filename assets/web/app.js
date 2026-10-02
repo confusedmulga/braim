@@ -243,13 +243,22 @@
     }
   });
 
-  // A circuit note's "+ Next to this note" and "+ Under this note": add, then
-  // show the new note on the map.
+  // A circuit note's "+ Next to this note" and "+ Under this note" show the
+  // new note on the map; a book's Add chapter opens the new chapter; a page's
+  // up and down arrows redraw the contents.
   document.addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('[data-circuit-add]');
+    var b = e.target.closest && e.target.closest('[data-circuit-add], [data-book-add], [data-book-move]');
     if (!b) return;
-    act(b.getAttribute('data-circuit-add'), { markdown: false }, b,
-      function (body) { location.href = body.map; });
+    if (b.hasAttribute('data-circuit-add')) {
+      act(b.getAttribute('data-circuit-add'), { markdown: false }, b,
+        function (body) { location.href = body.map; });
+    } else if (b.hasAttribute('data-book-add')) {
+      act(b.getAttribute('data-book-add'), {}, b,
+        function (body) { location.href = body.edit; });
+    } else {
+      act(b.getAttribute('data-book-move'), { delta: Number(b.getAttribute('data-delta')) }, b,
+        refreshList);
+    }
   });
 
   // ---- Dialogs: a window on the desk, as the old system drew them --------------

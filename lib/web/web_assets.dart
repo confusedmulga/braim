@@ -28,6 +28,8 @@ class WebAssets {
     // Circuit maps only.
     'map.css': 'text/css; charset=utf-8',
     'map.js': 'text/javascript; charset=utf-8',
+    // Book pages only.
+    'books.css': 'text/css; charset=utf-8',
   };
 
   /// Served at `/fonts/<name>` from `assets/fonts/<name>`.

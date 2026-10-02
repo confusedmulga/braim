@@ -13,6 +13,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
 import '../l10n/l10n.dart';
+import '../models/book.dart';
 import '../services/library_search.dart';
 import '../services/storage_service.dart';
 import '../state/app_state.dart';
@@ -204,6 +205,10 @@ class BraimWebServer {
     ..get('/sparks/<id>/edit', _editSpark)
     ..get('/circuits', _circuits)
     ..get('/circuits/<id>', _circuitMap)
+    ..get('/books', (Request r) => _view(r, pages.books(), tab: 'books'))
+    ..get('/books/<id>', _bookContents)
+    ..get('/books/<id>/read', _bookReader)
+    ..get('/books/<id>/pages/<pageId>/edit', _editBookPage)
     ..post('/api/notes', (Request r) => api.createNote(r))
     ..put(
       '/api/notes/<id>',
@@ -277,6 +282,15 @@ class BraimWebServer {
     ..post(
       '/api/circuits/<id>/layout',
       (Request r, String id) => api.setCircuitLayout(r, id),
+    )
+    ..post(
+      '/api/books/<id>/chapters',
+      (Request r, String id) => api.addChapter(id),
+    )
+    ..post(
+      '/api/books/<id>/pages/<pageId>/move',
+      (Request r, String id, String pageId) =>
+          api.moveBookPage(r, id, pageId, _sid(r)),
     )
     ..get('/search', _search)
     ..get('/link', _link)
@@ -471,13 +485,21 @@ class BraimWebServer {
   Response _editNote(Request request, String id) {
     final n = _visibleNote(id);
     if (n == null) return _failure(request, 404);
-    return _view(
-      request,
-      pages.noteEditor(n),
-      tab: n.inCircuit ? 'circuits' : 'notes',
-      editor: true,
-    );
+    final contents = _contentsOf(n);
+    if (contents != null) return contents;
+    return _view(request, pages.noteEditor(n), tab: _tabOf(n), editor: true);
   }
+
+  /// The menu bar's section for a note.
+  static String _tabOf(Note n) =>
+      n.bookId != null ? 'books' : (n.inCircuit ? 'circuits' : 'notes');
+
+  /// A book's Contents page is its contents on the web: a redirect there, or
+  /// null for any other note.
+  Response? _contentsOf(Note n) =>
+      n.bookId != null && n.bookPageKind == BookPageKind.contents
+      ? Response.found('/books/${Uri.encodeComponent(n.bookId!)}')
+      : null;
 
   Response _editSpark(Request request, String id) {
     final c = _visibleSpark(id);
@@ -498,11 +520,7 @@ class BraimWebServer {
   Response _note(Request request, String id) {
     final n = _visibleNote(id);
     if (n == null) return _failure(request, 404);
-    return _view(
-      request,
-      pages.note(n),
-      tab: n.inCircuit ? 'circuits' : 'notes',
-    );
+    return _contentsOf(n) ?? _view(request, pages.note(n), tab: _tabOf(n));
   }
 
   Response _circuits(Request request) =>
@@ -525,6 +543,24 @@ class BraimWebServer {
       tab: 'circuits',
       map: true,
     );
+  }
+
+  Response _bookContents(Request request, String id) {
+    final b = api.visibleBook(id);
+    if (b == null) return _failure(request, 404);
+    return _view(request, pages.bookContents(b), tab: 'books');
+  }
+
+  Response _bookReader(Request request, String id) {
+    final b = api.visibleBook(id);
+    if (b == null) return _failure(request, 404);
+    return _view(request, pages.bookReader(b), tab: 'books');
+  }
+
+  Response _editBookPage(Request request, String id, String pageId) {
+    final page = api.bookPage(id, pageId);
+    if (page == null) return _failure(request, 404);
+    return _view(request, pages.noteEditor(page), tab: 'books', editor: true);
   }
 
   Response _sparks(Request request) =>

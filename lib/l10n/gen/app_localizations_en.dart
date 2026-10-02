@@ -2575,4 +2575,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webCentre => 'Centre';
+
+  @override
+  String get webTabBooks => 'Books';
 }

@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:ui' show Rect;
 
 import '../l10n/l10n.dart';
+import '../models/book.dart';
 import '../models/note.dart';
 import '../models/note_block.dart';
 import '../models/tweet_card.dart';
@@ -159,7 +160,7 @@ class WebPages {
 <button type="button" data-action="logout">${esc(l10n.webLogOut)}</button>
 </div>
 </details>
-<nav class="tabs">${tabLink('notes', '/', l10n.webTabNotes)}${tabLink('sparks', '/sparks', l10n.webTabSparks)}${tabLink('circuits', '/circuits', l10n.webTabCircuits)}</nav>
+<nav class="tabs">${tabLink('notes', '/', l10n.webTabNotes)}${tabLink('sparks', '/sparks', l10n.webTabSparks)}${tabLink('circuits', '/circuits', l10n.webTabCircuits)}${tabLink('books', '/books', l10n.webTabBooks)}</nav>
 <div class="bar-end">
 <form class="search" action="/search" method="get" role="search">
 <input type="search" name="q" value="${esc(query)}" placeholder="${esc(l10n.webSearch)}" aria-label="${esc(l10n.webSearch)}">
@@ -177,6 +178,7 @@ class WebPages {
       styles: [
         if (editor) ...const ['vendor/quill.core.css', 'editor.css'],
         if (map) 'map.css',
+        if (tab == 'books') 'books.css',
       ],
       scripts: [
         if (editor) ...const ['vendor/quill.js', 'editor.js'],
@@ -283,18 +285,27 @@ class WebPages {
         : (n.textPreview.isNotEmpty
               ? n.textPreview.split('\n').first
               : l10n.emptyNote);
-    final out = StringBuffer('<article class="window note">')
-      ..write(
-        windowTitleBar(
-          display,
-          closeHref: '/',
-          closeLabel: l10n.webTabNotes,
-          label: _label(n.colorValue),
-          end: _editButton('/notes', n.id),
-        ),
-      )
-      ..write(_circuitBar(n))
-      ..write('<div class="window-body">');
+    // A book page closes to its book's contents and edits in the book.
+    final book = n.bookId == null ? null : state.bookById(n.bookId!);
+    final editHref = book == null
+        ? _editHref('/notes', n.id)
+        : WebApi.bookPageEditHref(n);
+    final out =
+        StringBuffer(
+            '<article class="window note"'
+            '${book == null ? '' : _bookFont(book)}>',
+          )
+          ..write(
+            windowTitleBar(
+              display,
+              closeHref: book == null ? '/' : _bookHref(book.id),
+              closeLabel: book == null ? l10n.webTabNotes : l10n.contentsPage,
+              label: _label(n.colorValue),
+              end: _editLink(editHref),
+            ),
+          )
+          ..write(book == null ? _circuitBar(n) : _bookBar(book, n))
+          ..write('<div class="window-body">');
     if (n.tags.isNotEmpty) {
       out.write('<p class="note-meta">');
       for (final t in n.tags) {
@@ -311,7 +322,7 @@ class WebPages {
       main: out.toString(),
       attrs:
           'data-watch="${esc('$api/meta')}" data-check="${esc('$api/check')}" '
-          'data-edit="${esc(_editHref('/notes', n.id))}" '
+          'data-edit="${esc(editHref)}" '
           'data-updated="${n.updatedAt.millisecondsSinceEpoch}"',
     );
   }
@@ -651,6 +662,214 @@ class WebPages {
     return (title: title, main: out.toString(), attrs: 'data-map');
   }
 
+  // ---- Books --------------------------------------------------------------------
+
+  static String _bookHref(String id) => '/books/${Uri.encodeComponent(id)}';
+
+  /// The reader, at [pageId] when given.
+  static String _readerHref(String bookId, [String? pageId]) =>
+      '${_bookHref(bookId)}/read'
+      '${pageId == null ? '' : '#page-${Uri.encodeComponent(pageId)}'}';
+
+  String _bookTitle(Book b) =>
+      b.title.trim().isEmpty ? l10n.untitledBook : b.title.trim();
+
+  String _pageTitle(Note p) =>
+      p.title.trim().isEmpty ? l10n.untitledEntry : p.title.trim();
+
+  /// A `style` attribute that sets a book's typeface as the page's reading
+  /// face (`--serif`). Caveat runs small, so it is set larger, as on the
+  /// phone.
+  static String _bookFont(Book b) {
+    final stack = switch (b.fontFamily) {
+      'EB Garamond' => '"EB Garamond", Garamond, Georgia, serif',
+      'Merriweather' => '"Merriweather", Georgia, serif',
+      'SpaceGrotesk' => '"Space Grotesk", "Helvetica Neue", Arial, sans-serif',
+      'Caveat' => '"Caveat", cursive',
+      _ => '"Lora", Georgia, serif',
+    };
+    return ' style="--serif:${esc(stack)}'
+        '${b.fontFamily == 'Caveat' ? ';--body-size:23px' : ''}"';
+  }
+
+  /// A book's cover image, when it has one the web may serve.
+  String _bookCover(Book b) {
+    final path = b.coverPath;
+    if (path == null || !state.webImageNames.contains(imageName(path))) {
+      return '';
+    }
+    return '<img class="book-cover" src="${esc(_imgHref(path))}" alt="" '
+        'loading="lazy">';
+  }
+
+  /// The pages a book's contents and reader list: its manuscript in order,
+  /// without the Contents page itself (and never its workshop notes).
+  List<Note> _listedPages(String bookId) => [
+    for (final p in state.bookPages(bookId))
+      if (p.bookPageKind != BookPageKind.contents && state.isWebVisibleNote(p))
+        p,
+  ];
+
+  /// Under a book page's title bar: the book it is in, and Read.
+  String _bookBar(Book b, Note page) =>
+      '<div class="info-bar"><a href="${esc(_bookHref(b.id))}">'
+      '${esc(l10n.circuitIn(_bookTitle(b)))}</a><span class="actions">'
+      '<a class="button small" href="${esc(_readerHref(b.id, page.id))}">'
+      '${esc(l10n.readBook)}</a></span></div>';
+
+  WebView books() {
+    final shelf = state.books;
+    final out = StringBuffer(
+      _listWindowTop(l10n.webTabBooks, shelf.length, ''),
+    );
+    if (shelf.isEmpty) {
+      out.write('<p class="empty">${esc(l10n.booksEmptyTitle)}</p>');
+    } else {
+      out.write('<div class="shelf">');
+      for (final b in shelf) {
+        final title = _bookTitle(b);
+        final cover = _bookCover(b);
+        out
+          ..write('<a class="book-card" href="${esc(_bookHref(b.id))}">')
+          ..write(
+            cover.isNotEmpty
+                ? cover
+                : '<span class="book-cover plain"${_bookFont(b)}>'
+                      '<span>${esc(title)}</span></span>',
+          )
+          ..write('<span class="book-title">${esc(title)}</span>');
+        if (b.author.trim().isNotEmpty) {
+          out.write('<span class="muted small">${esc(b.author.trim())}</span>');
+        }
+        out.write(
+          '<span class="muted small">'
+          '${esc(l10n.chaptersCount(state.bookChapters(b.id).length))}'
+          '</span></a>',
+        );
+      }
+      out.write('</div>');
+    }
+    out.write('</div></article>');
+    return (title: l10n.webTabBooks, main: out.toString(), attrs: 'data-list');
+  }
+
+  /// A book's contents: its cover and description, then every page with Read,
+  /// Edit and a move up and down, and Add chapter.
+  WebView bookContents(Book b) {
+    final title = _bookTitle(b);
+    final api = '/api/books/${Uri.encodeComponent(b.id)}';
+    final pages = _listedPages(b.id);
+    final facts = [
+      if (b.author.trim().isNotEmpty) b.author.trim(),
+      l10n.chaptersCount(state.bookChapters(b.id).length),
+      l10n.wordsCount(state.bookWordCount(b.id)),
+    ];
+    final out =
+        StringBuffer('<article class="window book-window"${_bookFont(b)}>')
+          ..write(
+            windowTitleBar(
+              title,
+              closeHref: '/books',
+              closeLabel: l10n.webTabBooks,
+            ),
+          )
+          ..write(
+            '<div class="info-bar"><span>${esc(facts.join(' · '))}</span>'
+            '<span class="actions"><a class="button small" href="'
+            '${esc(_readerHref(b.id))}">${esc(l10n.readBook)}</a>'
+            '<button type="button" class="small" data-book-add="'
+            '${esc('$api/chapters')}"><span aria-hidden="true">+</span>&nbsp;'
+            '${esc(l10n.addChapter)}</button></span></div>',
+          )
+          ..write('<div class="window-body">');
+    final cover = _bookCover(b);
+    final description = b.description.trim();
+    if (cover.isNotEmpty || description.isNotEmpty) {
+      out
+        ..write('<div class="book-head">$cover')
+        ..write(
+          description.isEmpty
+              ? ''
+              : '<div class="book-description">'
+                    '${plainTextHtml(description)}</div>',
+        )
+        ..write('</div>');
+    }
+    out.write(
+      '<h2 class="section-label">${esc(l10n.contentsPage)}</h2>'
+      '<ol class="contents">',
+    );
+    String arrow(String url, int delta, String glyph, String label, bool off) =>
+        '<button type="button" class="small" data-book-move="${esc(url)}" '
+        'data-delta="$delta" title="${esc(label)}" aria-label="${esc(label)}"'
+        '${off ? ' disabled' : ''}>$glyph</button>';
+    for (var i = 0; i < pages.length; i++) {
+      final p = pages[i];
+      final move = '$api/pages/${Uri.encodeComponent(p.id)}/move';
+      out.write(
+        '<li><span class="c-num">${i + 1}</span>'
+        '<a class="c-title" href="${esc(_noteHref(p))}">'
+        '${esc(_pageTitle(p))}</a>'
+        '<span class="c-words">${esc(l10n.wordsCount(p.wordCount))}</span>'
+        '<span class="actions"><a class="button small" href="'
+        '${esc(_readerHref(b.id, p.id))}">${esc(l10n.readBook)}</a>'
+        '<a class="button small" href="'
+        '${esc(WebApi.bookPageEditHref(p))}">${esc(l10n.editAction)}</a>'
+        '${arrow(move, -1, '↑', l10n.circuitMoveUp, i == 0)}'
+        '${arrow(move, 1, '↓', l10n.circuitMoveDown, i == pages.length - 1)}'
+        '</span></li>',
+      );
+    }
+    out.write('</ol></div></article>');
+    return (title: title, main: out.toString(), attrs: 'data-list');
+  }
+
+  /// The whole book to read, page after page, in its own typeface. Quiet
+  /// matter (a dedication, an epigraph) is centred and italic, without a
+  /// heading.
+  WebView bookReader(Book b) {
+    final title = _bookTitle(b);
+    final out =
+        StringBuffer('<article class="window reader-window"${_bookFont(b)}>')
+          ..write(
+            windowTitleBar(
+              title,
+              closeHref: _bookHref(b.id),
+              closeLabel: l10n.contentsPage,
+            ),
+          )
+          ..write(
+            '<div class="window-body reader"><header class="reader-head">',
+          );
+    if (b.author.trim().isNotEmpty) {
+      out.write('<p class="reader-author">${esc(b.author.trim())}</p>');
+    }
+    out.write('<h1 class="reader-title">${esc(title)}</h1></header>');
+    for (final p in _listedPages(b.id)) {
+      final quiet = BookPageKind.isQuietMatter(p.bookPageKind);
+      out.write(
+        '<section class="book-page${quiet ? ' quiet' : ''}" '
+        'id="page-${esc(p.id)}">',
+      );
+      if (!quiet && p.title.trim().isNotEmpty) {
+        out.write('<h2 class="page-heading">${esc(p.title.trim())}</h2>');
+      }
+      out
+        ..write(
+          _cache.putIfAbsent(
+            'read:${_signature(p)}',
+            () =>
+                '<div class="note-body${p.markdown ? ' markdown' : ''}">'
+                '${blocksHtml(p.blocks, markdown: p.markdown, checkedToBottom: p.checkedToBottom)}'
+                '</div>',
+          ),
+        )
+        ..write('</section>');
+    }
+    out.write('</div></article>');
+    return (title: title, main: out.toString(), attrs: 'data-list');
+  }
+
   // ---- Sparks -----------------------------------------------------------------
 
   WebView sparks() {
@@ -798,9 +1017,15 @@ class WebPages {
   WebView noteEditor(Note? n, {bool markdown = false}) {
     final isMarkdown = n?.markdown ?? markdown;
     final id = n?.id;
-    final view = id == null ? '/' : '/notes/${Uri.encodeComponent(id)}';
+    final book = n?.bookId == null ? null : state.bookById(n!.bookId!);
+    final view = id == null
+        ? '/'
+        : (book == null
+              ? '/notes/${Uri.encodeComponent(id)}'
+              : _bookHref(book.id));
     final canDelete = n != null && !n.inCircuit && n.bookId == null;
     return _editor(
+      attrs: book == null ? '' : _bookFont(book),
       item: 'note',
       kind: isMarkdown ? 'markdown' : 'rich',
       id: id,
@@ -841,6 +1066,7 @@ class WebPages {
     required List<NoteBlock> blocks,
     required String? deleteLabel,
     required String pageTitle,
+    String attrs = '',
   }) {
     final config = jsonEncode({
       'item': item,
@@ -873,7 +1099,7 @@ class WebPages {
           )
           ..write(
             '<article class="window editor" id="editor" '
-            'data-config="${esc(config)}">',
+            'data-config="${esc(config)}"$attrs>',
           )
           ..write(
             windowTitleBar(
@@ -1116,9 +1342,10 @@ class WebPages {
   // ---- Helpers ------------------------------------------------------------------
 
   /// Edit, at the right of a note's or spark's title bar.
-  String _editButton(String base, String id) =>
-      '<a class="button small" href="${esc(_editHref(base, id))}">'
-      '${esc(l10n.editAction)}</a>';
+  String _editLink(String href) =>
+      '<a class="button small" href="${esc(href)}">${esc(l10n.editAction)}</a>';
+
+  String _editButton(String base, String id) => _editLink(_editHref(base, id));
 
   static String _editHref(String base, String id) =>
       '$base/${Uri.encodeComponent(id)}/edit';
