@@ -1123,5 +1123,6 @@
     }
   },
   "webImageTooBig": "Images can be up to 10 MB.",
-  "webImageType": "Use a JPEG, PNG, GIF or WebP image."
+  "webImageType": "Use a JPEG, PNG, GIF or WebP image.",
+  "webBadLink": "That isn't a web link. Paste one that starts with http:// or https://."
 }

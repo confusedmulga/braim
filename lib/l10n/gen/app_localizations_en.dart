@@ -2614,4 +2614,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webImageType => 'Use a JPEG, PNG, GIF or WebP image.';
+
+  @override
+  String get webBadLink =>
+      'That isn\'t a web link. Paste one that starts with http:// or https://.';
 }

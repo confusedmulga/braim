@@ -155,6 +155,20 @@
     return withProps({ baseUpdatedAt: base, title: titleInput.value, blocks: blocks(true) });
   }
 
+  // The window and the tab say what the note is called once it has a title
+  // (a Markdown note's is its first heading).
+  function retitle() {
+    var t = titleInput.value.trim();
+    if (cfg.kind === 'markdown') {
+      var m = /^\s*#\s+(.+)$/m.exec(mdSource.value);
+      t = m ? m[1].trim() : '';
+    }
+    if (!t) return;
+    var span = root.querySelector('.window-title > span');
+    if (span) span.textContent = t;
+    document.title = t;
+  }
+
   function created(newId) {
     id = newId;
     var edit = (cfg.item === 'note' ? '/notes/' : '/sparks/') + encodeURIComponent(id);
@@ -192,6 +206,7 @@
           if (!id && b.id) created(b.id);
           if (b.updatedAt) base = b.updatedAt;
           adoptBlockIds(b.blockIds);
+          retitle();
           setState(S.saved);
           return true;
         });

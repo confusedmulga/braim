@@ -853,6 +853,7 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webFooter` | Braim Web runs on your phone. Your notes stay on your network. |
 | `webPrint` / `webTags` / `webNoColour` / `webColourN` | Print… / Tags / No colour / Colour {n} |
 | `webImageTooBig` / `webImageType` | Images can be up to 10 MB. / Use a JPEG, PNG, GIF or WebP image. |
+| `webBadLink` | That isn't a web link. Paste one that starts with http:// or https://. |
 | `webAddLinkHint` | Paste a link |
 | `webSaving` / `webSaved` / `webSaveFailed` | Saving… / Saved / Not saved. Check the connection and try again. |
 | `webMarkdownSource` / `webPreview` / `webSubheading` / `webDeleteNote` | Markdown / Preview / Sub-heading / Delete note |
@@ -1238,6 +1239,17 @@ Phase 8 notes (2026-10-02; analyzer clean, 381 tests passing):
 - Strings: `webPrint`, `webTags`, `webNoColour`, `webColourN`,
   `webImageTooBig`, `webImageType`; the button labels reuse `addPhotos`,
   `taskRemove` and `noteColor`. Tests: `test/web_polish_test.dart`.
+- Bug pass after Phase 8 (2026-10-02; 382 tests passing): every page type
+  loaded without script errors or CSP violations, and the create, edit,
+  Markdown, tick, spark, circuit and book flows ran end to end in a browser.
+  Fixed: File > Add a link and File > New circuit did nothing when already on
+  that page (only the hash changed; `app.js` now listens for `hashchange`); a
+  link the server refuses (`ftp:`, `mailto:`, `javascript:`) said "check the
+  connection" instead of why (new `webBadLink`); passing notices (a refused
+  link, a failed tick or map action) now clear after six seconds, while the
+  offline and deleted notices stay; a new note's window and tab kept saying
+  "New note" after its first save (they now take its title, or a Markdown
+  note's first heading); and the desk clock wrapped onto two lines on a phone.
 - Sizes after the Retro theme, the desk accessories and Phase 8:
   `app.css` 25.5 KB (6.4 KB compressed), `app.js` 21.2 KB (6.2 KB compressed), `editor.js`
   17.6 KB (5.0 KB compressed), `editor.css` 5.1 KB (1.7 KB compressed).

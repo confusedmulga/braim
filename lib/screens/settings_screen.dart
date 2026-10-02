@@ -556,7 +556,7 @@ class SettingsScreen extends StatelessWidget {
                                 context,
                                 label: context.t.backgroundForLight,
                                 preview: _bgThumb(state.feedBackgroundLight,
-                                    'assets/wallpapers/bg_light.jpg'),
+                                    kWallpaperLight),
                                 isSet: state.feedBackgroundLight.isNotEmpty,
                                 onPick: () async {
                                   final path = await ImageService.pickSingle();
@@ -571,7 +571,7 @@ class SettingsScreen extends StatelessWidget {
                                 context,
                                 label: context.t.backgroundForDark,
                                 preview: _bgThumb(state.feedBackgroundDark,
-                                    'assets/wallpapers/bg_dark.jpg'),
+                                    kWallpaperDark),
                                 isSet: state.feedBackgroundDark.isNotEmpty,
                                 onPick: () async {
                                   final path = await ImageService.pickSingle();

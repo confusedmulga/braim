@@ -449,7 +449,10 @@ class WebApi {
     if (url is! String) return _bad();
     final safe = safeUrl(url.trim());
     if (safe == null || safe.toLowerCase().startsWith('mailto:')) {
-      return _bad('bad_url');
+      return jsonResponse(400, {
+        'error': 'bad_url',
+        'message': l10n.webBadLink,
+      });
     }
     final card = await state.addCardFromUrl(safe);
     // An existing spark kept in the Crypt stays out of sight.

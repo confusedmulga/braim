@@ -475,7 +475,7 @@ main.desk-center { width: 100%; max-width: 480px; padding: 24px 16px; }
 .acc-status.off { color: var(--error); }
 .acc-status.off::before { background: var(--error); }
 .acc-news .button { margin-top: 10px; }
-.acc-time { margin-top: 2px; font-size: 26px; line-height: 1.2; letter-spacing: 0.02em; }
+.acc-time { margin-top: 2px; font-size: 26px; line-height: 1.2; letter-spacing: 0.02em; white-space: nowrap; }
 .acc-life canvas { display: block; width: 100%; height: auto; color: var(--accent); image-rendering: pixelated; cursor: pointer; }
 /* A system line at the foot of every page. */
 .sysline { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; max-width: 1120px; margin: 0 auto; padding: 0 24px 28px; font: 12px var(--mono); color: var(--ink-2); }
@@ -508,7 +508,8 @@ main[data-map] + .sysline { display: none; }
   main { padding: 18px 12px 28px; }
   .desk-row { gap: 12px; padding: 16px 12px 0; }
   .acc { flex: 1 1 100%; }
-  .acc-clock, .acc-life { flex-basis: calc(50% - 6px); }
+  .acc-clock, .acc-life { flex-basis: calc(50% - 6px); min-width: 0; }
+  .acc-time { font-size: 18px; }
   .sysline { padding: 0 12px 20px; }
   .window-body { padding: 20px 18px 26px; }
   .list-window > .window-body { padding: 16px; }

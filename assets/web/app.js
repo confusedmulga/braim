@@ -115,10 +115,20 @@
   var banner = document.getElementById('banner');
   var dot = document.getElementById('conn');
 
-  function showBanner(text) {
+  var bannerTimer = null;
+
+  // A notice under the menu bar. A passing one (a refused link, a failed
+  // tick) clears itself; the offline and deleted notices stay until fixed.
+  function showBanner(text, passing) {
     if (!banner) return;
+    clearTimeout(bannerTimer);
     banner.textContent = text || '';
     banner.hidden = !text;
+    if (text && passing) {
+      bannerTimer = setTimeout(function () {
+        if (banner.textContent === text) showBanner('');
+      }, 6000);
+    }
   }
 
   function withPartial(url) {
@@ -201,7 +211,7 @@
           }
           if (res.status === 401) { location.replace('/pair'); return; }
           box.checked = !box.checked;
-          showBanner(b.message || '');
+          showBanner(b.message || '', true);
         });
       }).catch(function () {
         box.checked = !box.checked;
@@ -223,7 +233,7 @@
       if (res.status === 401) { location.replace('/pair'); return; }
       return res.json().catch(function () { return {}; }).then(function (body) {
         if (res.ok) then(body);
-        else showBanner(body.message || banner.getAttribute('data-failed'));
+        else showBanner(body.message || banner.getAttribute('data-failed'), true);
       });
     }).catch(offline).then(function () { if (button) button.disabled = false; });
   }
@@ -350,7 +360,8 @@
     post: post,
     dialog: dialog,
     banner: showBanner,
-    text: function (key) { return banner ? banner.getAttribute('data-' + key) || '' : ''; }
+    text: function (key) { return banner ? banner.getAttribute('data-' + key) || '' : ''; },
+    passing: function (text) { showBanner(text, true); }
   };
 
   var source = null;
@@ -567,9 +578,17 @@
       });
     }
   }
-  // File > Add a link and File > New circuit.
-  var field = { '#add': '#add-link input', '#new': '#new-circuit input' }[location.hash];
-  if (field && document.querySelector(field)) document.querySelector(field).focus();
+  // File > Add a link and File > New circuit: on arrival, and when already on
+  // that page (then only the hash changes).
+  function focusFromHash() {
+    var field = { '#add': '#add-link input', '#new': '#new-circuit input' }[location.hash];
+    var input = field && document.querySelector(field);
+    if (!input) return;
+    if (menu) menu.open = false;
+    input.focus();
+  }
+  focusFromHash();
+  window.addEventListener('hashchange', focusFromHash);
   document.addEventListener('keydown', function (e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var t = e.target;

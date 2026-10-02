@@ -4725,6 +4725,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use a JPEG, PNG, GIF or WebP image.'**
   String get webImageType;
+
+  /// No description provided for @webBadLink.
+  ///
+  /// In en, this message translates to:
+  /// **'That isn\'t a web link. Paste one that starts with http:// or https://.'**
+  String get webBadLink;
 }
 
 class _AppLocalizationsDelegate

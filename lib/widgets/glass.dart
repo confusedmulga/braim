@@ -36,10 +36,12 @@ class AppBackground extends StatelessWidget {
                       gaplessPlayback: true,
                     )
                   : Image.asset(
-                      AppPalette.dark
-                          ? 'assets/wallpapers/bg_dark.jpg'
-                          : 'assets/wallpapers/bg_light.jpg',
+                      AppPalette.dark ? kWallpaperDark : kWallpaperLight,
                       fit: BoxFit.cover,
+                      // The artwork is 2480 x 3508 (A4 at 300 dpi): decoded in
+                      // full it would hold about 35 MB. Decode at the same
+                      // 1440 px width as a custom background instead.
+                      cacheWidth: 1440,
                       gaplessPlayback: true,
                     ),
             ),

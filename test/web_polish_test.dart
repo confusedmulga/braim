@@ -386,6 +386,23 @@ void main() {
     );
   });
 
+  test(
+    'a link the server refuses says why, not "check the connection"',
+    () async {
+      for (final url in [
+        'ftp://example.com/x',
+        'mailto:a@b.c',
+        'javascript:alert(1)',
+      ]) {
+        final r = await send('POST', '/api/sparks', json: {'url': url});
+        expect(r.statusCode, 400, reason: url);
+        final b = await json(r);
+        expect(b['error'], 'bad_url');
+        expect(b['message'], startsWith("That isn't a web link."));
+      }
+    },
+  );
+
   test('the File menu can print the page', () async {
     expect(await page('/'), contains('data-action="print"'));
   });

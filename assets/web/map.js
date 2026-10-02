@@ -215,7 +215,7 @@
       if (res.status === 401) { location.replace('/pair'); return; }
       return res.json().catch(function () { return {}; }).then(function (b) {
         if (!res.ok) {
-          braim.banner(b.message || S.failed);
+          (braim.passing || braim.banner)(b.message || S.failed);
           refresh();
         } else if (b.go || b.edit) {
           location.href = b.go || b.edit;

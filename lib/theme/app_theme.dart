@@ -127,6 +127,11 @@ class AppPalette {
 const String kNoteBodyFont = 'Caveat';
 const String kNoteHeadingFont = 'Lora';
 
+/// The built-in feed backgrounds: original artwork made for Braim, one per
+/// theme. Shown when the user hasn't picked their own background in Settings.
+const String kWallpaperLight = 'assets/wallpapers/lightmain.PNG';
+const String kWallpaperDark = 'assets/wallpapers/darkmain.PNG';
+
 /// Sky blue for inline hyperlinks (a pasted URL, or text linked with the "H"
 /// button). Chosen bright enough to read on the dark app cards yet dark enough
 /// on the white note sheet, so one value works in both places.

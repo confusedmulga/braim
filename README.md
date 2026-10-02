@@ -175,7 +175,8 @@ of the same title. Backlinks are shown on the linked item.
 ### 3-6. APPEARANCE
 
 Appearance is set in Settings: System, Light, or Dark. System follows the device
-theme. Light and dark wallpapers back the feeds. Body and reading typefaces are
+theme. Original light and dark artwork backs the feeds, or the operator may pick
+an image of their own for each theme. Body and reading typefaces are
 selectable from the bundled font set.
 
 ### 3-7. BACKUP AND RESTORE
@@ -437,8 +438,11 @@ not cover:
 - **Quill** (`assets/web/vendor/`), the editor Braim Web uses, under the BSD
   3-Clause License, with the notices of the packages its build bundles, in
   `assets/web/vendor/LICENSE-quill.txt`.
-- **Bundled photographs** (the note backgrounds and feed wallpapers), which
-  remain the work of their photographers under their own licenses.
+- **The feed wallpapers** (`assets/wallpapers/lightmain.PNG` and
+  `darkmain.PNG`), original artwork made for Braim. All rights reserved.
+- **The note backgrounds** (`assets/BACK*.jpg`), free stock photographs from
+  [Pexels](https://www.pexels.com/), used under the Pexels License. They remain
+  the work of their photographers.
 - **Dart and Flutter packages**, each under its own license, listed in the app
   under Settings › About › Open-source licenses.
 
