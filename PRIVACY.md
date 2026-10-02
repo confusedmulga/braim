@@ -1,6 +1,6 @@
 # Privacy Policy for Braim
 
-**Last updated:** October 2, 2026
+**Last updated:** October 3, 2026
 
 Braim ("the App") is developed and published by Kalpesh Nichal, an individual
 developer based in India ("we," "us," "our"). This policy explains what happens

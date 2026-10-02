@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -844,22 +845,27 @@ class SettingsScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        GlassPanel(
-                          borderRadius: 20,
-                          blur: 0,
-                          color: AppPalette.surfaceGlass,
-                          padding: EdgeInsets.zero,
-                          onTap: () => _loadSample(context),
-                          child: ListTile(
-                            leading: Icon(Icons.auto_awesome_rounded,
-                                color: AppPalette.inkPrimary),
-                            title: Text(context.t.loadSampleData,
-                                style: TextStyle(color: AppPalette.inkPrimary)),
-                            subtitle: Text(context.t.loadSampleDataSubtitle,
-                                style: TextStyle(color: Color(0xFF5E5F69))),
+                        // A testing aid for repopulating a wiped emulator:
+                        // debug builds only, never in a release.
+                        if (kDebugMode) ...[
+                          const SizedBox(height: 12),
+                          GlassPanel(
+                            borderRadius: 20,
+                            blur: 0,
+                            color: AppPalette.surfaceGlass,
+                            padding: EdgeInsets.zero,
+                            onTap: () => _loadSample(context),
+                            child: ListTile(
+                              leading: Icon(Icons.auto_awesome_rounded,
+                                  color: AppPalette.inkPrimary),
+                              title: Text(context.t.loadSampleData,
+                                  style:
+                                      TextStyle(color: AppPalette.inkPrimary)),
+                              subtitle: Text(context.t.loadSampleDataSubtitle,
+                                  style: TextStyle(color: Color(0xFF5E5F69))),
+                            ),
                           ),
-                        ),
+                        ],
                         const SizedBox(height: 12),
                         GlassPanel(
                           borderRadius: 20,
