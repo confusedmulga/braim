@@ -94,10 +94,6 @@ class AppPalette {
   static Color get selFill =>
       dark ? const Color(0x1FFFFFFF) : const Color(0x14000000);
 
-  /// Whitening/darkening tint over a themed note's background image.
-  static Color get noteTint =>
-      dark ? const Color(0x99000000) : const Color(0xADFFFFFF);
-
   /// Warm amber accent for the Journal (selected day, entry dates).
   static const journalAccent = Color(0xFFEBA23C);
 

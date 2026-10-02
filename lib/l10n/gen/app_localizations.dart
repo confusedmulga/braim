@@ -874,18 +874,6 @@ abstract class AppLocalizations {
   /// **'Add photos'**
   String get addPhotos;
 
-  /// No description provided for @background.
-  ///
-  /// In en, this message translates to:
-  /// **'Background'**
-  String get background;
-
-  /// No description provided for @noteBackground.
-  ///
-  /// In en, this message translates to:
-  /// **'Node background'**
-  String get noteBackground;
-
   /// No description provided for @copyNote.
   ///
   /// In en, this message translates to:
@@ -2236,12 +2224,6 @@ abstract class AppLocalizations {
   /// **'Theme'**
   String get themeLabel;
 
-  /// No description provided for @wallpaper.
-  ///
-  /// In en, this message translates to:
-  /// **'Background'**
-  String get wallpaper;
-
   /// No description provided for @moreOptions.
   ///
   /// In en, this message translates to:
@@ -2251,7 +2233,7 @@ abstract class AppLocalizations {
   /// No description provided for @chooseTheme.
   ///
   /// In en, this message translates to:
-  /// **'Colour & background'**
+  /// **'Colour'**
   String get chooseTheme;
 
   /// No description provided for @createNote.

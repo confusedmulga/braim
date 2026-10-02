@@ -6,10 +6,11 @@
     <!-- Note reminders (local notifications, rescheduled across reboots). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <!-- Fire reminders at the exact chosen time (a reminder app), instead of an
-         inexact window that Doze can defer for hours. USE_EXACT_ALARM is
-         auto-granted on Android 13+; SCHEDULE_EXACT_ALARM covers Android 12. -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- Fire reminders at the exact chosen time, instead of an inexact window
+         that Doze can defer. SCHEDULE_EXACT_ALARM is user-granted ("Alarms &
+         reminders"); without it reminders fall back to an inexact window.
+         USE_EXACT_ALARM is deliberately absent: Google Play reserves it for
+         alarm-clock, timer and calendar apps. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- Focus timer's Do Not Disturb: a single one-time "DND access" grant the
          user gives in system settings; nothing is read, only the filter set. -->

@@ -95,13 +95,8 @@ class _HomeScreenState extends State<HomeScreen> {
     await showNoteStylePicker(
       context,
       currentColor: n.colorValue,
-      currentBackground: n.backgroundAsset,
       onColor: (value) {
         n.colorValue = value;
-        state.upsertNote(n);
-      },
-      onBackground: (value) {
-        n.backgroundAsset = value;
         state.upsertNote(n);
       },
     );

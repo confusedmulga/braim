@@ -443,12 +443,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         await showNoteStylePicker(
           context,
           currentColor: note.colorValue,
-          currentBackground: note.backgroundAsset,
           onColor: (v) => state.setCircuitNodeColor(id, v),
-          onBackground: (v) {
-            note.backgroundAsset = v;
-            state.upsertNote(note);
-          },
         );
       case CircuitNodeAction.moveUp:
         await state.moveCircuitNode(id, -1);

@@ -447,12 +447,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addPhotos => 'Add photos';
 
   @override
-  String get background => 'Background';
-
-  @override
-  String get noteBackground => 'Node background';
-
-  @override
   String get copyNote => 'Copy node';
 
   @override
@@ -1211,13 +1205,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeLabel => 'Theme';
 
   @override
-  String get wallpaper => 'Background';
-
-  @override
   String get moreOptions => 'More';
 
   @override
-  String get chooseTheme => 'Colour & background';
+  String get chooseTheme => 'Colour';
 
   @override
   String get createNote => 'Node';

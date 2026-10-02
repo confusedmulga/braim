@@ -420,7 +420,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   String _fingerprint() => jsonEncode([
         _note.title,
         _note.colorValue,
-        _note.backgroundAsset,
         _note.spaceId,
         _note.tags,
         _note.reminderAt?.toIso8601String(),
@@ -625,15 +624,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     setState(() => _note.spaceId = selected == '__none__' ? null : selected);
   }
 
-  /// One menu for the note's look: colour swatches on top, backgrounds below.
-  /// Each tap applies live, so the note restyles behind the open sheet.
+  /// The note's colour. Each tap applies live, so the note restyles behind
+  /// the open sheet.
   Future<void> _pickStyle() async {
     await showNoteStylePicker(
       context,
       currentColor: _note.colorValue,
-      currentBackground: _note.backgroundAsset,
       onColor: (value) => setState(() => _note.colorValue = value),
-      onBackground: (value) => setState(() => _note.backgroundAsset = value),
     );
   }
 
@@ -940,7 +937,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         if (!didPop) _close();
       },
       child: NoteBackground(
-        asset: _note.backgroundAsset,
         color: NoteColors.resolve(_note.colorValue),
         // Status-bar clock/battery must stay readable over the sheet: dark
         // icons on the light sheet, light icons on the dark one.
@@ -1245,10 +1241,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                   // itself stays fully visible under the toolbar.
                   child: TopScrimFade(
                     height: MediaQuery.of(context).padding.top + 8,
-                    color: _note.backgroundAsset == null
-                        ? (NoteColors.resolve(_note.colorValue) ??
-                            AppPalette.sheet)
-                        : AppPalette.sheet,
+                    color: NoteColors.resolve(_note.colorValue) ??
+                        AppPalette.sheet,
                   ),
                 ),
                 // Nothing to format while reading.

@@ -16,6 +16,13 @@ websites when you save or view links, as described under
 turn on [Braim Web](#braim-web), your phone shows your library to your own
 browser on your local network.
 
+## What We Never Do
+
+- We never sell, rent or share your data, because we never have it.
+- There are no ads, no tracking across apps or websites, no analytics and no
+  crash reports.
+- The App is free and takes no payments, so it handles no payment details.
+
 ## Data We Collect
 
 We do not collect, store, or have access to any of your data. There is no user
@@ -152,6 +159,16 @@ described above: the linked website itself, X oEmbed, unavatar.io, and YouTube
 by us. Braim Web, when you turn it on, answers only browsers on your local
 network that you have paired.
 
+## Security
+
+Your library is stored in the App's private storage, which Android's app sandbox
+keeps away from other apps, and which your phone's own encryption protects when
+it is locked. Braim adds no encryption of its own: the Crypt folder restricts
+access inside the App but does not encrypt, and exported backups are plain zip
+files. Braim Web pages travel unencrypted on your local network, as described
+under [Braim Web](#braim-web). No method of storage or transmission is
+completely secure, so keep your phone locked and your backups somewhere safe.
+
 ## Children's Privacy
 
 Braim does not knowingly collect any information from anyone, including
@@ -159,6 +176,13 @@ children, because it collects no information itself. The App is not directed at
 children and contains no age-restricted content.
 
 ## Data Deletion and Your Rights
+
+Privacy laws such as India's Digital Personal Data Protection Act, 2023 and the
+EU's General Data Protection Regulation give you rights over personal data a
+company holds about you. We hold none, so there is nothing of yours for us to
+disclose, correct or erase. The third-party services listed above handle the
+requests your device sends them, and you can exercise your rights with them
+directly.
 
 All app data lives on your device. Deleting items in the App (they stay in
 Recently Deleted for thirty days unless you empty it), using Settings › Clear

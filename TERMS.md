@@ -1,18 +1,20 @@
 # Terms of Use for Braim
 
-**Last updated:** September 28, 2026
+**Last updated:** October 2, 2026
 
 These terms cover your use of the Braim app ("the App"), published by Kalpesh
 Nichal, an individual developer based in India ("we," "us"). By installing or
 using the App you agree to them. If you don't agree, don't use the App.
 
-## 1. The App
+## 1. The App is free
 
-Braim is free. We grant you a personal, non-exclusive, revocable right to use it
-on devices you own or control. The App's source code is also published under
-the MIT License (see `LICENSE`); that license governs the code. These terms
-govern your use of the App as distributed through app stores. The Braim name and
-logo are not licensed to you under either.
+Braim is provided free of charge. It has no price, no in-app purchases, no
+subscriptions and no ads, and we receive nothing from you for it, neither money
+nor your data. We grant you a personal, non-exclusive, revocable right to use it
+on devices you own or control. The App's source code is also published under the
+MIT License (see `LICENSE`); that license governs the code. These terms govern
+your use of the App as distributed through app stores. The Braim name, logo and
+artwork are not licensed to you under either.
 
 ## 2. Your content
 
@@ -37,7 +39,8 @@ at any time, and previews may then fail.
 
 All data lives on your device. We keep no copy and cannot recover anything for
 you. Phones get lost, storage fails, and software has bugs. Export a backup to
-somewhere other than your phone regularly.
+somewhere other than your phone regularly. You are solely responsible for
+backing up your data.
 
 ## 5. Not for critical use
 
@@ -50,36 +53,70 @@ the App mid-session; check your phone if you are expecting an important call.
 The Crypt folder limits access within the App. It does not encrypt anything and
 is not a place for passwords or financial details.
 
-## 6. No warranty
+## 6. Braim Web
+
+Braim Web is optional and off by default. When you turn it on, your phone serves
+your library to browsers you pair on your local network, over an unencrypted
+connection (plain HTTP). Anyone else on the same network may be able to read
+that traffic. Use it only on networks you trust, such as your home Wi-Fi or your
+phone's own hotspot, and keep your pairing code to yourself. You use Braim Web
+at your own risk, and you are responsible for the networks and the browsers you
+use it with.
+
+## 7. No warranty
 
 The App is provided "as is" and "as available," without warranties of any kind,
 express or implied, including merchantability, fitness for a particular
-purpose, and non-infringement. We don't promise that it will be error-free,
-uninterrupted, or that data will never be lost.
+purpose, accuracy, security, and non-infringement. We don't promise that it will
+be error-free, secure or uninterrupted, or that data will never be lost. You use
+the App at your own risk.
 
-## 7. Limitation of liability
+## 8. Limitation of liability
 
-To the fullest extent the law allows, we are not liable for any indirect,
-incidental, special or consequential damages, or for any loss of data, profits
-or goodwill, arising from your use of or inability to use the App. Our total
-liability for any claim relating to the App is limited to the amount you paid
-for it (the App is free) or INR 1,000, whichever is greater. Nothing in these
-terms limits liability that cannot be limited by law, or rights you have as a
-consumer that cannot be waived.
+The App is a free, personal project. To the fullest extent the law allows:
 
-## 8. Changes and ending
+- we are not liable for any loss or damage of any kind arising from your use of,
+  or inability to use, the App, including loss of data, missed reminders,
+  disclosure of content through Braim Web, profits, goodwill, or any indirect,
+  incidental, special or consequential damages, even if we were told such loss
+  was possible; and
+- where liability cannot be excluded, our total liability for all claims
+  relating to the App is limited to the amount you paid us for it, which is
+  nil.
 
-We may update the App or these terms, or stop offering the App. If we change
-these terms materially, we will update the date above and note it in the store
-listing or in the App. Continuing to use the App after a change means you accept
-it. You can stop using the App at any time by uninstalling it.
+Nothing in these terms limits liability that the law does not allow to be
+limited, such as liability for fraud, or any rights you have as a consumer that
+cannot be waived.
 
-## 9. Governing law
+## 9. Your responsibility
+
+You agree to use the App lawfully. If your use of the App, your content, or your
+breach of these terms or of a third party's rights leads to a claim against us,
+you agree to cover our reasonable costs and losses from that claim, to the
+extent the law allows.
+
+## 10. Changes and ending
+
+We may update the App or these terms, or stop offering the App, at any time and
+without notice. If we change these terms materially, we will update the date
+above and note it in the store listing or in the App. Continuing to use the App
+after a change means you accept it. You can stop using the App at any time by
+uninstalling it.
+
+## 11. General
+
+These terms and the [Privacy Policy](PRIVACY.md) are the whole agreement between
+you and us about the App. If any part of these terms is found unenforceable, the
+rest stays in effect and that part is applied as far as the law allows. Our not
+enforcing a term is not a waiver of it. You may not transfer these terms; we may
+transfer them to anyone who takes over the App.
+
+## 12. Governing law
 
 These terms are governed by the laws of India. Courts in India have jurisdiction
 over any dispute about them, without affecting any mandatory right you have to
 bring a claim where you live.
 
-## 10. Contact
+## 13. Contact
 
 **yellowisjoyy@gmail.com**

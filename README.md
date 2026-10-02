@@ -440,9 +440,6 @@ not cover:
   `assets/web/vendor/LICENSE-quill.txt`.
 - **The feed wallpapers** (`assets/wallpapers/lightmain.PNG` and
   `darkmain.PNG`), original artwork made for Braim. All rights reserved.
-- **The note backgrounds** (`assets/BACK*.jpg`), free stock photographs from
-  [Pexels](https://www.pexels.com/), used under the Pexels License. They remain
-  the work of their photographers.
 - **Dart and Flutter packages**, each under its own license, listed in the app
   under Settings › About › Open-source licenses.
 

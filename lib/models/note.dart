@@ -313,7 +313,6 @@ class Note {
     this.title = '',
     List<NoteBlock>? blocks,
     this.spaceId,
-    this.backgroundAsset,
     this.colorValue,
     this.journalDate,
     this.bookId,
@@ -356,9 +355,6 @@ class Note {
 
   /// Id of the space (folder) this note belongs to, or null for the inbox.
   String? spaceId;
-
-  /// Optional per-note background image asset (one of the BACK## assets).
-  String? backgroundAsset;
 
   /// Optional Keep-style colour tag (ARGB int of the light swatch); null =
   /// default surface.
@@ -534,7 +530,6 @@ class Note {
         'title': title,
         'blocks': blocks.map((b) => b.toJson()).toList(),
         'spaceId': spaceId,
-        'backgroundAsset': backgroundAsset,
         'colorValue': colorValue,
         'journalDate': journalDate,
         if (bookId != null) 'bookId': bookId,
@@ -577,7 +572,6 @@ class Note {
             .map((e) => NoteBlock.fromJson(e as Map<String, dynamic>))
             .toList(),
         spaceId: json['spaceId'] as String?,
-        backgroundAsset: json['backgroundAsset'] as String?,
         colorValue: json['colorValue'] as int?,
         journalDate: json['journalDate'] as String?,
         bookId: json['bookId'] as String?,

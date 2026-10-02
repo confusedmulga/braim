@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -86,16 +88,29 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin>();
       if (android == null) return true;
       final granted = await android.requestNotificationsPermission() ?? true;
-      // Also ask to schedule exact alarms so reminders fire on time rather than
-      // in an inexact (Doze-deferred) window. Best-effort; ignored where the
-      // OS auto-grants it (Android 13+ via USE_EXACT_ALARM).
-      try {
-        await android.requestExactAlarmsPermission();
-      } catch (_) {}
+      await _askExactAlarmsOnce(android);
       return granted;
     } catch (_) {
       return false;
     }
+  }
+
+  /// Sends the user to Android's "Alarms & reminders" screen the first time a
+  /// reminder needs it, so reminders fire on time rather than in an inexact
+  /// (Doze-deferred) window. Only once per install: Android 14+ denies exact
+  /// alarms by default, and reopening that screen on every reminder would nag.
+  /// Declined, reminders still fire, just less precisely, and Settings' test
+  /// notification says how to turn exact alarms on.
+  Future<void> _askExactAlarmsOnce(
+      AndroidFlutterLocalNotificationsPlugin android) async {
+    try {
+      if (await android.canScheduleExactNotifications() ?? true) return;
+      final dir = await getApplicationSupportDirectory();
+      final marker = File('${dir.path}/exact_alarms.asked');
+      if (await marker.exists()) return;
+      await marker.writeAsString('1', flush: true);
+      await android.requestExactAlarmsPermission();
+    } catch (_) {}
   }
 
   /// Exact firing when the OS allows it (a reminder app), else an inexact window.
