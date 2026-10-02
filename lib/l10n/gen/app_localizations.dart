@@ -4659,6 +4659,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Books'**
   String get webTabBooks;
+
+  /// No description provided for @webLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get webLoading;
+
+  /// No description provided for @webBootItems.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes, sparks, circuits, books'**
+  String get webBootItems;
+
+  /// No description provided for @webClock.
+  ///
+  /// In en, this message translates to:
+  /// **'Clock'**
+  String get webClock;
+
+  /// No description provided for @webLife.
+  ///
+  /// In en, this message translates to:
+  /// **'Game of Life'**
+  String get webLife;
+
+  /// No description provided for @webFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Braim Web runs on your phone. Your notes stay on your network.'**
+  String get webFooter;
+
+  /// No description provided for @webPrint.
+  ///
+  /// In en, this message translates to:
+  /// **'Print…'**
+  String get webPrint;
+
+  /// No description provided for @webTags.
+  ///
+  /// In en, this message translates to:
+  /// **'Tags'**
+  String get webTags;
+
+  /// No description provided for @webNoColour.
+  ///
+  /// In en, this message translates to:
+  /// **'No colour'**
+  String get webNoColour;
+
+  /// No description provided for @webColourN.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour {n}'**
+  String webColourN(int n);
+
+  /// No description provided for @webImageTooBig.
+  ///
+  /// In en, this message translates to:
+  /// **'Images can be up to 10 MB.'**
+  String get webImageTooBig;
+
+  /// No description provided for @webImageType.
+  ///
+  /// In en, this message translates to:
+  /// **'Use a JPEG, PNG, GIF or WebP image.'**
+  String get webImageType;
 }
 
 class _AppLocalizationsDelegate

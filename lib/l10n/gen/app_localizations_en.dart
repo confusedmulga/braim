@@ -2578,4 +2578,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webTabBooks => 'Books';
+
+  @override
+  String get webLoading => 'Loading…';
+
+  @override
+  String get webBootItems => 'Notes, sparks, circuits, books';
+
+  @override
+  String get webClock => 'Clock';
+
+  @override
+  String get webLife => 'Game of Life';
+
+  @override
+  String get webFooter =>
+      'Braim Web runs on your phone. Your notes stay on your network.';
+
+  @override
+  String get webPrint => 'Print…';
+
+  @override
+  String get webTags => 'Tags';
+
+  @override
+  String get webNoColour => 'No colour';
+
+  @override
+  String webColourN(int n) {
+    return 'Colour $n';
+  }
+
+  @override
+  String get webImageTooBig => 'Images can be up to 10 MB.';
+
+  @override
+  String get webImageType => 'Use a JPEG, PNG, GIF or WebP image.';
 }

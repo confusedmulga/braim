@@ -270,12 +270,19 @@ router), open the new address and pair again.
 left open and in view counts as use; a hidden tab does not. Swiping Braim away
 from Recents also turns it off.
 
-**On the computer.** The site is laid out as a classic desktop: a menu bar with
-the Braim logo, a **File** menu and one title for each section, **Notes**,
+**On the computer.** The site is laid out as a desktop: a menu bar with the
+Braim logo, a **File** menu and one title for each section, **Notes**,
 **Sparks**, **Circuits** and **Books**, and every item in a window of its own.
+The Notes page carries three small desk accessories above its window: the date
+and the link to the phone, a clock, and a Game of Life.
 
 - Notes and sparks are read, created, edited and deleted. Checklists tick from
   the reading view. Markdown notes are edited as source, with a preview.
+- A note's tags and colour are set under its title in the editor. Photos are
+  added to a rich note from the computer, up to 10 MB each (JPEG, PNG, GIF or
+  WebP), and removed with the button on each photo.
+- **Print…** in the File menu prints the open note, spark, chapter or book on
+  plain paper, a book one page to a sheet.
 - Circuits open on their map, which drags to pan and zooms with the wheel or a
   pinch, switches between the three layouts, and carries each note's actions on
   its menu: add, rename, move up or down, delete, and the placeholder actions.
@@ -294,7 +301,7 @@ side's autosave can overwrite the other. It frees up when that editor closes.
 answer as if they did not exist, and never appear in search. Journal entries,
 archived items, Recently Deleted, reflexes, settings, workshop notes, covers and
 exports stay on the phone, as do deleting book pages and the circuit actions not
-listed above. Images are shown but cannot be added from the computer.
+listed above.
 
 > **TIP.** Where there is no shared Wi-Fi, turn on the phone's hotspot and join
 > it from the computer. Braim Web works over the hotspot the same way.

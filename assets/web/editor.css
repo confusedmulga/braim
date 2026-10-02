@@ -1,8 +1,9 @@
 /* Braim Web's editor pages: the note's window becomes the writing surface,
-   with a tool palette that stays in reach while you scroll. Same classic
-   desktop look as app.css. */
+   with a tool palette that stays in reach while you scroll. Same look as
+   app.css. */
 
-.save-state { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.save-state { font: 12px var(--mono); color: var(--ink-2); }
+.titlebar .save-state { color: rgba(255, 255, 255, 0.7); }
 
 .edit-banner {
   display: flex;
@@ -12,17 +13,19 @@
   max-width: 820px;
   margin: 0 auto 18px;
   padding: 10px 14px;
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  box-shadow: 5px 5px 0 var(--shade);
+  background: var(--cta);
+  color: var(--on-cta);
+  border-radius: 4px;
   font-weight: 700;
 }
+.edit-banner button { background: transparent; border-color: var(--on-cta); color: var(--on-cta); }
+.edit-banner button:hover { background: var(--on-cta); color: var(--cta); }
 .edit-banner > span { margin-right: auto; }
 .edit-banner-actions { display: flex; gap: 8px; }
 
 .editor.locked .rich, .editor.locked .title-input, .editor.locked .md-source { opacity: 0.5; }
 
-/* The tool palette: square tools; the ones in effect are inverted. */
+/* The tool palette: the tools in effect are filled. */
 .toolbar {
   position: sticky;
   top: calc(var(--bar-h) + 10px);
@@ -30,25 +33,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
+  gap: 1px;
   margin: 0 0 22px;
+  padding: 3px;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  box-shadow: 4px 4px 0 var(--shade);
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
 .tool {
-  min-width: 36px;
-  min-height: 34px;
-  padding: 0 8px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 7px;
   border: 0;
-  border-radius: 0;
+  border-radius: 3px;
   background: transparent;
   color: var(--ink);
   font: 700 15px/1 var(--ui);
+  transition: none;
 }
 .tool.text { font-size: 13px; font-weight: 500; }
 .tool svg { width: 18px; height: 18px; }
-.tool:hover, .tool.on { background: var(--ink); color: var(--paper); }
-.tool-sep { width: 2px; background: var(--ink); }
+.tool:hover { background: var(--hover); color: var(--ink); }
+.tool.on, .tool.on:hover { background: var(--ink); color: var(--paper); }
+.tool-sep { width: 1px; margin: 4px 3px; background: var(--line); }
 
 .title-input {
   display: block;
@@ -56,14 +63,32 @@
   margin: 0 0 16px;
   padding: 0 0 8px;
   border: 0;
-  border-bottom: 2px dotted var(--ink-2);
+  border-bottom: 2px solid var(--line);
   border-radius: 0;
   background: transparent;
   color: var(--ink);
   font: 700 30px/1.2 var(--ui);
 }
 .title-input::placeholder { color: var(--ink-2); }
-.title-input:focus-visible { outline: none; border-bottom-style: solid; border-bottom-color: var(--ink); }
+.title-input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+
+/* Tags and colour, under the title. */
+.note-props { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 18px; }
+.tags-field { display: flex; align-items: center; flex: 1 1 14rem; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--fill); font: 14px var(--mono); color: var(--ink-2); }
+.tags-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tags-field input { flex: 1; min-width: 0; height: 100%; margin-left: 4px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; }
+.tags-field input:focus { outline: none; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 24px; height: 24px; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--note); transition: none; }
+@media (prefers-color-scheme: dark) { .swatch { background: var(--note-dark); } }
+.swatch:hover { background: var(--note); transform: scale(1.12); }
+.swatch.none { background: var(--paper) linear-gradient(135deg, transparent 46%, var(--error) 46% 54%, transparent 54%); }
+.swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent); }
+
+/* A photo in the editor, with its remove button. */
+.editor .note-img { position: relative; width: fit-content; max-width: 100%; }
+.img-remove { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: 18px; opacity: 0.85; }
+.img-remove:hover { background: var(--error); color: #ffffff; opacity: 1; }
 
 /* Quill's writing surface, set like the reading view. */
 .rich { margin: 0 0 12px; }
@@ -78,10 +103,10 @@
 .rich .ql-editor p { margin: 0 0 0.35em; }
 .rich .ql-editor h1 { font: 700 1.4em/1.22 var(--ui); margin: 0.6em 0 0.25em; }
 .rich .ql-editor h2 { font: 700 1.18em/1.22 var(--ui); margin: 0.5em 0 0.2em; }
-.rich .ql-editor blockquote { margin: 0.25em 0; padding-left: 0.9em; border-left: 4px solid var(--ink); font-style: italic; }
-.rich .ql-editor a { color: var(--ink); text-decoration: underline; }
+.rich .ql-editor blockquote { margin: 0.25em 0; padding-left: 0.9em; border-left: 4px solid var(--accent); font-style: italic; }
+.rich .ql-editor a { color: var(--accent); text-decoration: underline; }
 .rich .ql-editor li[data-list=checked] { text-decoration: line-through; opacity: 0.55; }
-.rich .ql-editor li > .ql-ui:before { color: var(--ink); }
+.rich .ql-editor li > .ql-ui:before { color: var(--accent); }
 .rich .ql-editor.ql-blank::before { left: 0; right: 0; color: var(--ink-2); font-style: normal; }
 
 /* Markdown: the source, and a preview to flip to. */

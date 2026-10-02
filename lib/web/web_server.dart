@@ -222,6 +222,15 @@ class BraimWebServer {
       '/api/notes/<id>/check',
       (Request r, String id) => api.checkLine(r, id, _sid(r)),
     )
+    ..post(
+      '/api/notes/<id>/images',
+      (Request r, String id) => api.addImage(r, id, _sid(r)),
+    )
+    ..delete(
+      '/api/notes/<id>/images/<blockId>',
+      (Request r, String id, String blockId) =>
+          api.removeImage(id, blockId, _sid(r)),
+    )
     ..post('/api/notes/<id>/lease', _takeNoteLease)
     ..delete(
       '/api/notes/<id>/lease',
@@ -447,6 +456,7 @@ class BraimWebServer {
     String query = '',
     bool editor = false,
     bool map = false,
+    String desk = '',
   }) {
     if (request.url.queryParameters['partial'] == '1') {
       return _html(view.main);
@@ -459,11 +469,13 @@ class BraimWebServer {
         query: query,
         editor: editor,
         map: map,
+        desk: desk,
       ),
     );
   }
 
-  Response _feed(Request request) => _view(request, pages.feed(), tab: 'notes');
+  Response _feed(Request request) =>
+      _view(request, pages.feed(), tab: 'notes', desk: pages.deskAccessories());
 
   /// The live note [id] if the web may show it. Anything else, the Crypt
   /// included, is indistinguishable from a note that doesn't exist.

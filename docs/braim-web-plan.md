@@ -447,6 +447,7 @@ API (JSON; mutations need the CSRF header):
 | `DELETE /api/notes/<id>` | Soft delete; plain notes only, circuit notes go through 9.3 |
 | `POST /api/notes/<id>/check` | `{block, line, baseUpdatedAt}`: tick a checklist line |
 | `POST /api/notes/<id>/lease`, `DELETE ...` | Take or renew, release (11) |
+| `POST /api/notes/<id>/images`, `DELETE .../images/<blockId>` | Add a photo (the body is the file), remove one (added Phase 8) |
 | `GET /api/notes/<id>/meta` | `{updatedAt, leaseHolder}` |
 | `POST /api/markdown/preview` | `{source}` returns sanitised HTML |
 | `POST /api/sparks`, `PUT /api/sparks/<id>`, `DELETE ...` | Add from URL, save, soft delete |
@@ -518,34 +519,46 @@ under 5 KB compressed; splitting them would add requests for no real gain.
 - A menu bar: the Braim logo (`assets/web/logo.svg`) in the left corner, a
   **File** menu (New note, New Markdown note, Add a link, Find…, Log out),
   then one menu title per section (**Notes**, **Sparks**, **Circuits**,
-  **Books**), the current one inverted; a search box and a small square at the
+  **Books**), the current one underlined; a search box and a small dot at the
   right show the phone connection state.
 - Content in a centred column; the notes feed is a responsive masonry of cards
   built with CSS columns, pinned first, in the phone's sort order.
-- Light and dark from `prefers-color-scheme` (dark is the same design
-  inverted). Note colour tags show as Finder-style label squares in the
-  `NoteColors` swatch.
+- Light and dark from `prefers-color-scheme`. Note colour tags show as small
+  swatches in the `NoteColors` colour.
 - Fonts from the phone's bundle through `/fonts/<file>`, with
   `font-display: swap`: Space Grotesk for the chrome (menus, title bars,
   buttons, card titles), Lora for everything you read (note bodies, snippets,
-  spark text), JetBrains Mono for code and the Markdown source. The phone's
+  spark text), JetBrains Mono for labels, counts, code and the Markdown
+  source. The phone's
   body font setting does not apply on the web. `font-weight` never exceeds
   700.
-- **Design language (owner, 2026-10-01, replacing the earlier native-style
-  pass):** the classic black-and-white Mac desktop, copied from the owner's
-  reference picture of a Finder screen. A grey desk; square windows with a
-  2 px black frame, a hard offset shadow and a striped title bar with a close
-  box and a centred title; menus that drop from the menu bar with a hard
-  shadow and dotted separators; rounded push buttons, the default one with a
-  second ring; checkboxes that show an X; everything inverted on hover. Every
-  page is a window: the Notes and Sparks lists are Finder windows with an
-  info bar ("11 items" and the page's action) over a double rule; a note or
-  spark is a window whose close box goes back and whose title bar holds
-  **Edit**; editors keep the save state and **Done** in the title bar, and the
-  close box is Done too; search is a list view; pairing and errors are
-  dialogs on an empty desk. 44 px touch targets on touch screens, a dotted
-  focus outline, `prefers-reduced-motion` honoured. Keep new pages in this
-  language.
+- **Layout (owner, 2026-10-01):** every page is a window on a desk, after the
+  owner's picture of a classic Finder screen. The Notes, Sparks, Circuits and
+  Books lists are windows with an info bar ("11 items" and the page's
+  action); a note or spark is a window whose close box goes back and whose
+  title bar holds **Edit**; editors keep the save state and **Done** in the
+  title bar, and the close box is Done too; search is a list; pairing, errors
+  and questions are dialogs.
+- **Theme (owner, 2026-10-02, replacing the black-and-white retro look):**
+  Retro's colours and manner, taken from their site's own design tokens.
+  Light: a beige desk (`#FFF0E5`) with a fine dot grid; white panels with
+  thin navy (`#10162F`) borders and 8 px corners under navy title bars;
+  buttons with 4 px corners and 2 px borders, the call to action yellow
+  (`#FFD300`) and lifting onto a hard navy shadow on hover; hyper blue
+  (`#3A10E5`) for links, focus, the current tab's underline and ticked
+  checkboxes; cards that lift onto a hard shadow; code blocks white on navy;
+  notices as navy toasts. Dark: their navy (`#0A0D1C` desk, `#10162F`
+  panels) with lime (`#AEE938`) as the accent.
+- **Desk accessories (owner, 2026-10-02):** small utility windows after
+  TypeSafe's site (typesafe.ai), on the Notes page above its window: a dated
+  window with the link to the phone and New note, a clock, and a Game of
+  Life glider. A boot window with a progress bar shows once per browser
+  session (a click or `Esc` skips it), and every page ends with a mono system
+  line ("Braim Web runs on your phone…"). The accessories sit outside `main`,
+  so a live refresh leaves them running; the glider pauses in a hidden tab
+  and stays still, like the boot window, for `prefers-reduced-motion`.
+- 44 px touch targets on touch screens, a visible focus outline,
+  `prefers-reduced-motion` honoured. Keep new pages in this language.
 - Keyboard: `/` focuses search, `e` edits the open item, `Ctrl+S` saves,
   `Esc` leaves the editor.
 
@@ -835,6 +848,11 @@ where the wording matches (`delete`, `cancel`, `save`, `circuitMoveUp`,
 | `webPinned` / `webConnected` | Pinned / Connected to your phone |
 | `webEditingElsewhere` | Being edited in another browser |
 | `webMenuFile` / `webFind` | File / Find… |
+| `webLoading` / `webBootItems` | Loading… / Notes, sparks, circuits, books |
+| `webClock` / `webLife` | Clock / Game of Life |
+| `webFooter` | Braim Web runs on your phone. Your notes stay on your network. |
+| `webPrint` / `webTags` / `webNoColour` / `webColourN` | Print… / Tags / No colour / Colour {n} |
+| `webImageTooBig` / `webImageType` | Images can be up to 10 MB. / Use a JPEG, PNG, GIF or WebP image. |
 | `webAddLinkHint` | Paste a link |
 | `webSaving` / `webSaved` / `webSaveFailed` | Saving… / Saved / Not saved. Check the connection and try again. |
 | `webMarkdownSource` / `webPreview` / `webSubheading` / `webDeleteNote` | Markdown / Preview / Sub-heading / Delete note |
@@ -1186,12 +1204,43 @@ Phase 7 notes (2026-10-02):
      the trusted-network warning.
 
 ### Phase 8: Optional polish
-- [ ] Upload images from the laptop into a note (multipart, saved with
+- [x] Upload images from the laptop into a note (multipart, saved with
       `StorageService.saveImageBytes`, 10 MB limit).
-- [ ] Remove images from a note on the web.
-- [ ] Print a note or a book chapter with the browser's print dialog, using a
+- [x] Remove images from a note on the web.
+- [x] Print a note or a book chapter with the browser's print dialog, using a
       print stylesheet.
-- [ ] Colour tags and tags editable from the web.
+- [x] Colour tags and tags editable from the web.
+
+Phase 8 notes (2026-10-02; analyzer clean, 381 tests passing):
+
+- Photos: a picture button at the end of a saved rich note's toolbar picks
+  one or more files. Each goes up as the raw request body (`POST
+  /api/notes/<id>/images`, not multipart: one file per request is simpler to
+  bound and check), up to 10 MB (`kWebMaxImageBytes`; `bodyLimitFor` raises
+  the limit for that route only). The server reads the type from the first
+  bytes (JPEG, PNG, GIF or WebP; anything else, SVG included, is refused),
+  saves it with `saveImageBytes`, and adds it at the end of the note with an
+  empty line after it, as the phone adds photos. The editor saves first and
+  reloads after, so the new image shows in place.
+- Removing: each photo in the editor has a remove button (`DELETE
+  /api/notes/<id>/images/<blockId>`). The block goes, an empty line it leaves
+  touching another is folded away, and the file is deleted through
+  `refreshAfterImageRemoval`, as on the phone. Both need the edit lease.
+- Tags and colour: a tags field and the phone's eight swatches (plus none)
+  under the title of a note's editor, rich or Markdown, saved with the text.
+  `tags` is cleaned as the phone's tag editor cleans it (no `#`, lower case,
+  split on spaces and commas, no repeats); `color` must be one of
+  `NoteColors.swatches` or null. Left out, either stays as it was. Book pages
+  keep theirs on the phone, so their editor doesn't show the row.
+- Print: **Print…** in the File menu. The print stylesheet keeps only the
+  note, spark, chapter or book in ink on white, and starts each page of a book
+  on a new sheet when the reader is printed.
+- Strings: `webPrint`, `webTags`, `webNoColour`, `webColourN`,
+  `webImageTooBig`, `webImageType`; the button labels reuse `addPhotos`,
+  `taskRemove` and `noteColor`. Tests: `test/web_polish_test.dart`.
+- Sizes after the Retro theme, the desk accessories and Phase 8:
+  `app.css` 25.5 KB (6.4 KB compressed), `app.js` 21.2 KB (6.2 KB compressed), `editor.js`
+  17.6 KB (5.0 KB compressed), `editor.css` 5.1 KB (1.7 KB compressed).
 
 ---
 
@@ -1341,7 +1390,7 @@ adb -s emulator-5554 forward tcp:8420 tcp:8420
 | Markdown sanitiser, script-like tags (added Phase 3) | `script`, `style`, `iframe`, `object`, `embed`, `template`, `svg` and similar are removed with their contents, not unwrapped: their text is code, not prose. Other disallowed tags keep their text, as 5.5 says |
 | Markdown links that are neither web, mail nor `/` paths (added Phase 3) | Dropped, keeping the link text (a `notes.md` link has nowhere to go) |
 | Note body font on the web (owner, 2026-10-01) | Lora for everything you read; the phone's body font setting (Caveat by default) is not used on the web |
-| Chrome font for the retro design (added with the redesign) | Space Grotesk, the bundled face closest to the reference picture's menu font; Lora stays for reading. Switching the chrome back to Lora is one line in `app.css` |
+| Chrome font (added with the redesign, kept for the Retro theme) | Space Grotesk, the bundled face closest to Retro's Apercu (Inter is bundled at one weight only); JetBrains Mono stands in for their Suisse Int'l Mono labels; Lora stays for reading. Switching the chrome to Lora is one line in `app.css` |
 | A `[[link]]` to a title that doesn't exist (added Phase 3) | The same "Open this on your phone" page as a hidden item, so the web never reveals whether a hidden note has that title |
 | An emptied rich note saved from the web (added Phase 4) | Kept, not deleted: the web only deletes with the Delete button. (An emptied Markdown note is deleted on leaving the editor, as on the phone) |
 | Deleting circuit notes and book pages from the web (added Phase 4, settled Phase 5) | Circuit notes delete from the map's node menu, which carries the circuit rules; `DELETE /api/notes/<id>` and the editor's Delete stay for plain notes. Book pages stay phone-only |

@@ -1,6 +1,5 @@
 /* Braim Web's circuit map: a window you pan and zoom, with each note a small
-   framed box and the branches drawn in ink. Same classic desktop look as
-   app.css. */
+   card and the branches drawn between them. Same look as app.css. */
 
 /* The map window fills the desk below the menu bar. */
 main[data-map] { padding-bottom: 24px; }
@@ -22,18 +21,22 @@ main[data-map] { padding-bottom: 24px; }
 .map-view.dragging { cursor: grabbing; }
 .canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; user-select: none; -webkit-user-select: none; }
 .edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-.edges path { fill: none; stroke: var(--ink); stroke-width: 2; }
+.edges path { fill: none; stroke: var(--line); stroke-width: 2; }
 
 .node {
   position: absolute;
   display: flex;
+  overflow: hidden;
   background: var(--paper);
-  border: 2px solid var(--ink);
-  box-shadow: 4px 4px 0 var(--shade);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-/* The first note has the default button's second ring. */
-.node.root { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink), 6px 6px 0 4px var(--shade); }
-.node.placeholder { border-style: dashed; box-shadow: none; color: var(--ink-2); }
+.node:hover { transform: translate(3px, -3px); box-shadow: -3px 3px 0 var(--shade); }
+/* The first note is outlined in the accent. */
+.node.root { border: 2px solid var(--accent); }
+.node.placeholder { border-style: dashed; border-color: var(--line); color: var(--ink-2); }
+.node.placeholder:hover { transform: none; box-shadow: none; }
 .node-open {
   flex: 1;
   min-width: 0;
@@ -64,28 +67,32 @@ main[data-map] { padding-bottom: 24px; }
   min-height: 0;
   padding: 0;
   border: 0;
-  border-left: 2px solid var(--ink);
+  border-left: 1px solid var(--line);
   border-radius: 0;
   background: var(--paper);
   font: 700 16px/1 var(--ui);
+  transition: none;
 }
-.node-open:hover, .node-more:hover { background: var(--ink); color: var(--paper); }
+.node-open:hover, .node-more:hover { background: var(--hover); color: var(--accent); }
 .node-plus {
   position: absolute;
   width: 28px;
   height: 28px;
   min-height: 0;
   padding: 0;
-  border-radius: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--cta);
+  color: var(--on-cta);
   font: 700 18px/1 var(--ui);
-  box-shadow: 3px 3px 0 var(--shade);
 }
-/* A node the map was opened on blinks, inverted, a few times. */
+.node-plus:hover { background: var(--cta); color: var(--on-cta); transform: translate(2px, -2px); box-shadow: -2px 2px 0 var(--ink); }
+/* A node the map was opened on blinks in the accent a few times. */
 .node.flash { animation: blink 0.36s steps(1) 4; }
-@keyframes blink { 50% { background: var(--ink); color: var(--paper); } }
+@keyframes blink { 50% { background: var(--accent); color: var(--on-accent); } }
 
 .node-menu { position: fixed; top: 0; left: 0; z-index: 40; max-width: min(320px, calc(100vw - 24px)); }
-.menu-head { margin: 0 0 4px; padding: 4px 16px 6px; border-bottom: 2px solid var(--ink); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu-head { margin: 0 0 4px; padding: 4px 16px 8px; border-bottom: 1px solid var(--line); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 720px) {
   main[data-map] { padding-bottom: 12px; }
@@ -94,5 +101,5 @@ main[data-map] { padding-bottom: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .node.flash { animation: none; background: var(--ink); color: var(--paper); }
+  .node.flash { animation: none; background: var(--accent); color: var(--on-accent); }
 }

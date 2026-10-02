@@ -1107,5 +1107,21 @@
   "webCircuitsEmpty": "No circuits yet.",
   "webFit": "Fit",
   "webCentre": "Centre",
-  "webTabBooks": "Books"
+  "webTabBooks": "Books",
+  "webLoading": "Loading…",
+  "webBootItems": "Notes, sparks, circuits, books",
+  "webClock": "Clock",
+  "webLife": "Game of Life",
+  "webFooter": "Braim Web runs on your phone. Your notes stay on your network.",
+  "webPrint": "Print…",
+  "webTags": "Tags",
+  "webNoColour": "No colour",
+  "webColourN": "Colour {n}",
+  "@webColourN": {
+    "placeholders": {
+      "n": { "type": "int" }
+    }
+  },
+  "webImageTooBig": "Images can be up to 10 MB.",
+  "webImageType": "Use a JPEG, PNG, GIF or WebP image."
 }

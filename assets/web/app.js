@@ -359,6 +359,11 @@
 
   function connected(on) {
     if (dot) dot.classList.toggle('on', on);
+    var status = document.querySelector('[data-status]');
+    if (status) {
+      status.textContent = status.getAttribute(on ? 'data-on' : 'data-off');
+      status.classList.toggle('off', !on);
+    }
     if (on) {
       lastConnected = Date.now();
       if (banner && banner.textContent === banner.getAttribute('data-offline')) {
@@ -401,6 +406,119 @@
     if (document.visibilityState === 'visible') post('/api/ping').catch(function () {});
   }
 
+  // ---- Desk accessories (the Notes page): a clock and a Game of Life -------
+
+  function setUpClock() {
+    var date = document.querySelector('[data-clock-date]');
+    var time = document.querySelector('[data-clock-time]');
+    var today = document.querySelectorAll('[data-today]');
+    if (!date && !time && !today.length) return;
+    function tick() {
+      var now = new Date();
+      today.forEach(function (e) {
+        e.textContent = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      });
+      if (date) date.textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+      if (time) time.textContent = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // A small Game of Life, seeded with a glider and some noise; it reseeds when
+  // it dies down or settles, and on a click. Still for reduced motion.
+  function setUpLife(canvas) {
+    var cell = 4;
+    var w = Math.floor(canvas.width / cell), h = Math.floor(canvas.height / cell);
+    var grid = new Uint8Array(w * h), next = new Uint8Array(w * h);
+    var age = 0;
+    function seed() {
+      for (var i = 0; i < grid.length; i++) grid[i] = Math.random() < 0.22 ? 1 : 0;
+      [[1, 0], [2, 1], [0, 2], [1, 2], [2, 2]].forEach(function (p) { grid[(p[1] + 1) * w + p[0] + 1] = 1; });
+      age = 0;
+    }
+    function draw() {
+      var g = canvas.getContext('2d');
+      g.clearRect(0, 0, canvas.width, canvas.height);
+      g.fillStyle = getComputedStyle(canvas).color;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) if (grid[y * w + x]) g.fillRect(x * cell, y * cell, cell - 1, cell - 1);
+      }
+    }
+    function step() {
+      var alive = 0, changed = 0;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var n = 0;
+          for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+              if (dx || dy) n += grid[((y + dy + h) % h) * w + (x + dx + w) % w];
+            }
+          }
+          var i = y * w + x;
+          next[i] = n === 3 || (n === 2 && grid[i]) ? 1 : 0;
+          alive += next[i];
+          if (next[i] !== grid[i]) changed++;
+        }
+      }
+      var t = grid; grid = next; next = t;
+      if (alive < 6 || changed < 3 || ++age > 500) seed();
+    }
+    seed();
+    draw();
+    canvas.addEventListener('click', function () { seed(); draw(); });
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setInterval(function () {
+      if (document.visibilityState !== 'visible') return;
+      step();
+      draw();
+    }, 160);
+  }
+
+  // A boot window once per browser session, as TypeSafe's site opens: a moment,
+  // skippable with a click or Esc, and never for reduced motion.
+  function boot() {
+    var title = banner && banner.getAttribute('data-app');
+    if (!title) return;
+    try {
+      if (sessionStorage.getItem('braim-booted')) return;
+      sessionStorage.setItem('braim-booted', '1');
+    } catch (_) { return; }
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var box = document.createElement('div');
+    box.className = 'boot';
+    box.innerHTML = '<div class="acc boot-window" role="status"><header class="acc-bar"></header>' +
+      '<div class="acc-body"><p></p><p></p><div class="boot-bar"><span></span></div></div></div>';
+    box.querySelector('.acc-bar').textContent = title;
+    var lines = box.querySelectorAll('p');
+    lines[0].textContent = banner.getAttribute('data-loading');
+    lines[1].textContent = banner.getAttribute('data-boot');
+    var fill = box.querySelector('.boot-bar span');
+    var start = null, gone = false;
+    function done() {
+      if (gone) return;
+      gone = true;
+      document.removeEventListener('keydown', onKey);
+      box.classList.add('gone');
+      setTimeout(function () { box.remove(); }, 260);
+    }
+    function onKey(e) { if (e.key === 'Escape') done(); }
+    function frame(t) {
+      if (start === null) start = t;
+      var p = Math.min(1, (t - start) / 650);
+      fill.style.width = (p * 100) + '%';
+      fill.textContent = Math.round(p * 100) + '%';
+      if (p < 1 && !gone) requestAnimationFrame(frame);
+      else setTimeout(done, 180);
+    }
+    box.addEventListener('click', done);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(box);
+    requestAnimationFrame(frame);
+    // Frames pause in a background tab; never leave the page covered.
+    setTimeout(done, 1600);
+  }
+
   // ---- Start ---------------------------------------------------------------------
 
   var pairForm = document.getElementById('pair-form');
@@ -408,7 +526,12 @@
   setUpTicks();
   document.querySelectorAll('[data-action="logout"]').forEach(setUpLogout);
 
+  setUpClock();
+  var lifeCanvas = document.querySelector('canvas[data-life]');
+  if (lifeCanvas && lifeCanvas.getContext) setUpLife(lifeCanvas);
+
   if (csrf) {
+    boot();
     connect();
     setInterval(ping, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', ping);
@@ -429,6 +552,13 @@
       menu.open = false;
       menu.querySelector('summary').focus();
     });
+    var print = menu.querySelector('[data-action="print"]');
+    if (print) {
+      print.addEventListener('click', function () {
+        menu.open = false;
+        window.print();
+      });
+    }
     var find = menu.querySelector('[data-action="find"]');
     if (find) {
       find.addEventListener('click', function () {

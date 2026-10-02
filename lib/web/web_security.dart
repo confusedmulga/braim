@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
@@ -19,6 +20,18 @@ const String kWebCsp =
 
 /// Largest request body the server reads.
 const int kWebMaxBodyBytes = 2 * 1024 * 1024;
+
+/// Largest image a browser may upload into a note.
+const int kWebMaxImageBytes = 10 * 1024 * 1024;
+
+final _imageUpload = RegExp(r'^api/notes/[^/]+/images$');
+
+/// The most [request] may send: [kWebMaxImageBytes] for an image upload,
+/// [kWebMaxBodyBytes] for anything else.
+int bodyLimitFor(Request request) =>
+    request.method == 'POST' && _imageUpload.hasMatch(request.url.path)
+    ? kWebMaxImageBytes
+    : kWebMaxBodyBytes;
 
 /// The context key shelf_io stores the socket's [HttpConnectionInfo] under.
 const String kConnectionInfoKey = 'shelf.io.connection_info';
@@ -124,12 +137,13 @@ bool _hostAllowed(
   return false;
 }
 
-/// Answers 413 when a request declares a body over [kWebMaxBodyBytes]. Bodies
-/// sent without a length are capped by [readBodyLimited].
+/// Answers 413 when a request declares a body over its limit
+/// ([bodyLimitFor]). Bodies sent without a length are capped by
+/// [readBodyLimited] and [readBytesLimited].
 Middleware bodyLimit() =>
     (inner) => (request) {
       final length = request.contentLength;
-      if (length != null && length > kWebMaxBodyBytes) {
+      if (length != null && length > bodyLimitFor(request)) {
         return Response(413, body: 'Payload Too Large');
       }
       return inner(request);
@@ -148,6 +162,16 @@ Future<String> readBodyLimited(Request request) async {
     if (bytes.length > kWebMaxBodyBytes) throw const BodyTooLarge();
   }
   return utf8.decode(bytes, allowMalformed: true);
+}
+
+/// Reads [request]'s body as bytes, throwing [BodyTooLarge] past [max].
+Future<Uint8List> readBytesLimited(Request request, int max) async {
+  final out = BytesBuilder(copy: false);
+  await for (final chunk in request.read()) {
+    out.add(chunk);
+    if (out.length > max) throw const BodyTooLarge();
+  }
+  return out.takeBytes();
 }
 
 /// Adds the security headers to every response: the CSP, `nosniff`, no

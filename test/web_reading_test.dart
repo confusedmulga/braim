@@ -232,7 +232,23 @@ void main() {
       expect(html, startsWith('<article class="window list-window">'));
       expect(html, isNot(contains('<html')));
       expect(html, contains('Groceries'));
+      // The desk accessories sit outside main, so a refresh leaves them be.
+      expect(html, isNot(contains('desk-row')));
     });
+
+    test(
+      'the Notes page has the desk accessories; every page the footer line',
+      () async {
+        final feed = await body('/');
+        expect(feed, contains('<div class="desk-row">'));
+        expect(feed, contains('data-clock-time'));
+        expect(feed, contains('<canvas data-life'));
+        expect(feed, contains('class="sysline"'));
+        final sparks = await body('/sparks');
+        expect(sparks, isNot(contains('desk-row')));
+        expect(sparks, contains('class="sysline"'));
+      },
+    );
 
     test(
       'a note page: title, body, images, link cards, watch attributes',

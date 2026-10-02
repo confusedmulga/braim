@@ -24,6 +24,9 @@
   var banner = document.getElementById('edit-banner');
   var mdSource = document.getElementById('md-source');
   var mdPreview = document.getElementById('md-preview');
+  var tagsInput = document.getElementById('tags-input');
+  var swatches = document.getElementById('swatches');
+  var MAX_IMAGE = 10 * 1024 * 1024;
 
   var id = cfg.id;
   var base = cfg.base;
@@ -95,6 +98,7 @@
     locked = on;
     editors.forEach(function (e) { e.quill.enable(!on); });
     titleInput.readOnly = on;
+    if (tagsInput) tagsInput.readOnly = on;
     if (mdSource) mdSource.readOnly = on;
     root.classList.toggle('locked', on);
   }
@@ -131,14 +135,24 @@
     });
   }
 
+  // The note's tags and colour, when the page offers them.
+  function withProps(b) {
+    if (!cfg.props) return b;
+    b.tags = [tagsInput.value];
+    var on = swatches.querySelector('[aria-checked="true"]');
+    var c = on ? on.getAttribute('data-color') : '';
+    b.color = c ? Number(c) : null;
+    return b;
+  }
+
   function body() {
     if (!id) {
-      return cfg.kind === 'markdown'
+      return withProps(cfg.kind === 'markdown'
         ? { kind: 'markdown', source: mdSource.value }
-        : { kind: 'rich', title: titleInput.value, blocks: blocks(false) };
+        : { kind: 'rich', title: titleInput.value, blocks: blocks(false) });
     }
-    if (cfg.kind === 'markdown') return { baseUpdatedAt: base, source: mdSource.value };
-    return { baseUpdatedAt: base, title: titleInput.value, blocks: blocks(true) };
+    if (cfg.kind === 'markdown') return withProps({ baseUpdatedAt: base, source: mdSource.value });
+    return withProps({ baseUpdatedAt: base, title: titleInput.value, blocks: blocks(true) });
   }
 
   function created(newId) {
@@ -276,7 +290,7 @@
     });
     bar.addEventListener('click', function (e) {
       var b = e.target.closest('.tool');
-      if (!b || locked || !active) return;
+      if (!b || locked || !active || !b.hasAttribute('data-format')) return;
       apply(b.getAttribute('data-format'), b.getAttribute('data-value'));
     });
   }
@@ -315,7 +329,7 @@
     if (!active) return;
     var sel = active.getSelection();
     var cur = sel ? active.getFormat(sel) : {};
-    root.querySelectorAll('.tool').forEach(function (b) {
+    root.querySelectorAll('.tool[data-format]').forEach(function (b) {
       var f = b.getAttribute('data-format');
       var v = b.getAttribute('data-value');
       var on;
@@ -327,6 +341,90 @@
       else on = !!cur[f];
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  // ---- Tags, colour and photos ----------------------------------------------------------
+
+  function setUpProps() {
+    if (!cfg.props) return;
+    tagsInput.addEventListener('input', changed);
+    swatches.addEventListener('click', function (e) {
+      var b = e.target.closest('.swatch');
+      if (!b || locked) return;
+      swatches.querySelectorAll('.swatch').forEach(function (o) {
+        o.setAttribute('aria-checked', o === b ? 'true' : 'false');
+      });
+      changed();
+    });
+  }
+
+  // Saves what is typed, then sends [files] one by one, then reloads to show
+  // them in place (the server adds a line to write on after each).
+  function uploadImages(files) {
+    if (!id || locked || conflicted) return;
+    var list = Array.prototype.slice.call(files);
+    var fits = list.filter(function (f) { return f.size <= MAX_IMAGE; });
+    if (fits.length < list.length) setState(S.imageTooBig);
+    if (!fits.length) return;
+    save().then(function (ok) {
+      if (!ok) return;
+      setState(S.saving);
+      var added = 0;
+      var chain = Promise.resolve(true);
+      fits.forEach(function (f) {
+        chain = chain.then(function (going) {
+          if (!going) return false;
+          return fetch(itemUrl('/images'), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Braim-CSRF': csrf },
+            body: f
+          }).then(function (res) {
+            if (res.ok) { added++; return true; }
+            return res.json().catch(function () { return {}; }).then(function (b) {
+              if (res.status === 401) location.replace('/pair');
+              else if (res.status === 413) setState(S.imageTooBig);
+              else if (b.error === 'leased') lock(b.message);
+              else setState(b.message || S.failed);
+              return false;
+            });
+          });
+        });
+      });
+      chain.catch(function () { setState(S.failed); }).then(function () {
+        if (added) { navigating = true; location.reload(); }
+      });
+    });
+  }
+
+  function removeImage(blockId) {
+    if (!id || locked || conflicted) return;
+    save().then(function (ok) {
+      if (!ok) return;
+      req('DELETE', itemUrl('/images/' + encodeURIComponent(blockId))).then(function (res) {
+        if (res.ok) { navigating = true; location.reload(); return; }
+        return res.json().catch(function () { return {}; }).then(function (b) {
+          if (b.error === 'leased') lock(b.message);
+          else setState(S.failed);
+        });
+      }).catch(function () { setState(S.failed); });
+    });
+  }
+
+  function setUpImages() {
+    var input = document.getElementById('image-input');
+    var tool = root.querySelector('[data-action="add-image"]');
+    if (input && tool) {
+      tool.addEventListener('click', function () { if (!locked) input.click(); });
+      input.addEventListener('change', function () {
+        uploadImages(input.files);
+        input.value = '';
+      });
+    }
+    root.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-remove-image]');
+      if (b) removeImage(b.getAttribute('data-remove-image'));
     });
   }
 
@@ -355,6 +453,8 @@
 
   if (cfg.kind === 'markdown') setUpMarkdown();
   else setUpRich();
+  setUpProps();
+  setUpImages();
   titleInput.addEventListener('input', changed);
   takeLease();
 

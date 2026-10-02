@@ -13,6 +13,7 @@ import '../models/tweet_card.dart';
 import '../services/circuit_layout.dart';
 import '../services/note_markdown.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart' show NoteColors;
 import 'web_api.dart';
 import 'web_assets.dart';
 import 'web_html.dart';
@@ -66,7 +67,7 @@ ${windowTitleBar(l10n.webPairTitle)}
   );
 }
 
-/// A window's striped title bar: an optional close box (a link, or a button
+/// A window's title bar: an optional close box (a link, or a button
 /// with [closeAction]), the title, an optional colour [label] square, and
 /// [end] (buttons) at the right. [title] is escaped here; [label] and [end]
 /// must already be.
@@ -134,6 +135,7 @@ class WebPages {
     String query = '',
     bool editor = false,
     bool map = false,
+    String desk = '',
   }) {
     String tabLink(String key, String href, String label) {
       final current = key == tab;
@@ -156,6 +158,7 @@ class WebPages {
 <a href="/circuits#new">${esc(l10n.newCircuit)}</a>
 <hr>
 <button type="button" data-action="find">${esc(l10n.webFind)}<kbd>/</kbd></button>
+<button type="button" data-action="print">${esc(l10n.webPrint)}</button>
 <hr>
 <button type="button" data-action="logout">${esc(l10n.webLogOut)}</button>
 </div>
@@ -168,8 +171,9 @@ class WebPages {
 <span class="dot" id="conn" role="status" title="${esc(l10n.webConnected)}" aria-label="${esc(l10n.webConnected)}"></span>
 </div>
 </header>
-<p class="banner" id="banner" hidden data-offline="${esc(l10n.webOffline)}" data-deleted="${esc(l10n.webDeletedOnPhone)}" data-failed="${esc(l10n.webSaveFailed)}" data-cancel="${esc(l10n.cancel)}"></p>
-<main${view.attrs.isEmpty ? '' : ' ${view.attrs}'}>${view.main}</main>''';
+<p class="banner" id="banner" hidden data-offline="${esc(l10n.webOffline)}" data-deleted="${esc(l10n.webDeletedOnPhone)}" data-failed="${esc(l10n.webSaveFailed)}" data-cancel="${esc(l10n.cancel)}" data-app="${esc(l10n.webSection)}" data-loading="${esc(l10n.webLoading)}" data-boot="${esc(l10n.webBootItems)}"></p>
+$desk<main${view.attrs.isEmpty ? '' : ' ${view.attrs}'}>${view.main}</main>
+<footer class="sysline"><span>${esc(l10n.webSection)}</span><span>${esc(l10n.webFooter)}</span></footer>''';
     return htmlPage(
       assets: assets,
       title: view.title,
@@ -211,7 +215,27 @@ class WebPages {
     return (title: l10n.webTabNotes, main: out.toString(), attrs: 'data-list');
   }
 
-  /// The top of a list window, like a Finder window's: the striped title bar,
+  /// Small utility windows above the Notes window, after TypeSafe's site: the
+  /// date and the link to the phone with New note, a clock, and a Game of Life
+  /// glider. `app.js` keeps them running; a refresh of the list leaves them be.
+  String deskAccessories() =>
+      '<div class="desk-row">'
+      '<section class="acc acc-news"><header class="acc-bar"><span data-today>'
+      '</span> • ${esc(l10n.webSection)}</header><div class="acc-body">'
+      '<p class="acc-status" data-status data-on="${esc(l10n.webConnected)}" '
+      'data-off="${esc(l10n.webOffline)}">${esc(l10n.webConnected)}</p>'
+      '<a class="button primary small" href="/notes/new">'
+      '${esc(l10n.webNewNote)}</a></div></section>'
+      '<section class="acc acc-clock"><header class="acc-bar">'
+      '${esc(l10n.webClock)}</header><div class="acc-body">'
+      '<p data-clock-date></p><p class="acc-time" data-clock-time></p></div>'
+      '</section>'
+      '<section class="acc acc-life"><header class="acc-bar">'
+      '${esc(l10n.webLife)}</header><div class="acc-body">'
+      '<canvas data-life width="216" height="84" aria-hidden="true"></canvas>'
+      '</div></section></div>';
+
+  /// The top of a list window: the title bar,
   /// then an info bar with the item count and [actions] (already escaped).
   String _listWindowTop(String title, int count, String actions) =>
       '<article class="window list-window">${windowTitleBar(title)}'
@@ -1026,6 +1050,12 @@ class WebPages {
     final canDelete = n != null && !n.inCircuit && n.bookId == null;
     return _editor(
       attrs: book == null ? '' : _bookFont(book),
+      // Photos go into a rich note once it exists; book pages keep their
+      // tags and colour on the phone.
+      images: n != null && !isMarkdown,
+      props: book == null,
+      tags: n?.tags ?? const [],
+      color: n?.colorValue,
       item: 'note',
       kind: isMarkdown ? 'markdown' : 'rich',
       id: id,
@@ -1067,6 +1097,10 @@ class WebPages {
     required String? deleteLabel,
     required String pageTitle,
     String attrs = '',
+    bool images = false,
+    bool props = false,
+    List<String> tags = const [],
+    int? color,
   }) {
     final config = jsonEncode({
       'item': item,
@@ -1076,6 +1110,7 @@ class WebPages {
       'api': item == 'note' ? '/api/notes' : '/api/sparks',
       'view': view,
       'list': item == 'note' ? '/' : '/sparks',
+      'props': props,
       'strings': {
         'saving': l10n.webSaving,
         'saved': l10n.webSaved,
@@ -1088,6 +1123,8 @@ class WebPages {
         'tryAgain': l10n.webTryAgain,
         'deleteConfirm': l10n.deleteItemsConfirm(1),
         'linkPrompt': l10n.linkUrlHint,
+        'imageTooBig': l10n.webImageTooBig,
+        'imageType': l10n.webImageType,
       },
     });
     // Saving is automatic: the title bar holds the save state and Done, and
@@ -1114,13 +1151,14 @@ class WebPages {
             ),
           )
           ..write('<div class="window-body">');
-    if (kind == 'rich') out.write(_toolbar());
+    if (kind == 'rich') out.write(_toolbar(images: images));
     out.write(
       '<input class="title-input" id="title-input" type="text" '
       'value="${esc(title)}" placeholder="${esc(l10n.addATitle)}" '
       'aria-label="${esc(l10n.addATitle)}"'
       '${kind == 'markdown' ? ' hidden' : ''}>',
     );
+    if (props) out.write(_propsRow(tags, color));
     if (kind == 'markdown') {
       final source = blocks.where((b) => b.isText).firstOrNull?.text ?? '';
       out
@@ -1150,9 +1188,12 @@ class WebPages {
             'data-delta="${esc(editorDelta(b.text))}"></div>',
           );
         } else if (b.isImage && b.imagePath.isNotEmpty) {
+          final remove = esc(l10n.taskRemove);
           out.write(
             '<figure class="note-img"><img src="'
-            '${esc(_imgHref(b.imagePath))}" alt="" loading="lazy"></figure>',
+            '${esc(_imgHref(b.imagePath))}" alt="" loading="lazy">'
+            '${images ? '<button type="button" class="img-remove" data-remove-image="${esc(b.id)}" title="$remove" aria-label="$remove">×</button>' : ''}'
+            '</figure>',
           );
         } else if (b.isLink) {
           out.write(_linkCard(b));
@@ -1177,9 +1218,38 @@ class WebPages {
     return (title: pageTitle, main: out.toString(), attrs: 'data-edit-page');
   }
 
+  /// Under the title: the note's tags as one text field, and its colour as a
+  /// row of the phone's swatches (the first is no colour).
+  String _propsRow(List<String> tags, int? color) {
+    final out = StringBuffer('<div class="note-props">')
+      ..write(
+        '<label class="tags-field"><span aria-hidden="true">#</span>'
+        '<input id="tags-input" type="text" autocomplete="off" '
+        'value="${esc(tags.join(' '))}" placeholder="${esc(l10n.tagHint)}" '
+        'aria-label="${esc(l10n.webTags)}"></label>',
+      )
+      ..write(
+        '<div class="swatches" id="swatches" role="radiogroup" '
+        'aria-label="${esc(l10n.noteColor)}">',
+      );
+    String swatch(int? value, String label, String style) =>
+        '<button type="button" role="radio" class="swatch'
+        '${value == null ? ' none' : ''}" data-color="${value ?? ''}" '
+        'aria-checked="${value == color}" title="${esc(label)}" '
+        'aria-label="${esc(label)}"$style></button>';
+    out.write(swatch(null, l10n.webNoColour, ''));
+    for (var i = 0; i < NoteColors.swatches.length; i++) {
+      final v = NoteColors.swatches[i];
+      out.write(swatch(v, l10n.webColourN(i + 1), _tintStyle(v)));
+    }
+    out.write('</div></div>');
+    return out.toString();
+  }
+
   /// The formatting bar, mirroring the phone's: paragraph style, inline
-  /// marks, highlight and link, lists, quote, indent and alignment.
-  String _toolbar() {
+  /// marks, highlight and link, lists, quote, indent and alignment, and, on a
+  /// saved rich note, a button to add photos from the computer.
+  String _toolbar({bool images = false}) {
     String button(
       String format,
       String? value,
@@ -1213,8 +1283,13 @@ class WebPages {
         '${button('align', '', l10n.alignLeft, _icon(_iconAlignLeft))}'
         '${button('align', 'center', l10n.alignCenter, _icon(_iconAlignCenter))}'
         '${button('align', 'right', l10n.alignRight, _icon(_iconAlignRight))}'
+        '${images ? '$sep<button type="button" class="tool" data-action="add-image" title="${esc(l10n.addPhotos)}" aria-label="${esc(l10n.addPhotos)}">${_icon(_iconImage)}</button><input type="file" id="image-input" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden>' : ''}'
         '</div>';
   }
+
+  static const _iconImage =
+      '<rect x="2.5" y="3.5" width="13" height="11" rx="1.5"/>'
+      '<circle cx="6.5" cy="7.5" r="1.3"/><path d="M15.5 12l-4-4-6.5 6.5"/>';
 
   static String _icon(String paths) =>
       '<svg viewBox="0 0 18 18" aria-hidden="true" fill="none" '

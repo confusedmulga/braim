@@ -13,7 +13,9 @@ import '../models/note.dart';
 import '../models/note_block.dart';
 import '../models/tweet_card.dart';
 import '../services/note_markdown.dart';
+import '../services/storage_service.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart' show NoteColors;
 import 'web_html.dart';
 import 'web_security.dart';
 
@@ -218,11 +220,17 @@ class WebApi {
   Future<Response> createNote(Request request) async {
     final body = await _body(request);
     if (body == null) return _bad();
+    final props = noteProps(body);
+    if (props == null) return _bad();
     if (body['kind'] == 'markdown') {
       final source = body['source'];
       if (source is! String) return _bad();
       if (source.trim().isEmpty) return _bad('empty');
       final note = await state.addMarkdownNode(source);
+      if (props.changes) {
+        props.applyTo(note);
+        await state.upsertNote(note);
+      }
       return _created(note);
     }
     final title = body['title'];
@@ -244,6 +252,7 @@ class WebApi {
     }
     final note = Note(title: (title as String?) ?? '', blocks: newBlocks);
     if (note.isEmpty) return _bad('empty');
+    props.applyTo(note);
     await state.upsertNote(note);
     return _created(note);
   }
@@ -272,11 +281,13 @@ class WebApi {
         _leaseConflict(id, webLeaseHolder(sessionId)) ??
         _versionConflict(note.updatedAt, body['baseUpdatedAt']);
     if (conflict != null) return conflict;
+    final props = noteProps(body);
+    if (props == null) return _bad();
 
     if (note.markdown) {
       final source = body['source'];
       if (source is! String) return _bad();
-      return _saveMarkdown(note, source);
+      return _saveMarkdown(note, source, props);
     }
 
     final title = body['title'];
@@ -288,6 +299,7 @@ class WebApi {
     }
     note.blocks.addAll(edits.added);
     if (title is String) note.title = title;
+    props.applyTo(note);
     await state.upsertNote(note);
     return _saved(note.updatedAt, note.blocks);
   }
@@ -295,7 +307,11 @@ class WebApi {
   /// The Markdown screen's save: the source is the note's one text block and
   /// its first heading the title. Emptied, it is deleted, except a circuit
   /// note others hang off (Circuits guide, section 9).
-  Future<Response> _saveMarkdown(Note note, String source) async {
+  Future<Response> _saveMarkdown(
+    Note note,
+    String source,
+    NoteProps props,
+  ) async {
     if (source.trim().isEmpty &&
         !(note.isCircuitNode ||
             (note.isCircuitRoot &&
@@ -312,6 +328,7 @@ class WebApi {
     note
       ..markdown = true
       ..title = markdownTitle(source);
+    props.applyTo(note);
     await state.upsertNote(note);
     return _saved(note.updatedAt, note.blocks);
   }
@@ -484,6 +501,144 @@ class WebApi {
     String id,
     String sessionId,
   ) => _check(request, id, sessionId, card: visibleSpark(id));
+
+  // ---- Tags and colour (Phase 8) -------------------------------------------------
+
+  /// The tags and colour a save may carry, or null when either is malformed.
+  /// `tags` (a list of strings) replaces the note's tags; `color` (one of the
+  /// phone's swatches, or null for none) replaces its colour. Either may be
+  /// left out to keep what the note has.
+  static NoteProps? noteProps(Map<String, Object?> body) {
+    List<String>? tags;
+    if (body.containsKey('tags')) {
+      tags = cleanTags(body['tags']);
+      if (tags == null) return null;
+    }
+    final setColor = body.containsKey('color');
+    final color = body['color'];
+    if (setColor &&
+        color != null &&
+        (color is! int || !NoteColors.swatches.contains(color))) {
+      return null;
+    }
+    return NoteProps(tags: tags, setColor: setColor, color: color as int?);
+  }
+
+  /// Tags as the phone's tag editor keeps them: split on spaces and commas,
+  /// without `#`, lower case, no blanks or repeats. Null unless [raw] is a
+  /// list of strings.
+  static List<String>? cleanTags(Object? raw) {
+    if (raw is! List) return null;
+    final out = <String>[];
+    for (final item in raw) {
+      if (item is! String) return null;
+      for (final part in item.split(RegExp(r'[,\s]+'))) {
+        final tag = part.replaceAll('#', '').trim().toLowerCase();
+        if (tag.isNotEmpty && tag.length <= 60 && !out.contains(tag)) {
+          out.add(tag);
+        }
+      }
+    }
+    return out.length > 50 ? out.sublist(0, 50) : out;
+  }
+
+  // ---- Images (Phase 8) --------------------------------------------------------------
+
+  /// The extension an uploaded image is saved under, read from its first
+  /// bytes rather than trusting the browser: JPEG, PNG, GIF or WebP. Null
+  /// for anything else.
+  static String? imageExtension(List<int> b) {
+    bool at(int offset, List<int> sig) {
+      if (b.length < offset + sig.length) return false;
+      for (var i = 0; i < sig.length; i++) {
+        if (b[offset + i] != sig[i]) return false;
+      }
+      return true;
+    }
+
+    if (at(0, const [0xFF, 0xD8, 0xFF])) return '.jpg';
+    if (at(0, const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) {
+      return '.png';
+    }
+    if (at(0, 'GIF87a'.codeUnits) || at(0, 'GIF89a'.codeUnits)) return '.gif';
+    if (at(0, 'RIFF'.codeUnits) && at(8, 'WEBP'.codeUnits)) return '.webp';
+    return null;
+  }
+
+  /// `POST /api/notes/<id>/images`: the body is one image file, up to
+  /// [kWebMaxImageBytes]. It goes at the end of the note with an empty line
+  /// after it to write on, as the phone adds photos. Rich notes only.
+  Future<Response> addImage(
+    Request request,
+    String id,
+    String sessionId,
+  ) async {
+    final note = visibleNote(id);
+    if (note == null) return _notFound();
+    if (note.markdown) return _bad('markdown');
+    final conflict = _leaseConflict(id, webLeaseHolder(sessionId));
+    if (conflict != null) return conflict;
+    final bytes = await readBytesLimited(request, kWebMaxImageBytes);
+    final ext = imageExtension(bytes);
+    if (ext == null) {
+      return jsonResponse(400, {
+        'error': 'not_image',
+        'message': l10n.webImageType,
+      });
+    }
+    final path = await StorageService.instance.saveImageBytes(bytes, ext: ext);
+    note.blocks
+      ..add(NoteBlock(type: NoteBlockType.image, imagePath: path))
+      ..add(
+        NoteBlock(
+          type: NoteBlockType.text,
+          text: jsonEncode(sanitizeDelta([])),
+        ),
+      );
+    await state.upsertNote(note);
+    return _saved(note.updatedAt, note.blocks);
+  }
+
+  /// `DELETE /api/notes/<id>/images/<blockId>`: takes an image out of the note
+  /// and deletes its file, as the phone does, folding away an empty line it
+  /// leaves touching another.
+  Future<Response> removeImage(
+    String id,
+    String blockId,
+    String sessionId,
+  ) async {
+    final note = visibleNote(id);
+    if (note == null) return _notFound();
+    final conflict = _leaseConflict(id, webLeaseHolder(sessionId));
+    if (conflict != null) return conflict;
+    final i = note.blocks.indexWhere((b) => b.id == blockId && b.isImage);
+    if (i < 0) return _notFound();
+    final path = note.blocks.removeAt(i).imagePath;
+    final blocks = note.blocks;
+    if (i > 0 &&
+        i < blocks.length &&
+        blocks[i - 1].isText &&
+        blocks[i].isText) {
+      if (_blankText(blocks[i])) {
+        blocks.removeAt(i);
+      } else if (_blankText(blocks[i - 1])) {
+        blocks.removeAt(i - 1);
+      }
+    }
+    if (!blocks.any((b) => b.isText)) {
+      blocks.add(
+        NoteBlock(
+          type: NoteBlockType.text,
+          text: jsonEncode(sanitizeDelta([])),
+        ),
+      );
+    }
+    await state.upsertNote(note);
+    await state.refreshAfterImageRemoval(path);
+    return _saved(note.updatedAt, note.blocks);
+  }
+
+  static bool _blankText(NoteBlock b) => richToPlain(b.text).trim().isEmpty;
 
   // ---- Circuits (section 9.3) ----------------------------------------------------
 
@@ -889,5 +1044,24 @@ class WebApi {
     // page's old slot when moving down.
     await state.reorderBookPages(bookId, from, to > from ? to + 1 : to);
     return _ok();
+  }
+}
+
+/// What a note save may change besides its text: see [WebApi.noteProps].
+class NoteProps {
+  const NoteProps({this.tags, this.setColor = false, this.color});
+
+  /// The new tags, or null to keep the note's.
+  final List<String>? tags;
+
+  /// Whether to set the colour to [color] (null clears it).
+  final bool setColor;
+  final int? color;
+
+  bool get changes => tags != null || setColor;
+
+  void applyTo(Note note) {
+    if (tags != null) note.tags = tags!;
+    if (setColor) note.colorValue = color;
   }
 }
