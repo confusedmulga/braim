@@ -28,6 +28,25 @@ class ArticleExtractor {
     'h1', 'h2', 'h3', 'h4', 'p', 'li', 'blockquote', 'pre',
   };
 
+  /// schema.org's `"isAccessibleForFree": false`, the marker publishers put on
+  /// subscriber-only articles for search engines, as JSON-LD.
+  static final _notFreeJson = RegExp(
+      r'''["']isAccessibleForFree["']\s*:\s*["']?false["']?''',
+      caseSensitive: false);
+
+  /// Whether the page marks itself as paywalled (subscriber-only), in JSON-LD
+  /// or microdata. Must run before the scripts are stripped.
+  static bool isPaywalled(dom.Document doc) {
+    for (final s in doc.querySelectorAll('script[type="application/ld+json"]')) {
+      if (_notFreeJson.hasMatch(s.text)) return true;
+    }
+    for (final m in doc.querySelectorAll('[itemprop="isAccessibleForFree"]')) {
+      final v = (m.attributes['content'] ?? m.text).trim().toLowerCase();
+      if (v == 'false') return true;
+    }
+    return false;
+  }
+
   /// Hard cap so a very long page can't bloat the data file.
   static const _maxChars = 80000;
 
@@ -36,6 +55,8 @@ class ArticleExtractor {
   static String? extract(dom.Document doc) {
     final body = doc.body;
     if (body == null) return null;
+    // A publisher's subscriber-only article: don't lift text a paywall hides.
+    if (isPaywalled(doc)) return null;
 
     // 1. Drop chrome outright so it can't score or leak into the text.
     for (final el in body.querySelectorAll(_chromeTags.join(','))) {

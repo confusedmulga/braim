@@ -733,8 +733,14 @@ abstract class AppLocalizations {
   /// No description provided for @cryptLockedSecret.
   ///
   /// In en, this message translates to:
-  /// **'Locked, secret'**
+  /// **'Locked, not encrypted'**
   String get cryptLockedSecret;
+
+  /// No description provided for @cryptNotEncrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'not encrypted'**
+  String get cryptNotEncrypted;
 
   /// No description provided for @noFoldersYetCreate.
   ///

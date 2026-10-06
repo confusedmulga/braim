@@ -371,7 +371,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get crypt => 'Crypt';
 
   @override
-  String get cryptLockedSecret => 'Locked, secret';
+  String get cryptLockedSecret => 'Locked, not encrypted';
+
+  @override
+  String get cryptNotEncrypted => 'not encrypted';
 
   @override
   String get noFoldersYetCreate => 'No folds yet, create one in Cortex.';

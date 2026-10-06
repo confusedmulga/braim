@@ -1,6 +1,6 @@
 # Privacy Policy for Braim
 
-**Last updated:** October 3, 2026
+**Last updated:** October 6, 2026
 
 Braim ("the App") is developed and published by Kalpesh Nichal, an individual
 developer based in India ("we," "us," "our"). This policy explains what happens
@@ -25,8 +25,11 @@ browser on your local network.
 
 ## Data We Collect
 
-We do not collect, store, or have access to any of your data. There is no user
-account with us and no analytics library in the App. Specifically:
+We do not operate any server, so your notes, library and everything else you
+keep in Braim are never sent to us, and we cannot access them. There is no user
+account with us and no analytics library in the App. Some features make your
+device contact other services directly, as described below; that traffic does
+not pass through us either. Specifically:
 
 - **Notes, cards, checklists, journal entries, books, and habit trackers** are
   stored only in a local database on your device.
@@ -100,7 +103,8 @@ device's IP address and the request itself:
 - **For a general link,** the App requests the page to read its title,
   description and preview image (Open Graph tags). When you save a card it may
   also keep the article's text so you can read it in reader mode, stored only on
-  your device. That website, and any content-delivery network it uses, sees a
+  your device. Reader mode uses only what the page serves publicly without
+  signing in, and skips articles the publisher marks as subscriber-only. That website, and any content-delivery network it uses, sees a
   request from your device, the same as if you had opened the link in a
   browser.
 - **For a tweet or X post,** the App additionally contacts **X's public oEmbed
@@ -167,16 +171,16 @@ completely secure, so keep your phone locked and your backups somewhere safe.
 
 ## Children's Privacy
 
-Braim does not knowingly collect any information from anyone, including
-children, because it collects no information itself. The App is not directed at
-children and contains no age-restricted content.
+Braim is not designed or marketed for children. We do not knowingly collect
+information from anyone, including children, and the App sends nothing to us.
+A child's notes, like anyone's, stay on the device they were written on.
 
 ## Data Deletion and Your Rights
 
 Privacy laws such as India's Digital Personal Data Protection Act, 2023 and the
 EU's General Data Protection Regulation give you rights over personal data a
-company holds about you. We hold none, so there is nothing of yours for us to
-disclose, correct or erase. The third-party services listed above handle the
+company holds about you. Because we run no server, we receive and hold none of
+your data, so there is nothing of yours for us to disclose, correct or erase. The third-party services listed above handle the
 requests your device sends them, and you can exercise your rights with them
 directly.
 

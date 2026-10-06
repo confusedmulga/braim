@@ -133,7 +133,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
   }
 }
 
-/// The locked, secret Crypt tile: a compact half-height dark tile.
+/// The locked Crypt tile: a compact half-height dark tile.
 class _CryptTile extends StatelessWidget {
   const _CryptTile({super.key, required this.itemCount, required this.onTap});
   final int itemCount;
@@ -180,7 +180,13 @@ class _CryptTile extends StatelessWidget {
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700)),
                         const SizedBox(height: 2),
-                        Text(context.t.itemsCount(itemCount),
+                        // Said on the tile itself, not only in the
+                        // tutorial: the name suggests encryption.
+                        Text(
+                            '${context.t.itemsCount(itemCount)} · '
+                            '${context.t.cryptNotEncrypted}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.75),
                                 fontSize: 12,

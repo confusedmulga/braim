@@ -49,4 +49,33 @@ void main() {
     ''');
     expect(ArticleExtractor.extract(doc), isNull);
   });
+
+  group('paywalled pages are not extracted', () {
+    String page(String head, {String attrs = ''}) => '''
+      <html><head>$head</head><body><article $attrs>
+        <h1>Members only</h1>${List.generate(8, _para).join()}
+      </article></body></html>''';
+
+    test('JSON-LD isAccessibleForFree false', () {
+      final doc = html_parser.parse(page(
+          '<script type="application/ld+json">{"@type":"NewsArticle",'
+          '"isAccessibleForFree": "False","hasPart":{}}</script>'));
+      expect(ArticleExtractor.isPaywalled(doc), isTrue);
+      expect(ArticleExtractor.extract(doc), isNull);
+    });
+
+    test('microdata isAccessibleForFree false', () {
+      final doc = html_parser.parse(page(
+          '<meta itemprop="isAccessibleForFree" content="false">'));
+      expect(ArticleExtractor.extract(doc), isNull);
+    });
+
+    test('a free article marked true is still extracted', () {
+      final doc = html_parser.parse(page(
+          '<script type="application/ld+json">{"isAccessibleForFree": true}'
+          '</script>'));
+      expect(ArticleExtractor.isPaywalled(doc), isFalse);
+      expect(ArticleExtractor.extract(doc), contains('Paragraph 3'));
+    });
+  });
 }

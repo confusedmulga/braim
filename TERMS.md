@@ -1,6 +1,6 @@
 # Terms of Use for Braim
 
-**Last updated:** October 2, 2026
+**Last updated:** October 6, 2026
 
 These terms cover your use of the Braim app ("the App"), published by Kalpesh
 Nichal, an individual developer based in India ("we," "us"). By installing or
@@ -10,20 +10,24 @@ using the App you agree to them. If you don't agree, don't use the App.
 
 Braim is provided free of charge. It has no price, no in-app purchases, no
 subscriptions and no ads, and we receive nothing from you for it, neither money
-nor your data. We grant you a personal, non-exclusive, revocable right to use it
-on devices you own or control. The App's source code is also published under the
-MIT License (see `LICENSE`); that license governs the code. These terms govern
-your use of the App as distributed through app stores. The Braim name, logo and
+nor your data. You may use the App as distributed through app stores on
+devices you own or control, under these terms. The App's source code is
+separately published under the MIT License (see `LICENSE`), which governs the
+code and is not limited by these terms. The Braim name, logo and
 artwork are not licensed to you under either.
 
 ## 2. Your content
 
-What you write and save in Braim is yours. It is stored on your device, not with
-us (see the [Privacy Policy](PRIVACY.md)). You are responsible for it,
-including making sure you have the right to save, export or share it.
+You keep whatever rights you have in the content you create or import into
+Braim; using Braim gives neither you nor us any rights in content that belongs
+to someone else. Your content is stored on your device, not with us (see the
+[Privacy Policy](PRIVACY.md)). You are responsible for it, including making
+sure you have the right to save, export or share it.
 
 Braim can save material from other sources, such as article text in reader
-mode and tweet text. That material belongs to its owners.
+mode and tweet text. That material belongs to its owners. Reader mode only
+reads what a page serves publicly without signing in, is not designed to get
+around paywalls, and skips articles the publisher marks as subscriber-only.
 Keep it for your own personal reference, and follow the copyright and the terms
 of the sites you save from. Don't use the App to republish other people's work
 without permission.
@@ -32,7 +36,9 @@ without permission.
 
 Previews come from websites and services we don't operate (the linked site,
 X, YouTube, unavatar.io). We don't control them, don't vouch for their content,
-and aren't affiliated with or endorsed by them. They can change or stop working
+and aren't affiliated with or endorsed by them. X is a trademark of X Corp. and
+YouTube is a trademark of Google LLC; these and other names appear only to
+describe which links Braim can preview. The services can change or stop working
 at any time, and previews may then fail.
 
 ## 4. Keep your own backups
@@ -46,8 +52,10 @@ backing up your data.
 
 Reminders, notifications and the focus timer's Do Not Disturb depend on your
 device's operating system and settings and can be delayed, silenced or skipped.
-Don't rely on Braim for medical, safety, legal, financial or other time-critical
-matters. Do Not Disturb set by the focus timer can stay on if the system closes
+Don't rely on Braim for medical or medication reminders, emergencies or
+emergency contact, safety, legal deadlines, financial records, professional or
+regulatory compliance, or any other time-critical matter, and don't store
+passwords or other security credentials in it. Do Not Disturb set by the focus timer can stay on if the system closes
 the App mid-session; check your phone if you are expecting an important call.
 
 The Crypt folder limits access within the App. It does not encrypt anything and
@@ -84,16 +92,16 @@ The App is a free, personal project. To the fullest extent the law allows:
   relating to the App is limited to the amount you paid us for it, which is
   nil.
 
-Nothing in these terms limits liability that the law does not allow to be
-limited, such as liability for fraud, or any rights you have as a consumer that
-cannot be waived.
+Nothing in these terms excludes or limits any liability, or any right you have
+as a consumer, to the extent that applicable law does not allow it to be
+excluded or limited, such as liability for fraud.
 
 ## 9. Your responsibility
 
-You agree to use the App lawfully. If your use of the App, your content, or your
-breach of these terms or of a third party's rights leads to a claim against us,
-you agree to cover our reasonable costs and losses from that claim, to the
-extent the law allows.
+You agree to use the App lawfully. If your unlawful use of the App, your
+infringement of someone else's rights, or your deliberate breach of these terms
+leads to a claim against us, you agree to cover our reasonable costs and losses
+from that claim, to the extent the law allows.
 
 ## 10. Changes and ending
 
@@ -111,12 +119,18 @@ rest stays in effect and that part is applied as far as the law allows. Our not
 enforcing a term is not a waiver of it. You may not transfer these terms; we may
 transfer them to anyone who takes over the App.
 
-## 12. Governing law
+## 12. Copyright complaints and security reports
+
+If you believe something about the App infringes your rights, write to the
+contact address below with the details and we will look into it promptly.
+Security problems can be reported privately as described in `SECURITY.md`.
+
+## 13. Governing law
 
 These terms are governed by the laws of India. Courts in India have jurisdiction
 over any dispute about them, without affecting any mandatory right you have to
 bring a claim where you live.
 
-## 13. Contact
+## 14. Contact
 
 **yellowisjoyy@gmail.com**

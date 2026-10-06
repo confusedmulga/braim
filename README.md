@@ -445,5 +445,6 @@ not cover:
   under Settings › About › Open-source licenses.
 
 The [Privacy Policy](PRIVACY.md) and [Terms of Use](TERMS.md) are linked from
-Settings › About. Braim is not affiliated with X, YouTube, Google or unavatar.io;
+Settings › About; security problems are reported as described in
+[SECURITY.md](SECURITY.md). Braim is not affiliated with X, YouTube, Google or unavatar.io;
 avatars are provided by [Unavatar](https://unavatar.io).
