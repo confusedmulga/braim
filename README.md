@@ -439,8 +439,8 @@ not cover:
 - **Quill** (`assets/web/vendor/`), the editor Braim Web uses, under the BSD
   3-Clause License, with the notices of the packages its build bundles, in
   `assets/web/vendor/LICENSE-quill.txt`.
-- **The feed wallpapers** (`assets/wallpapers/lightmain.PNG` and
-  `darkmain.PNG`), original artwork made for Braim. All rights reserved.
+- **The feed wallpapers** (`assets/wallpapers/lightmain.jpg` and
+  `darkmain.jpg`), original artwork made for Braim. All rights reserved.
 - **Dart and Flutter packages**, each under its own license, listed in the app
   under Settings › About › Open-source licenses.
 

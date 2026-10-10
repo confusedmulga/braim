@@ -617,7 +617,10 @@ class AppState extends ChangeNotifier {
     await _importSharedInbox();
     _loaded = true;
     notifyListeners();
-    rescheduleReminders();
+    // Re-arm reminders once the app is up, not during the launch: the first
+    // one reads the time-zone database, most of a second on a slow phone.
+    // Reminders already armed keep firing meanwhile.
+    Timer(const Duration(seconds: 2), rescheduleReminders);
 
     // Cards saved by the share popup arrive without a preview; enrich them in
     // the background now. Capped so a dead link doesn't refetch every launch.

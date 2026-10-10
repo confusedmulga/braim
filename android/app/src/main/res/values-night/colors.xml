@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launch screen logo, a lighter periwinkle on the dark background. -->
+    <color name="splash_logo">#FF8FA5FF</color>
+</resources>

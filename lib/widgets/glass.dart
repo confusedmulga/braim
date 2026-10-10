@@ -17,39 +17,39 @@ class AppBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final custom = wallpaper
-        ? context.watch<AppState>().feedBackgroundForTheme
-        : '';
-    final hasCustom = custom.isNotEmpty && File(custom).existsSync();
+    final image = wallpaper
+        ? feedWallpaper(context.watch<AppState>().feedBackgroundForTheme)
+        : null;
     return Stack(
       fit: StackFit.expand,
       children: [
         ColoredBox(color: AppPalette.scheme.surface),
-        if (wallpaper)
+        if (image != null)
           Positioned.fill(
             child: RepaintBoundary(
-              child: hasCustom
-                  ? Image.file(
-                      File(custom),
-                      fit: BoxFit.cover,
-                      cacheWidth: 1440,
-                      gaplessPlayback: true,
-                    )
-                  : Image.asset(
-                      AppPalette.dark ? kWallpaperDark : kWallpaperLight,
-                      fit: BoxFit.cover,
-                      // The artwork is 2480 x 3508 (A4 at 300 dpi): decoded in
-                      // full it would hold about 35 MB. Decode at the same
-                      // 1440 px width as a custom background instead.
-                      cacheWidth: 1440,
-                      gaplessPlayback: true,
-                    ),
+              child: Image(
+                image: image,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              ),
             ),
           ),
         if (child != null) Positioned.fill(child: child!),
       ],
     );
   }
+}
+
+/// The feed's backdrop image: the user's chosen [custom] file when it's set
+/// (and still there), else the built-in artwork for the current theme. Both
+/// are decoded at 1440 px wide: a phone photo in full would hold tens of MB.
+/// The launch reads this same image ahead of the first frame, so the feed
+/// opens with it already decoded.
+ImageProvider feedWallpaper(String custom) {
+  final ImageProvider source = custom.isNotEmpty && File(custom).existsSync()
+      ? FileImage(File(custom))
+      : AssetImage(AppPalette.dark ? kWallpaperDark : kWallpaperLight);
+  return ResizeImage(source, width: 1440);
 }
 
 /// A solid surface colour that fades downward from the top edge. Used as a

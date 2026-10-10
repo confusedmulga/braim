@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
@@ -19,7 +20,10 @@ class NotificationService {
 
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _ready = false;
-  bool _tried = false;
+
+  /// The platform setup, run at most once and shared: a call made while it
+  /// is still running waits for it rather than finding it not ready.
+  Future<void>? _setUp;
 
   static const _channelId = 'braim_reminders';
   static const _journalChannelId = 'braim_journal';
@@ -54,15 +58,20 @@ class NotificationService {
   /// re-arms them all to make them exact too.
   static void Function()? onExactAlarmsGranted;
 
-  Future<void> init() async {
-    // Attempt the platform setup at most once; if it fails (e.g. no plugin in
-    // a test), every later call quietly no-ops instead of retrying.
-    if (_ready || _tried) return;
-    _tried = true;
+  /// Sets up reminders. Attempted once; if it fails (e.g. no plugin in a
+  /// test), every later call quietly no-ops instead of retrying. The app
+  /// starts it without waiting, so it never holds up the launch.
+  Future<void> init() => _setUp ??= _initOnce();
+
+  Future<void> _initOnce() async {
     try {
-      tzdata.initializeTimeZones();
       final name = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(name));
+      // Reading the world's time-zone database takes most of a second, so it
+      // is read on another isolate; only this phone's zone comes back.
+      tz.setLocalLocation(await Isolate.run(() {
+        tzdata.initializeTimeZones();
+        return tz.getLocation(name);
+      }));
     } catch (_) {
       // Fall back to UTC; reminders still fire, just relative to UTC.
     }

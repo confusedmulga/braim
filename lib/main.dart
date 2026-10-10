@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -15,6 +17,7 @@ import 'state/app_state.dart';
 import 'state/pomodoro_controller.dart';
 import 'theme/app_theme.dart';
 import 'web/web_controller.dart';
+import 'widgets/glass.dart';
 
 /// Root navigator, so a tapped notification can open a screen without a
 /// BuildContext.
@@ -84,12 +87,17 @@ void registerDictionaryLicense() {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The launch screen stays up until the library and the feed's backdrop are
+  // ready (see _Root), so the app opens as itself: no blank page, no backdrop
+  // popping in, no flash of the other theme.
+  _LaunchGate.hold();
   registerFontLicenses();
   registerWebLicenses();
   registerDictionaryLicense();
-  // Best-effort; reminders simply don't fire if this fails.
+  // Reminders are set up on first use (AppState re-arms them just after the
+  // launch), not here: setting up reads the time-zone database, which took
+  // most of a second of every launch.
   NotificationService.onSelect = _onNotificationTap;
-  await NotificationService.instance.init();
   // If a focus session was killed with DND still on, turn it back off.
   await DndService.instance.restoreIfLeftOn();
   // Draw behind the status bar and the gesture-nav pill, and turn off the
@@ -199,14 +207,63 @@ class _NoStretchScrollBehavior extends MaterialScrollBehavior {
       const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
 }
 
-class _Root extends StatelessWidget {
+/// Holds back the app's first frame, which keeps the system launch screen
+/// (the logo) showing until [release]. Never for long: after a few seconds the
+/// app shows whatever it has, a slow first load its spinner.
+abstract final class _LaunchGate {
+  static bool _held = false;
+
+  static void hold() {
+    if (_held) return;
+    _held = true;
+    WidgetsBinding.instance.deferFirstFrame();
+    Timer(const Duration(seconds: 4), release);
+  }
+
+  static void release() {
+    if (!_held) return;
+    _held = false;
+    WidgetsBinding.instance.allowFirstFrame();
+  }
+}
+
+class _Root extends StatefulWidget {
   const _Root();
+
+  @override
+  State<_Root> createState() => _RootState();
+}
+
+class _RootState extends State<_Root> {
+  bool _warming = false;
+
+  /// Decodes the feed's backdrop (the frames before it are built, just not
+  /// shown), then lets the first frame through with it in place. Decoding a
+  /// full-screen image takes a moment; before, the feed showed its plain
+  /// surface until it arrived.
+  Future<void> _showWhenReady() async {
+    try {
+      await precacheImage(
+              feedWallpaper(context.read<AppState>().feedBackgroundForTheme),
+              context)
+          .timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // A missing or slow image just shows the plain surface, as before.
+    }
+    _LaunchGate.release();
+  }
 
   @override
   Widget build(BuildContext context) {
     final loaded = context.select<AppState, bool>((s) => s.loaded);
     if (!loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!_warming) {
+      _warming = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showWhenReady();
+      });
     }
     return const RootShell();
   }

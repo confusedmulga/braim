@@ -6,4 +6,8 @@
             <solid android:color="#FF15161C" />
         </shape>
     </item>
+    <!-- The Braim logo, centred. -->
+    <item
+        android:drawable="@drawable/splash_logo"
+        android:gravity="center" />
 </layer-list>
