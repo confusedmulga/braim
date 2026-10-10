@@ -63,7 +63,7 @@ class TweetCard {
 
   /// The page marks its article as for subscribers only, so [articleText]
   /// was deliberately left empty: Braim keeps the preview and never steps
-  /// around a paywall (see LinkPreviewService.isPaywalled).
+  /// around a paywall (see ArticleExtractor.isPaywalled).
   bool articlePaywalled;
 
   /// For a YouTube spark: the video's full description and caption transcript,

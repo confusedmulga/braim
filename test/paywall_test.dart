@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:braim/models/tweet_card.dart';
+import 'package:braim/services/article_extractor.dart';
 import 'package:braim/services/link_preview_service.dart';
 
 /// An article page: [head] goes in the page's head, and the body carries
@@ -26,7 +27,7 @@ String ldJson(Object data) =>
     '<script type="application/ld+json">${jsonEncode(data)}</script>';
 
 bool paywalled(String html) =>
-    LinkPreviewService.isPaywalled(html_parser.parse(html));
+    ArticleExtractor.isPaywalled(html_parser.parse(html));
 
 void main() {
   group('isPaywalled', () {

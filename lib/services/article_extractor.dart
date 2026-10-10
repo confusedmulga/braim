@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:html/dom.dart' as dom;
 
 /// Reader-mode extraction: pulls the main article text out of a web page so
@@ -28,23 +30,54 @@ class ArticleExtractor {
     'h1', 'h2', 'h3', 'h4', 'p', 'li', 'blockquote', 'pre',
   };
 
-  /// schema.org's `"isAccessibleForFree": false`, the marker publishers put on
-  /// subscriber-only articles for search engines, as JSON-LD.
+  /// schema.org's `"isAccessibleForFree": false` as raw text, for a JSON-LD
+  /// block too malformed to parse.
   static final _notFreeJson = RegExp(
       r'''["']isAccessibleForFree["']\s*:\s*["']?false["']?''',
       caseSensitive: false);
 
-  /// Whether the page marks itself as paywalled (subscriber-only), in JSON-LD
-  /// or microdata. Must run before the scripts are stripped.
+  /// Whether [doc] marks its article as for paying subscribers, the way
+  /// publishers tell search engines: schema.org `isAccessibleForFree: false`
+  /// (in JSON-LD, anywhere in it, including a paywalled `hasPart`, or in
+  /// microdata), or an `article:content_tier` of `locked` or `metered`. A
+  /// metered article is treated as paywalled too: Braim can't know which of
+  /// the reader's free articles it would be using up. Must run before the
+  /// scripts are stripped.
   static bool isPaywalled(dom.Document doc) {
-    for (final s in doc.querySelectorAll('script[type="application/ld+json"]')) {
-      if (_notFreeJson.hasMatch(s.text)) return true;
+    bool notFree(Object? v) =>
+        v == false || (v is String && v.trim().toLowerCase() == 'false');
+
+    bool search(Object? node) {
+      if (node is Map) {
+        for (final entry in node.entries) {
+          if (entry.key == 'isAccessibleForFree' && notFree(entry.value)) {
+            return true;
+          }
+          if (search(entry.value)) return true;
+        }
+      } else if (node is List) {
+        for (final item in node) {
+          if (search(item)) return true;
+        }
+      }
+      return false;
     }
-    for (final m in doc.querySelectorAll('[itemprop="isAccessibleForFree"]')) {
-      final v = (m.attributes['content'] ?? m.text).trim().toLowerCase();
-      if (v == 'false') return true;
+
+    for (final script
+        in doc.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        if (search(jsonDecode(script.text))) return true;
+      } catch (_) {
+        if (_notFreeJson.hasMatch(script.text)) return true;
+      }
     }
-    return false;
+    for (final el in doc.querySelectorAll('[itemprop="isAccessibleForFree"]')) {
+      if (notFree(el.attributes['content'] ?? el.text)) return true;
+    }
+    final tier = doc.querySelector('meta[property="article:content_tier"]') ??
+        doc.querySelector('meta[name="article:content_tier"]');
+    final value = tier?.attributes['content']?.trim().toLowerCase();
+    return value == 'locked' || value == 'metered';
   }
 
   /// Hard cap so a very long page can't bloat the data file.
