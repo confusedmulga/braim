@@ -358,6 +358,12 @@ abstract class AppLocalizations {
   /// **'New node'**
   String get newNote;
 
+  /// No description provided for @newSpark.
+  ///
+  /// In en, this message translates to:
+  /// **'New spark'**
+  String get newSpark;
+
   /// No description provided for @newMarkdown.
   ///
   /// In en, this message translates to:
@@ -379,8 +385,50 @@ abstract class AppLocalizations {
   /// No description provided for @exportFailed.
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t export the PDF'**
+  /// **'Couldn\'t create the file'**
   String get exportFailed;
+
+  /// No description provided for @shareAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Share as'**
+  String get shareAs;
+
+  /// No description provided for @shareFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a format'**
+  String get shareFormat;
+
+  /// No description provided for @shareFormatMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown (.md)'**
+  String get shareFormatMarkdown;
+
+  /// No description provided for @shareFormatText.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain text'**
+  String get shareFormatText;
+
+  /// No description provided for @shareFormatPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF (.pdf)'**
+  String get shareFormatPdf;
+
+  /// No description provided for @shareFormatDocx.
+  ///
+  /// In en, this message translates to:
+  /// **'Document (.docx)'**
+  String get shareFormatDocx;
+
+  /// No description provided for @shareFormatCircuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole circuit (.braim)'**
+  String get shareFormatCircuit;
 
   /// No description provided for @shareFailed.
   ///
@@ -859,7 +907,7 @@ abstract class AppLocalizations {
   /// No description provided for @useButtonsToAdd.
   ///
   /// In en, this message translates to:
-  /// **'Use the + buttons to add a node or existing items.'**
+  /// **'Use the buttons to add a node, a spark or existing items.'**
   String get useButtonsToAdd;
 
   /// No description provided for @title.
@@ -2218,6 +2266,24 @@ abstract class AppLocalizations {
   /// **'Saved to {name}'**
   String savedToName(String name);
 
+  /// No description provided for @shareTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Title (optional)'**
+  String get shareTitleHint;
+
+  /// No description provided for @shareBodyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get shareBodyHint;
+
+  /// No description provided for @shareSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get shareSave;
+
   /// No description provided for @createAndSave.
   ///
   /// In en, this message translates to:
@@ -2235,6 +2301,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reader'**
   String get readerSection;
+
+  /// No description provided for @articlePaywalled.
+  ///
+  /// In en, this message translates to:
+  /// **'This article is for the site\'s subscribers, so Braim saved only its preview. Open the link to read it there.'**
+  String get articlePaywalled;
 
   /// No description provided for @themeLabel.
   ///
@@ -3447,6 +3519,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reset'**
   String get cropReset;
+
+  /// No description provided for @cropOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Original'**
+  String get cropOriginal;
 
   /// No description provided for @cropFreeform.
   ///
@@ -4785,6 +4863,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This circuit file is too large to import.'**
   String get circuitImportTooLarge;
+
+  /// No description provided for @define.
+  ///
+  /// In en, this message translates to:
+  /// **'Define'**
+  String get define;
+
+  /// No description provided for @dictionaryOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t open the dictionary.'**
+  String get dictionaryOpenFailed;
+
+  /// No description provided for @dictionaryNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No definition found for “{word}”.'**
+  String dictionaryNotFound(String word);
+
+  /// No description provided for @dictionaryShowAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all {n} meanings'**
+  String dictionaryShowAll(int n);
+
+  /// No description provided for @wordClassNoun.
+  ///
+  /// In en, this message translates to:
+  /// **'noun'**
+  String get wordClassNoun;
+
+  /// No description provided for @wordClassVerb.
+  ///
+  /// In en, this message translates to:
+  /// **'verb'**
+  String get wordClassVerb;
+
+  /// No description provided for @wordClassAdjective.
+  ///
+  /// In en, this message translates to:
+  /// **'adjective'**
+  String get wordClassAdjective;
+
+  /// No description provided for @wordClassAdverb.
+  ///
+  /// In en, this message translates to:
+  /// **'adverb'**
+  String get wordClassAdverb;
+
+  /// No description provided for @dictionarySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A word, or what it means'**
+  String get dictionarySearchHint;
+
+  /// No description provided for @dictionaryIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Look up a word for its meanings and synonyms, or describe a meaning to find the word for it.'**
+  String get dictionaryIntro;
+
+  /// No description provided for @dictionaryNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing found.'**
+  String get dictionaryNoResults;
+
+  /// No description provided for @dictionaryDefinitions.
+  ///
+  /// In en, this message translates to:
+  /// **'Definitions'**
+  String get dictionaryDefinitions;
+
+  /// No description provided for @dictionarySynonyms.
+  ///
+  /// In en, this message translates to:
+  /// **'Synonyms'**
+  String get dictionarySynonyms;
+
+  /// No description provided for @dictionaryStartingWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Words starting with “{text}”'**
+  String dictionaryStartingWith(String text);
+
+  /// No description provided for @dictionaryByMeaning.
+  ///
+  /// In en, this message translates to:
+  /// **'Words for this meaning'**
+  String get dictionaryByMeaning;
+
+  /// No description provided for @dictionarySource.
+  ///
+  /// In en, this message translates to:
+  /// **'From Open English WordNet (CC BY 4.0), based on Princeton WordNet.'**
+  String get dictionarySource;
+
+  /// No description provided for @findInNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Find in note'**
+  String get findInNote;
+
+  /// No description provided for @findPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String findPosition(int current, int total);
+
+  /// No description provided for @findPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous match'**
+  String get findPrevious;
+
+  /// No description provided for @findNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next match'**
+  String get findNext;
+
+  /// No description provided for @findClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close find'**
+  String get findClose;
 }
 
 class _AppLocalizationsDelegate

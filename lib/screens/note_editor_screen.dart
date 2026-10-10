@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -9,17 +8,12 @@ import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/note.dart';
 import 'note_open.dart';
 import '../services/journal_format.dart';
-import '../services/file_names.dart';
 import '../services/note_markdown.dart';
-import '../services/note_pdf.dart';
 import '../services/notification_service.dart';
 import '../services/wiki_links.dart';
 import '../state/app_state.dart';
@@ -27,7 +21,9 @@ import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
 import '../widgets/bubble_button.dart';
 import '../widgets/circuit_sheets.dart';
+import '../widgets/dictionary_popup.dart';
 import '../widgets/expand_from_button.dart';
+import '../widgets/find_bar.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
 import '../widgets/glass_bubble.dart';
@@ -41,6 +37,7 @@ import '../widgets/note_links_section.dart';
 import '../widgets/note_read_body.dart';
 import '../widgets/note_tags_editor.dart';
 import '../widgets/reminder_hint.dart';
+import '../widgets/share_as.dart';
 import 'card_detail_screen.dart';
 import 'circuit_map_screen.dart';
 import 'reflexes_screen.dart';
@@ -83,6 +80,78 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   }
   final _editorKey = GlobalKey<NoteBodyEditorState>();
   final _activeController = ValueNotifier<QuillController?>(null);
+
+  // ---- Find in note --------------------------------------------------------
+
+  /// Whether the Find bar is open, and its field.
+  bool _finding = false;
+  final _findCtrl = TextEditingController();
+  final _findFocus = FocusNode();
+
+  /// The current match's marker in the read view, to scroll to.
+  final _findKey = GlobalKey();
+
+  /// How many matches there are, and which one (from 0) is current.
+  int _findTotal = 0;
+  int _findAt = 0;
+
+  /// While writing: the matches in the editor, block by block.
+  List<EditorMatch> _editMatches = const [];
+
+  void _openFind() {
+    setState(() => _finding = true);
+    // A query left from the last time is found again straight away.
+    _updateFind(reveal: true);
+  }
+
+  void _closeFind() {
+    if (!_finding) return;
+    _findFocus.unfocus();
+    if (!_readOnly && _findAt < _editMatches.length) {
+      _editorKey.currentState?.clearMatch(_editMatches[_findAt]);
+    }
+    setState(() {
+      _finding = false;
+      _findTotal = 0;
+      _findAt = 0;
+      _editMatches = const [];
+    });
+  }
+
+  /// Recounts the matches (the note may have changed) and, with [reveal],
+  /// scrolls to the current one: marked in the read view, selected in the
+  /// editor.
+  void _updateFind({bool reveal = false}) {
+    final query = _findCtrl.text;
+    if (_readOnly) {
+      _findTotal = query.isEmpty
+          ? 0
+          : NoteReadBody.countMatches(_note.blocks, query,
+              checkedToBottom: _note.checkedToBottom);
+    } else {
+      _editMatches = query.isEmpty
+          ? const []
+          : _editorKey.currentState?.findMatches(query) ?? const [];
+      _findTotal = _editMatches.length;
+    }
+    if (_findAt >= _findTotal) _findAt = 0;
+    setState(() {});
+    if (!reveal || _findTotal == 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_finding || _findAt >= _findTotal) return;
+      if (_readOnly) {
+        revealKey(_findKey);
+      } else if (_findAt < _editMatches.length) {
+        _editorKey.currentState?.showMatch(_editMatches[_findAt]);
+      }
+    });
+  }
+
+  void _stepFind(int by) {
+    if (_findTotal == 0) return;
+    _findAt = (_findAt + by) % _findTotal;
+    _updateFind(reveal: true);
+  }
 
   /// True once the open animation has finished. Heavy children (Quill editors,
   /// backdrop blurs, the bottom island) mount only then, so the opening stays
@@ -145,6 +214,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
 
   void _startEditing() {
     if (!_takeLease()) return;
+    _closeFind();
     // A browser may have changed the note while it was being read here.
     _titleCtrl.text = _note.title;
     _savedFingerprint = _fingerprint();
@@ -154,6 +224,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
 
   /// Done writing: fold the editor away and commit the note.
   void _finishEditing() {
+    _closeFind();
     FocusManager.instance.primaryFocus?.unfocus();
     _collect();
     final state = context.read<AppState>();
@@ -276,6 +347,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final state = context.read<AppState>();
     showModalBottomSheet<void>(
       context: context,
+      // As tall as its rows need (not the default cap), scrolling only on a
+      // screen too short for them all.
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => SafeArea(
         child: Padding(
@@ -284,7 +358,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
             borderRadius: 26,
             strong: true,
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 noteInfoBlock(
@@ -300,12 +375,17 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                     endIndent: 16,
                     color: AppPalette.cardOutline),
                 const SizedBox(height: 4),
-                _menuTile(sheetCtx, Icons.ios_share_rounded, context.t.share,
-                    _shareMarkdown),
-                _menuTile(sheetCtx, Icons.picture_as_pdf_outlined,
-                    context.t.exportAsPdf, _exportPdf),
-                _menuTile(sheetCtx, Icons.copy_all_rounded, context.t.copyNote,
-                    _copyNote),
+                ShareAsTile(
+                  formats: _note.inCircuit && !_note.circuitPlaceholder
+                      ? ShareFormat.forCircuit
+                      : ShareFormat.note,
+                  onShare: (format) {
+                    Navigator.pop(sheetCtx);
+                    _share(format);
+                  },
+                ),
+                _menuTile(sheetCtx, Icons.search_rounded,
+                    context.t.findInNote, _openFind),
                 if (_hasChecklist())
                   _menuTile(
                     sheetCtx,
@@ -351,6 +431,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                     danger: true,
                   ),
               ],
+              ),
             ),
           ),
         ),
@@ -375,37 +456,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     );
   }
 
-  String _fileBase() => safeFileBase(_note.title, fallback: 'note');
-
-  /// Writes the note to a temporary `.md` file and opens the share sheet.
-  Future<void> _shareMarkdown() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final md = noteToMarkdown(_note);
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_fileBase()}.md');
-      await file.writeAsString(md);
-      await SharePlus.instance
-          .share(ShareParams(files: [XFile(file.path)]));
-    } catch (_) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
-      }
+  /// Shares the note, as written right now, in [format] (all formats are
+  /// made from its Markdown form). A circuit note goes with every note under
+  /// it — the first note, as the whole circuit.
+  void _share(ShareFormat format) {
+    _collect();
+    if (_note.inCircuit) {
+      shareCircuitAs(context, _note, format);
+      return;
     }
-  }
-
-  /// Renders the note (via its Markdown form) to a PDF and shares it.
-  Future<void> _exportPdf() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final bytes = await NotePdf.fromMarkdown(noteToMarkdown(_note),
-          title: _note.title.trim());
-      await Printing.sharePdf(bytes: bytes, filename: '${_fileBase()}.pdf');
-    } catch (_) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(context.t.exportFailed)));
-      }
-    }
+    shareNoteAs(context,
+        markdown: noteToMarkdown(_note),
+        title: _note.title.trim(),
+        format: format);
   }
 
   /// True once this note has been written to the library, so an emptied note
@@ -523,6 +586,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     _titleCtrl.dispose();
     _titleFocus.dispose();
     _activeController.dispose();
+    _findCtrl.dispose();
+    _findFocus.dispose();
     super.dispose();
   }
 
@@ -580,10 +645,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
       await state.upsertNote(_note);
   }
 
-  void _close() {
+  /// Leaves the note, saving it, and hands [result] to the screen below (the
+  /// circuit map reads a [CircuitMapFocus] or [CircuitMapOpenNote]).
+  void _close({Object? result}) {
     // Reading a saved note changes nothing — leave without rewriting it.
     if (_readOnly) {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(result);
       return;
     }
     final state = context.read<AppState>();
@@ -593,24 +660,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     // as the note being discarded.
     if (widget.isNew && !_note.isEmpty) GlassMorph.slideCloseOf(context);
     setState(() => _closing = true);
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(result);
     _persistLater(state);
-  }
-
-  /// Copies the whole note (title + text) to the clipboard for sharing.
-  void _copyNote() {
-    _collect();
-    final buffer = StringBuffer();
-    if (_note.title.trim().isNotEmpty) buffer.writeln(_note.title.trim());
-    final body = _note.textPreview;
-    if (body.isNotEmpty) {
-      if (buffer.isNotEmpty) buffer.writeln();
-      buffer.write(body);
-    }
-    Clipboard.setData(ClipboardData(text: buffer.toString()));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.t.noteCopied)),
-    );
   }
 
   Future<void> _pickSpace() async {
@@ -723,10 +774,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
       return;
     }
     final target = state.noteById(ref.id);
-    if (target != null) {
-      await pushNoteScreen(
-          context, target, () => cupertinoRoute(noteScreen(target)));
+    if (target == null) return;
+    // Opened from the circuit map: the map opens the target in this note's
+    // place, so back from it returns to the map rather than to this note.
+    if (widget.fromCircuitMap) {
+      _close(result: CircuitMapOpenNote(target.id));
+      return;
     }
+    await pushNoteScreen(
+        context, target, () => cupertinoRoute(noteScreen(target)));
   }
 
   /// Creates a note for an unresolved `[[title]]` and opens it ready to write.
@@ -740,6 +796,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final created = await state.createLinkedNote(title,
         circuitParent: _note.inCircuit ? _note : null);
     if (!mounted) return;
+    if (widget.fromCircuitMap) {
+      _close(result: CircuitMapOpenNote(created.id));
+      return;
+    }
     await Navigator.of(context)
         .push(cupertinoRoute(NoteEditorScreen(note: created, isNew: true)));
   }
@@ -814,7 +874,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     await Navigator.of(context).push(cupertinoRoute(CircuitMapScreen(
         circuitId: circuitId,
         focusNodeId: focusNodeId,
-        highlight: highlight)));
+        highlight: highlight,
+        openedFromNoteId: _note.id)));
     _afterMap();
   }
 
@@ -918,6 +979,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                   onPressed: _circuitMap,
                 ),
               ],
+              // Writing a book: the dictionary, a tap away.
+              if (_note.isBookPage)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: context.t.dictionary,
+                  icon: const Icon(Icons.abc_rounded),
+                  onPressed: () => showDictionarySearch(context),
+                ),
               IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: context.t.moreOptions,
@@ -931,9 +1000,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
       // While viewing a saved note, let the back gesture pop directly so
       // Android's predictive-back peek can play; intercept only while editing,
       // where _close() collects and persists the note before popping.
-      canPop: _readOnly,
+      canPop: _readOnly && !_finding,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _close();
+        if (didPop) return;
+        if (_finding) {
+          _closeFind();
+        } else {
+          _close();
+        }
       },
       child: NoteBackground(
         color: NoteColors.resolve(_note.colorValue),
@@ -1141,18 +1215,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                   if (_readOnly)
                     // Reading: no Quill controllers are built at all, which
                     // is why opening a note is cheap.
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        NoteReadBody(
-                            blocks: _note.blocks,
-                            fontScale: _note.fontScale,
-                            checkedToBottom: _note.checkedToBottom,
-                            fontFamily: bookFont,
-                            onOpenLink: _openWikiLink,
-                            onOpenMention: _openMention,
-                            onToggleCheck: _toggleCheck),
-                      ],
+                    // Selectable, so a word can be copied or defined.
+                    DefinableSelectionArea(
+                      child: NoteReadBody(
+                          blocks: _note.blocks,
+                          fontScale: _note.fontScale,
+                          checkedToBottom: _note.checkedToBottom,
+                          fontFamily: bookFont,
+                          onOpenLink: _openWikiLink,
+                          onOpenMention: _openMention,
+                          onToggleCheck: _toggleCheck,
+                          find: _finding && _findCtrl.text.isNotEmpty
+                              ? FindHighlight(
+                                  _findCtrl.text, _findAt, _findKey)
+                              : null),
                     )
                   else
                     _Entrance(
@@ -1294,7 +1370,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                     padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
                     child: Row(
                       children: [
-                        FrostedBackButton(onTap: _close),
+                        FrostedBackButton(
+                            onTap: _finding ? _closeFind : _close),
                         const Spacer(),
                         topActions,
                       ],
@@ -1302,6 +1379,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                   ),
                 ),
               ),
+              // Find in note, pinned under the top bar.
+              if (_finding)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          14, 8 + FrostedCircleButton.size + 10, 14, 0),
+                      child: FindBar(
+                        controller: _findCtrl,
+                        focusNode: _findFocus,
+                        total: _findTotal,
+                        current: _findAt,
+                        onChanged: (_) {
+                          _findAt = 0;
+                          _updateFind(reveal: true);
+                        },
+                        onPrevious: () => _stepFind(-1),
+                        onNext: () => _stepFind(1),
+                        onClose: _closeFind,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

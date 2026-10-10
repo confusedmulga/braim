@@ -147,6 +147,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newNote => 'New node';
 
   @override
+  String get newSpark => 'New spark';
+
+  @override
   String get newMarkdown => 'New markdown';
 
   @override
@@ -156,7 +159,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exportAsPdf => 'Export as PDF';
 
   @override
-  String get exportFailed => 'Couldn\'t export the PDF';
+  String get exportFailed => 'Couldn\'t create the file';
+
+  @override
+  String get shareAs => 'Share as';
+
+  @override
+  String get shareFormat => 'Choose a format';
+
+  @override
+  String get shareFormatMarkdown => 'Markdown (.md)';
+
+  @override
+  String get shareFormatText => 'Plain text';
+
+  @override
+  String get shareFormatPdf => 'PDF (.pdf)';
+
+  @override
+  String get shareFormatDocx => 'Document (.docx)';
+
+  @override
+  String get shareFormatCircuit => 'Whole circuit (.braim)';
 
   @override
   String get shareFailed => 'Couldn\'t share the note';
@@ -439,7 +463,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get useButtonsToAdd =>
-      'Use the + buttons to add a node or existing items.';
+      'Use the buttons to add a node, a spark or existing items.';
 
   @override
   String get title => 'Title';
@@ -1203,6 +1227,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get shareTitleHint => 'Title (optional)';
+
+  @override
+  String get shareBodyHint => 'Note (optional)';
+
+  @override
+  String get shareSave => 'Save';
+
+  @override
   String get createAndSave => 'Create & save';
 
   @override
@@ -1210,6 +1243,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerSection => 'Reader';
+
+  @override
+  String get articlePaywalled =>
+      'This article is for the site\'s subscribers, so Braim saved only its preview. Open the link to read it there.';
 
   @override
   String get themeLabel => 'Theme';
@@ -1889,6 +1926,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cropReset => 'Reset';
+
+  @override
+  String get cropOriginal => 'Original';
 
   @override
   String get cropFreeform => 'Free';
@@ -2663,4 +2703,77 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get circuitImportTooLarge =>
       'This circuit file is too large to import.';
+
+  @override
+  String get define => 'Define';
+
+  @override
+  String get dictionaryOpenFailed => 'Couldn\'t open the dictionary.';
+
+  @override
+  String dictionaryNotFound(String word) {
+    return 'No definition found for “$word”.';
+  }
+
+  @override
+  String dictionaryShowAll(int n) {
+    return 'Show all $n meanings';
+  }
+
+  @override
+  String get wordClassNoun => 'noun';
+
+  @override
+  String get wordClassVerb => 'verb';
+
+  @override
+  String get wordClassAdjective => 'adjective';
+
+  @override
+  String get wordClassAdverb => 'adverb';
+
+  @override
+  String get dictionarySearchHint => 'A word, or what it means';
+
+  @override
+  String get dictionaryIntro =>
+      'Look up a word for its meanings and synonyms, or describe a meaning to find the word for it.';
+
+  @override
+  String get dictionaryNoResults => 'Nothing found.';
+
+  @override
+  String get dictionaryDefinitions => 'Definitions';
+
+  @override
+  String get dictionarySynonyms => 'Synonyms';
+
+  @override
+  String dictionaryStartingWith(String text) {
+    return 'Words starting with “$text”';
+  }
+
+  @override
+  String get dictionaryByMeaning => 'Words for this meaning';
+
+  @override
+  String get dictionarySource =>
+      'From Open English WordNet (CC BY 4.0), based on Princeton WordNet.';
+
+  @override
+  String get findInNote => 'Find in note';
+
+  @override
+  String findPosition(int current, int total) {
+    return '$current of $total';
+  }
+
+  @override
+  String get findPrevious => 'Previous match';
+
+  @override
+  String get findNext => 'Next match';
+
+  @override
+  String get findClose => 'Close find';
 }

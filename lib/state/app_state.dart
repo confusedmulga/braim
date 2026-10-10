@@ -1558,8 +1558,9 @@ class AppState extends ChangeNotifier {
 
   /// Creates a note from the contents of a shared Markdown/plain-text file and
   /// adds it to the home feed. Returns the new note.
-  Future<Note> addSharedMarkdown(String markdown, {String? spaceId}) async {
-    final note = noteFromMarkdown(markdown, spaceId: spaceId);
+  Future<Note> addSharedMarkdown(String markdown,
+      {String? spaceId, String? title}) async {
+    final note = noteFromMarkdown(markdown, spaceId: spaceId, title: title);
     _notes.add(note);
     await _persist();
     return note;
@@ -3430,11 +3431,12 @@ class AppState extends ChangeNotifier {
     final records = await _storage.drainShareInbox();
     for (final r in records) {
       final url = r['url'] as String?;
-      final noteText = r['noteText'] as String?;
-      if ((url == null || url.isEmpty) &&
-          (noteText == null || noteText.trim().isEmpty)) {
-        continue;
-      }
+      final noteText = (r['noteText'] as String?) ?? '';
+      // Optional, typed in the share popup (absent from older shares).
+      final title = ((r['title'] as String?) ?? '').trim();
+      final body = ((r['body'] as String?) ?? '').trim();
+      final isLink = url != null && url.isNotEmpty;
+      if (!isLink && noteText.trim().isEmpty && title.isEmpty) continue;
       String? spaceId = r['spaceId'] as String?;
       final newFolderName = (r['newFolderName'] as String?)?.trim();
       if (newFolderName != null && newFolderName.isNotEmpty) {
@@ -3449,13 +3451,23 @@ class AppState extends ChangeNotifier {
           spaceId = space.id;
         }
       }
-      if (url != null && url.isNotEmpty) {
-        await addCardFromUrl(url, spaceId: spaceId);
+      if (isLink) {
+        final card = await addCardFromUrl(url, spaceId: spaceId);
+        if (title.isNotEmpty || body.isNotEmpty) {
+          if (title.isNotEmpty) card.noteTitle = title;
+          if (body.isNotEmpty) {
+            card.blocks.add(NoteBlock(
+                type: NoteBlockType.text, text: markdownToDeltaJson(body)));
+          }
+          card.updatedAt = DateTime.now();
+          await _persist();
+        }
       } else {
         // Parse the shared text as Markdown so any formatting (headings,
         // bullets, checkboxes, bold/italic, links) renders instead of showing
         // its raw symbols. Plain text passes through unchanged.
-        await addSharedMarkdown(noteText!, spaceId: spaceId);
+        await addSharedMarkdown(noteText,
+            spaceId: spaceId, title: title.isEmpty ? null : title);
       }
     }
   }

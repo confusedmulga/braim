@@ -12,8 +12,10 @@ import '../l10n/l10n.dart';
 import '../models/annotation.dart';
 import '../models/book.dart';
 import '../models/note.dart';
+import '../services/dictionary.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import '../widgets/dictionary_popup.dart';
 import '../widgets/text_prompt.dart';
 
 /// A reading theme: the paper and ink a book is read on.
@@ -717,14 +719,15 @@ class _BookReadScreenState extends State<BookReadScreen> {
                 '${Uri.encodeComponent(text)}&op=translate');
           },
         ),
-        ContextMenuButtonItem(
-          label: t.dictionary,
-          onPressed: () {
-            close();
-            _openUrl('https://www.google.com/search?q=define+'
-                '${Uri.encodeComponent(text)}');
-          },
-        ),
+        // The offline dictionary, in a card over the page.
+        if (Dictionary.canDefine(text))
+          ContextMenuButtonItem(
+            label: t.define,
+            onPressed: () {
+              close();
+              showDefinition(this.context, text);
+            },
+          ),
         ContextMenuButtonItem(
           label: t.share,
           onPressed: () {

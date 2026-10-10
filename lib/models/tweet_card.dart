@@ -20,6 +20,7 @@ class TweetCard {
     this.authorHandle = '',
     this.siteName = '',
     this.articleText = '',
+    this.articlePaywalled = false,
     this.videoDescription = '',
     this.videoTranscript = '',
     this.videoFetched = false,
@@ -59,6 +60,11 @@ class TweetCard {
   /// Reader-mode capture: the page's full article text, extracted when the
   /// link was saved, so the card reads offline without a browser.
   String articleText;
+
+  /// The page marks its article as for subscribers only, so [articleText]
+  /// was deliberately left empty: Braim keeps the preview and never steps
+  /// around a paywall (see LinkPreviewService.isPaywalled).
+  bool articlePaywalled;
 
   /// For a YouTube spark: the video's full description and caption transcript,
   /// scraped so the card shows both without opening the video. [videoFetched]
@@ -169,6 +175,7 @@ class TweetCard {
         'authorHandle': authorHandle,
         'siteName': siteName,
         'articleText': articleText,
+        if (articlePaywalled) 'articlePaywalled': true,
         if (videoDescription.isNotEmpty) 'videoDescription': videoDescription,
         if (videoTranscript.isNotEmpty) 'videoTranscript': videoTranscript,
         if (videoFetched) 'videoFetched': true,
@@ -196,6 +203,7 @@ class TweetCard {
         authorHandle: (json['authorHandle'] as String?) ?? '',
         siteName: (json['siteName'] as String?) ?? '',
         articleText: (json['articleText'] as String?) ?? '',
+        articlePaywalled: (json['articlePaywalled'] as bool?) ?? false,
         videoDescription: (json['videoDescription'] as String?) ?? '',
         videoTranscript: (json['videoTranscript'] as String?) ?? '',
         videoFetched: (json['videoFetched'] as bool?) ?? false,

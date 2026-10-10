@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:provider/provider.dart';
 
 import '../models/tweet_card.dart';
@@ -11,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/feed_greeting.dart';
 import '../widgets/glass_morph.dart';
 import '../widgets/item_actions_sheet.dart';
+import '../widgets/sticky_columns.dart';
 import '../widgets/tweet_card_widget.dart';
 import 'card_detail_screen.dart';
 
@@ -53,9 +53,10 @@ class CardsScreen extends StatelessWidget {
 
     if (cards.isEmpty) return const _EmptyCards();
 
+    // Right-edge scrollbar, as on Home.
     return RawScrollbar(
       controller: controller,
-      scrollbarOrientation: ScrollbarOrientation.left,
+      scrollbarOrientation: ScrollbarOrientation.right,
       thumbColor: AppPalette.inkSecondary.withValues(alpha: 0.5),
       radius: const Radius.circular(4),
       thickness: 3.4,
@@ -68,20 +69,19 @@ class CardsScreen extends StatelessWidget {
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 150),
-            // Lazy masonry: builds only visible tiles and packs each into the
-            // shortest column (true height balancing). Re-key only on a real
-            // reorder — a pin/unpin or sort change — so the grid re-lays out
-            // cleanly there instead of reusing stale columns, while add/delete
-            // keep their scroll position.
-            sliver: SliverMasonryGrid.count(
-              key: ValueKey('cards|${state.sortMode.name}|'
-                  '${cards.where((c) => c.pinned).map((c) => c.id).join(',')}'),
-              crossAxisCount: 2,
+            // Two lazy columns. Each spark keeps the column it was first
+            // placed in, so a preview arriving (or a picture failing to load)
+            // never sends tiles hopping across; a re-sort or a pin/unpin
+            // balances the columns afresh.
+            sliver: StickyColumnsSliver<TweetCard>(
+              layout: 'cards|${state.sortMode.name}|'
+                  '${cards.where((c) => c.pinned).map((c) => c.id).join(',')}',
+              items: cards,
+              idOf: (c) => c.id,
+              estimateHeight: CompactCardTile.estimateHeight,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childCount: cards.length,
-              itemBuilder: (context, i) {
-                final c = cards[i];
+              itemBuilder: (context, c) {
                 return GlassMorph(
                   key: ValueKey(c.id),
                   closedRadius: 18,

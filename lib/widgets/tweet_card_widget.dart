@@ -142,7 +142,8 @@ class TweetCardWidget extends StatelessWidget {
                   fit: BoxFit.cover,
                   // Same cacheWidth as the detail preview: one shared decode.
                   cacheWidth: 900,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) =>
+                      const _MissingImage(width: 56, height: 56),
                 ),
               ),
             ],
@@ -247,7 +248,7 @@ class TweetCardWidget extends StatelessWidget {
         width: double.infinity,
         height: height,
         cacheWidth: 900,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        errorBuilder: (_, _, _) => _MissingImage(height: height),
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
           return Container(
@@ -352,6 +353,24 @@ class CompactCardTile extends StatelessWidget {
   final String? folderName;
   final int? folderColor;
 
+  /// Roughly how tall [card]'s tile will be, from its data alone (no layout):
+  /// the Sparks feed uses it to pick a column for a tile it hasn't drawn yet.
+  /// Mirrors [build] below at the usual phone width; it only has to be close.
+  static double estimateHeight(TweetCard card) {
+    const charsPerLine = 20;
+    final title = card.noteTitle.trim().isNotEmpty
+        ? card.noteTitle.trim()
+        : (card.authorName.isNotEmpty ? card.authorName : card.siteName);
+    final titleLines = title.length > charsPerLine ? 2 : 1;
+    var h = 10.0 + titleLines * 18 + 6 + 14 + 10; // padding, title, url row
+    if (card.coverImageUrl.isNotEmpty) h += 86;
+    if (card.text.isNotEmpty) {
+      final lines = (card.text.length / charsPerLine).ceil().clamp(1, 4);
+      h += 5 + lines * 19.2;
+    }
+    return h;
+  }
+
   Color get _folderFg =>
       folderColor != null ? NoteColors.onSwatch : AppPalette.inkSecondary;
 
@@ -392,7 +411,8 @@ class CompactCardTile extends StatelessWidget {
                     width: double.infinity,
                     fit: BoxFit.cover,
                     cacheWidth: 900,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    errorBuilder: (_, _, _) =>
+                        const _MissingImage(height: 86),
                   ),
                 ),
               Padding(
@@ -486,6 +506,28 @@ class CompactCardTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Stands in for a preview picture that couldn't load (offline, or the site
+/// took it down) at the picture's own size, so the card keeps its height and
+/// the feed around it doesn't shift.
+class _MissingImage extends StatelessWidget {
+  const _MissingImage({this.width = double.infinity, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      color: Colors.black.withValues(alpha: 0.05),
+      alignment: Alignment.center,
+      child: Icon(Icons.image_not_supported_outlined,
+          size: 20, color: AppPalette.inkSecondary.withValues(alpha: 0.6)),
     );
   }
 }

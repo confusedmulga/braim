@@ -25,6 +25,7 @@ import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
 import '../widgets/bubble_button.dart';
+import '../widgets/dictionary_popup.dart';
 import '../widgets/expand_from_button.dart';
 import '../widgets/frosted_chrome.dart';
 import '../widgets/glass.dart';
@@ -577,6 +578,9 @@ class _CardDetailScreenState extends State<CardDetailScreen>
                   if (_card.articleText.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     _ArticleReader(text: _card.articleText),
+                  ] else if (_card.articlePaywalled) ...[
+                    const SizedBox(height: 10),
+                    const _PaywalledNote(),
                   ],
                   const SizedBox(height: 16),
                   if (_readOnly) ...[
@@ -842,6 +846,37 @@ class _CardPreview extends StatelessWidget {
 
 /// The page's captured article text, readable in place (no browser needed).
 /// Collapsible so a long read doesn't bury the user's own note below it.
+/// Where the reader would be, for an article its site keeps for subscribers:
+/// says why there is no text rather than leaving the reader out silently.
+class _PaywalledNote extends StatelessWidget {
+  const _PaywalledNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      borderRadius: 22,
+      blur: 0,
+      color: Colors.black.withValues(alpha: 0.05),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.lock_outline_rounded,
+              size: 18, color: AppPalette.inkSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              context.t.articlePaywalled,
+              style: TextStyle(
+                  fontSize: 13.5, height: 1.35, color: AppPalette.inkSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ArticleReader extends StatefulWidget {
   const _ArticleReader({required this.text});
   final String text;
@@ -895,7 +930,7 @@ class _ArticleReaderState extends State<_ArticleReader> {
           if (_expanded)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: SelectionArea(
+              child: DefinableSelectionArea(
                 child: Text(
                   widget.text,
                   style: TextStyle(

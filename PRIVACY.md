@@ -1,6 +1,6 @@
 # Privacy Policy for Braim
 
-**Last updated:** October 6, 2026
+**Last updated:** October 10, 2026
 
 Braim ("the App") is developed and published by Kalpesh Nichal, an individual
 developer based in India ("we," "us," "our"). This policy explains what happens
@@ -104,7 +104,9 @@ device's IP address and the request itself:
   description and preview image (Open Graph tags). When you save a card it may
   also keep the article's text so you can read it in reader mode, stored only on
   your device. Reader mode uses only what the page serves publicly without
-  signing in, and skips articles the publisher marks as subscriber-only. That website, and any content-delivery network it uses, sees a
+  signing in, and does not keep the text of an article the publisher marks
+  as subscriber-only; that card keeps just its preview. That website, and
+  any content-delivery network it uses, sees a
   request from your device, the same as if you had opened the link in a
   browser.
 - **For a tweet or X post,** the App additionally contacts **X's public oEmbed

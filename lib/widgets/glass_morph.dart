@@ -70,6 +70,12 @@ class _GlassMorphState extends State<GlassMorph> {
         setState(() => _hidden = false);
       }
     });
+    // A route can also be removed without animating back (the circuit map
+    // takes a note's screen out from under itself), and then the status above
+    // never fires. `completed` comes either way, once the route is gone.
+    route.completed.whenComplete(() {
+      if (mounted && _hidden) setState(() => _hidden = false);
+    });
   }
 
   @override

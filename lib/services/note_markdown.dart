@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:markdown/markdown.dart' as md;
+
 import '../models/note.dart';
 import '../models/note_block.dart';
 import '../models/tweet_card.dart';
@@ -12,6 +14,64 @@ import '../models/tweet_card.dart';
 
 String noteToMarkdown(Note note) =>
     _compose(note.title, null, note.blocks);
+
+/// A note's text as Markdown, without its title.
+String noteBodyToMarkdown(Note note) {
+  if (!note.markdown) return _compose('', null, note.blocks).trim();
+  // A Markdown note's own leading `# Title` repeats the title; drop it.
+  final lines = note.markdownSource.split('\n');
+  var start = 0;
+  while (start < lines.length && lines[start].trim().isEmpty) {
+    start++;
+  }
+  if (start < lines.length && RegExp(r'^#\s+').hasMatch(lines[start].trim())) {
+    start++;
+  }
+  return lines.sublist(start).join('\n').trim();
+}
+
+/// A circuit — or one branch and everything under it — as one Markdown
+/// document: [from] as H1, each note below it as a heading by its depth
+/// (bullets once past H6), each note's text under its heading. Placeholders
+/// are skipped, their children taking their level. [childrenOf] lists a
+/// note's branches in order.
+String circuitOutline(
+  Note from,
+  List<Note> Function(String id) childrenOf, {
+  required String untitledCircuit,
+  required String untitledNote,
+}) {
+  final buf = StringBuffer();
+  void visit(Note n, int depth) {
+    if (n.circuitPlaceholder) {
+      for (final c in childrenOf(n.id)) {
+        visit(c, depth);
+      }
+      return;
+    }
+    final title = n.title.trim().isEmpty
+        ? (n.isCircuitRoot ? untitledCircuit : untitledNote)
+        : n.title.trim();
+    if (depth <= 5) {
+      buf.writeln('${'#' * (depth + 1)} $title');
+    } else {
+      buf.writeln('${'  ' * (depth - 6)}- $title');
+    }
+    final body = noteBodyToMarkdown(n);
+    if (body.isNotEmpty) {
+      buf
+        ..writeln()
+        ..writeln(body);
+    }
+    buf.writeln();
+    for (final c in childrenOf(n.id)) {
+      visit(c, depth + 1);
+    }
+  }
+
+  visit(from, 0);
+  return buf.toString().trim();
+}
 
 String cardToMarkdown(TweetCard card) => _compose(
       card.noteTitle.trim().isNotEmpty ? card.noteTitle : card.url,
@@ -96,7 +156,8 @@ String _runsToMarkdown(List<RichRun> runs, String fallback) {
 
 /// The first `# heading` becomes the note title (best-effort).
 String markdownTitle(String md) {
-  for (final raw in const LineSplitter().convert(md)) {
+  // Lazily: the title leads, so a long document is never split whole.
+  for (final raw in LineSplitter.split(md)) {
     final line = raw.trimRight();
     final m = RegExp(r'^#\s+(.*)$').firstMatch(line);
     if (m != null) return m.group(1)!.trim();
@@ -210,7 +271,9 @@ String _stripInline(String line) =>
 String markdownPlainPreview(String md, {String? skipTitle}) {
   final out = <String>[];
   var skipped = false;
-  for (final raw in const LineSplitter().convert(md)) {
+  // Lazily: it stops after a few lines, and a feed tile asks on every
+  // rebuild, so a long document must not be split whole each time.
+  for (final raw in LineSplitter.split(md)) {
     var line = raw.trim();
     if (!skipped && skipTitle != null && skipTitle.isNotEmpty) {
       final m = RegExp(r'^#\s+(.*)$').firstMatch(line);
@@ -235,8 +298,19 @@ String markdownPlainPreview(String md, {String? skipTitle}) {
   return out.join('\n');
 }
 
-/// A whole note reconstructed from a shared `.md`/`.txt` file.
-Note noteFromMarkdown(String md, {String? spaceId}) {
+/// A whole note reconstructed from a shared `.md`/`.txt` file. A [title]
+/// given with the share wins over the text's own leading heading, which then
+/// stays in the body.
+Note noteFromMarkdown(String md, {String? spaceId, String? title}) {
+  if (title != null && title.trim().isNotEmpty) {
+    return Note(
+      title: title.trim(),
+      blocks: [
+        NoteBlock(type: NoteBlockType.text, text: markdownToDeltaJson(md)),
+      ],
+      spaceId: spaceId,
+    );
+  }
   // The raw heading text matches the body line we skip; the stored title is
   // flattened so markers like ** never show up in it.
   final rawTitle = markdownTitle(md);
@@ -246,4 +320,125 @@ Note noteFromMarkdown(String md, {String? spaceId}) {
     blocks: [NoteBlock(type: NoteBlockType.text, text: delta)],
     spaceId: spaceId,
   );
+}
+
+// ---- Markdown -> plain text --------------------------------------------------
+
+/// A note's Markdown as plain text, for sharing into apps that take text:
+/// no `#` or `**` symbols, list items as "• " or "1. ", task items as "☐ " or
+/// "☑ ", a link as "text (address)", blocks separated by blank lines.
+String markdownToPlainText(String source) {
+  final nodes = md.Document(
+    extensionSet: md.ExtensionSet.gitHubFlavored,
+    encodeHtml: false,
+  ).parse(source);
+
+  String inline(List<md.Node>? nodes) {
+    final out = StringBuffer();
+    for (final node in nodes ?? const <md.Node>[]) {
+      if (node is md.Text) {
+        // A soft line break inside a paragraph reads as a space.
+        out.write(node.text.replaceAll(RegExp(r'[ \t]*\n[ \t]*'), ' '));
+      } else if (node is md.Element) {
+        switch (node.tag) {
+          case 'br':
+            out.write('\n');
+          case 'img':
+            out.write('[image]');
+          case 'input':
+            out.write(node.attributes.containsKey('checked') ? '☑ ' : '☐ ');
+          case 'a':
+            final text = inline(node.children);
+            final href = node.attributes['href'] ?? '';
+            out.write(href.isEmpty || href == text || href == 'mailto:$text'
+                ? text
+                : '$text ($href)');
+          default:
+            out.write(inline(node.children));
+        }
+      }
+    }
+    return out.toString();
+  }
+
+  List<String> list(md.Element el, String indent) {
+    final lines = <String>[];
+    var number = int.tryParse(el.attributes['start'] ?? '') ?? 1;
+    for (final item in el.children ?? const <md.Node>[]) {
+      if (item is! md.Element || item.tag != 'li') continue;
+      final text = StringBuffer();
+      final nested = <String>[];
+      for (final child in item.children ?? const <md.Node>[]) {
+        if (child is md.Element && (child.tag == 'ul' || child.tag == 'ol')) {
+          nested.addAll(list(child, '$indent  '));
+        } else if (child is md.Element && child.tag == 'p') {
+          if (text.isNotEmpty) text.write(' ');
+          text.write(inline(child.children));
+        } else {
+          text.write(inline([child]));
+        }
+      }
+      final line = text.toString().trim();
+      // A task item already starts with its box.
+      final task = line.startsWith('☐ ') || line.startsWith('☑ ');
+      final marker = task ? '' : (el.tag == 'ol' ? '${number++}. ' : '• ');
+      lines
+        ..add('$indent$marker$line')
+        ..addAll(nested);
+    }
+    return lines;
+  }
+
+  final blocks = <String>[];
+  void block(md.Node node) {
+    if (node is md.Text) {
+      blocks.add(node.text.trim());
+      return;
+    }
+    if (node is! md.Element) return;
+    switch (node.tag) {
+      case 'ul':
+      case 'ol':
+        blocks.add(list(node, '').join('\n'));
+      case 'pre':
+        blocks.add(node.textContent.replaceAll(RegExp(r'\n$'), ''));
+      case 'hr':
+        blocks.add('———');
+      case 'table':
+        final rows = <String>[];
+        void collect(md.Element el) {
+          for (final child in el.children ?? const <md.Node>[]) {
+            if (child is! md.Element) continue;
+            if (child.tag == 'tr') {
+              rows.add([
+                for (final cell in child.children ?? const <md.Node>[])
+                  if (cell is md.Element) inline(cell.children).trim()
+              ].join(' | '));
+            } else {
+              collect(child);
+            }
+          }
+        }
+        collect(node);
+        blocks.add(rows.join('\n'));
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6':
+      case 'p':
+        blocks.add(inline(node.children).trim());
+      default:
+        // A quote and anything else: its blocks, in order.
+        for (final child in node.children ?? const <md.Node>[]) {
+          block(child);
+        }
+    }
+  }
+
+  for (final node in nodes) {
+    block(node);
+  }
+  return blocks.where((b) => b.isNotEmpty).join('\n\n');
 }

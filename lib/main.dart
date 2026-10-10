@@ -72,10 +72,21 @@ void registerWebLicenses() {
   });
 }
 
+/// The offline dictionary's data (Open English WordNet, over Princeton
+/// WordNet) asks for credit to both; its licence is listed with the others.
+void registerDictionaryLicense() {
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString('assets/dictionary/LICENSE.txt');
+    yield LicenseEntryWithLineBreaks(
+        ['Open English WordNet (dictionary)', 'Princeton WordNet'], text);
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerFontLicenses();
   registerWebLicenses();
+  registerDictionaryLicense();
   // Best-effort; reminders simply don't fire if this fails.
   NotificationService.onSelect = _onNotificationTap;
   await NotificationService.instance.init();

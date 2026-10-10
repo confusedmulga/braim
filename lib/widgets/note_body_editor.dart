@@ -18,6 +18,8 @@ import '../services/link_preview_service.dart';
 import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'dictionary_popup.dart';
+import 'find_bar.dart';
 import 'frosted_glass.dart';
 
 /// The highlighter's paint: a light background with a fixed dark ink so
@@ -30,6 +32,9 @@ const String kHighlightInk = '#202124';
 /// Adds an https scheme when the user typed a bare host, so "example.com"
 /// becomes a working link. A URL that already carries a scheme is left as-is.
 String _normalizeLinkUrl(String raw) => withUrlScheme(raw);
+
+/// A Find-in-note match while writing: the text block, and where in it.
+typedef EditorMatch = ({String blockId, TextRange range});
 
 /// A reusable rich-text + image block editor. It edits the [blocks] list in
 /// place; call [NoteBodyEditorState.sync] before persisting. The [activeController]
@@ -75,6 +80,9 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
   final Map<String, QuillController> _quillCtrls = {};
   final Map<String, FocusNode> _focusNodes = {};
   final Map<String, ScrollController> _scrollCtrls = {};
+
+  /// Each text block's editor, so Find can work out where a match sits.
+  final Map<String, GlobalKey<EditorState>> _editorKeys = {};
   final Map<String, StreamSubscription> _docSubs = {};
   final Set<String> _fetchingLinks = {};
   // One debounce timer per block: a scan queued for one block must not cancel a
@@ -162,6 +170,7 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
       return c;
     });
     _scrollCtrls.putIfAbsent(b.id, () => ScrollController());
+    _editorKeys.putIfAbsent(b.id, () => GlobalKey<EditorState>());
     _focusNodes.putIfAbsent(b.id, () {
       final node = FocusNode();
       node.addListener(() {
@@ -676,6 +685,56 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     c?.dispose();
     _focusNodes.remove(id)?.dispose();
     _scrollCtrls.remove(id)?.dispose();
+    _editorKeys.remove(id);
+  }
+
+  // ---- Find in note ---------------------------------------------------------
+
+  /// Every match of [query] in the note's text, block by block, in order.
+  List<EditorMatch> findMatches(String query) => [
+        for (final b in _blocks)
+          if (_quillCtrls[b.id] case final c?)
+            for (final r in findRanges(c.document.toPlainText(), query))
+              (blockId: b.id, range: r),
+      ];
+
+  /// Selects [match] and scrolls it into view, leaving the keyboard with the
+  /// Find field (the selection shows without the editor taking focus).
+  void showMatch(EditorMatch match) {
+    final c = _quillCtrls[match.blockId];
+    if (c == null || match.range.end > c.document.length - 1) return;
+    c.ignoreFocusOnTextChange = true;
+    c.updateSelection(
+        TextSelection(
+            baseOffset: match.range.start, extentOffset: match.range.end),
+        ChangeSource.local);
+    c.ignoreFocusOnTextChange = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = _editorKeys[match.blockId];
+      final editor = key?.currentState;
+      final ctx = key?.currentContext;
+      if (editor == null || ctx == null || !mounted) return;
+      final render = editor.renderEditor;
+      final rect = render
+          .getLocalRectForCaret(TextPosition(offset: match.range.start))
+          .expandToInclude(render
+              .getLocalRectForCaret(TextPosition(offset: match.range.end)));
+      revealRect(ctx, render, rect);
+    });
+  }
+
+  /// Find closed: drop the selection [match] left, keeping the caret there.
+  void clearMatch(EditorMatch match) {
+    final c = _quillCtrls[match.blockId];
+    if (c == null ||
+        c.selection.start != match.range.start ||
+        c.selection.end != match.range.end) {
+      return;
+    }
+    c.ignoreFocusOnTextChange = true;
+    c.updateSelection(TextSelection.collapsed(offset: match.range.end),
+        ChangeSource.local);
+    c.ignoreFocusOnTextChange = false;
   }
 
   void _fetchLinkPreview(NoteBlock b) {
@@ -841,6 +900,22 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
           expands: false,
           autoFocus: false,
           padding: EdgeInsets.zero,
+          editorKey: _editorKeys[block.id],
+          // The usual selection menu, plus Define for a selected word.
+          contextMenuBuilder: (_, editor) {
+            final c = _quillCtrls[block.id]!;
+            final sel = c.selection;
+            final selected = sel.isCollapsed || sel.start < 0
+                ? ''
+                : c.document.getPlainText(sel.start, sel.end - sel.start);
+            return TextFieldTapRegion(
+              child: AdaptiveTextSelectionToolbar.buttonItems(
+                anchors: editor.contextMenuAnchors,
+                buttonItems: withDefine(context, editor.contextMenuButtonItems,
+                    selected, editor.hideToolbar),
+              ),
+            );
+          },
           customStyles: _quillStyles(
               widget.onLight, widget.bodyFontFamily, widget.fontScale),
           // Backspace at the start of a line: delete a preceding image, or on

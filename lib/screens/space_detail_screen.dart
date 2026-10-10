@@ -20,6 +20,7 @@ import '../widgets/note_card.dart';
 import '../widgets/sort_button.dart';
 import '../widgets/tweet_card_widget.dart';
 import 'card_detail_screen.dart';
+import 'cards_screen.dart' show showAddLinkDialog;
 import 'note_editor_screen.dart';
 import 'note_open.dart';
 
@@ -55,6 +56,14 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
         _query = '';
       }
     });
+  }
+
+  /// A new spark straight into this fold, through the same add-link box as
+  /// Sparks. A link already saved moves here instead of being doubled.
+  Future<void> _addSpark(String spaceId) async {
+    final url = await showAddLinkDialog(context);
+    if (url == null || url.trim().isEmpty || !mounted) return;
+    await context.read<AppState>().addCardFromUrl(url.trim(), spaceId: spaceId);
   }
 
   Future<void> _noteActions(BuildContext context, Note note) async {
@@ -269,6 +278,14 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
           iconSize: 24,
           onTap: () => showAddToSpaceSheet(context,
               spaceId: spaceId, spaceName: space.name),
+        ),
+        const SizedBox(height: 14),
+        BubbleButton(
+          icon: Icons.add_link_rounded,
+          tooltip: context.t.newSpark,
+          size: 52,
+          iconSize: 24,
+          onTap: () => _addSpark(spaceId),
         ),
         const SizedBox(height: 14),
         GlassMorph(

@@ -59,6 +59,29 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/markdown" />
             </intent-filter>
+            <!-- Open a circuit file (.braim): tapping one in a messenger, or
+                 sharing one to Braim, imports it. Braim shares circuits under
+                 their own type; file managers that don't know the type still
+                 match by the name. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.braim.circuit" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <!-- Android matches the first dot, so names with more dots
+                     need longer patterns. -->
+                <data android:pathPattern=".*\\.braim" />
+                <data android:pathPattern=".*\\..*\\.braim" />
+                <data android:pathPattern=".*\\..*\\..*\\.braim" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.braim" />
+            </intent-filter>
         </activity>
         <!-- Routes the focus media notification's play/pause button to the
              MediaSession. -->

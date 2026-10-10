@@ -40,8 +40,9 @@ Widget noteScreen(
 ///
 /// Both note screens edit the shared [Note] instance and write their own
 /// controllers back into it when they save or close. Two screens open on one
-/// note would overwrite each other's edits, so the circuit map checks here and
-/// returns to a screen that is already open instead of opening a second one.
+/// note would overwrite each other's edits, so navigation checks here first:
+/// [pushNoteScreen] returns to a screen that is already open, and the circuit
+/// map takes it out from under itself before opening the note on top.
 class OpenNoteScreens {
   OpenNoteScreens._();
 
@@ -66,8 +67,8 @@ class OpenNoteScreens {
 /// Opens [note]'s screen by pushing [route] — unless a screen for that note is
 /// already open further down this navigator, in which case it goes back to
 /// that one instead (see [OpenNoteScreens]). Every note-to-note jump (a
-/// `[[link]]`, a "Mentioned in" entry, a circuit map node) goes through here,
-/// so a note can never be open twice. Screens popped on the way back must
+/// `[[link]]`, a "Mentioned in" entry) goes through here, so a note can never
+/// be open twice. (The circuit map has its own rule; see its `_openNode`.) Screens popped on the way back must
 /// already have saved themselves; every caller saves before navigating.
 /// Returns the pushed route's result, or null when it went back instead.
 Future<T?> pushNoteScreen<T>(

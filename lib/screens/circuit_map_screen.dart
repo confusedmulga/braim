@@ -1,17 +1,11 @@
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../services/circuit_layout.dart';
-import '../services/file_names.dart';
-import '../services/note_pdf.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/circuit_sheets.dart';
@@ -27,6 +21,14 @@ class CircuitMapFocus {
   const CircuitMapFocus(this.nodeId, {this.highlight = false});
   final String nodeId;
   final bool highlight;
+}
+
+/// The pop result of a note screen opened from the map when a link in it
+/// leads to another note: the map opens [noteId] in its place, so back from
+/// that note returns to the map too.
+class CircuitMapOpenNote {
+  const CircuitMapOpenNote(this.noteId);
+  final String noteId;
 }
 
 enum _PickKind { move, fill }
@@ -48,11 +50,18 @@ class CircuitMapScreen extends StatefulWidget {
     required this.circuitId,
     this.focusNodeId,
     this.highlight = false,
+    this.openedFromNoteId,
   });
 
   final String circuitId;
   final String? focusNodeId;
   final bool highlight;
+
+  /// The note whose screen opened this map, or null when it was opened from
+  /// elsewhere (Home, after importing a circuit). Back returns to that screen
+  /// while it is still open underneath; otherwise it lands on the circuit's
+  /// first note, so back always reads map → first note → where you started.
+  final String? openedFromNoteId;
 
   @override
   State<CircuitMapScreen> createState() => _CircuitMapScreenState();
@@ -370,19 +379,34 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     final state = context.read<AppState>();
     final note = state.noteById(id);
     if (note == null || note.circuitPlaceholder) return;
-    // If this note's screen is already open beneath the map (the map was
-    // opened from it), this goes back to it rather than opening a second one.
-    final result = await pushNoteScreen<CircuitMapFocus>(
-      context,
-      note,
-      () => MaterialPageRoute(
+    final navigator = Navigator.of(context);
+    // Its screen may already be open under the map (usually the first note,
+    // which the map was opened from). Going back down to it would close the
+    // map; instead it comes out from under the map and opens on top, so back
+    // returns here like any other note. Never two screens on one note: the
+    // one underneath saved itself before the map opened, and is removed
+    // before the new one is built.
+    final below = OpenNoteScreens.routeFor(note.id);
+    if (below != null && identical(below.navigator, navigator)) {
+      navigator.removeRoute(below);
+    }
+    // A note reached through a link may sit outside any circuit; it still
+    // comes back here. One in another circuit keeps its own map button.
+    final fromHere =
+        note.circuitId == null || note.circuitId == widget.circuitId;
+    final result = await navigator.push<Object?>(
+      MaterialPageRoute(
         builder: (_) => noteScreen(note,
-            fromCircuitMap: true, startEditing: _bodyEmpty(note)),
+            fromCircuitMap: fromHere, startEditing: _bodyEmpty(note)),
       ),
     );
     if (!mounted) return;
-    if (result != null) {
+    if (result is CircuitMapFocus) {
       _focusOn(result.nodeId, highlight: result.highlight);
+    } else if (result is CircuitMapOpenNote) {
+      // A link followed in that note: open its target from here instead of
+      // on top of it, so back always lands on the map.
+      await _openNode(result.noteId);
     } else {
       setState(() {});
     }
@@ -474,110 +498,8 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         await state.setCircuitShowInFeed(id, !note.circuitShowInFeed);
       case CircuitNodeAction.remove:
         await state.removeFromCircuit(id);
-      case CircuitNodeAction.shareFile:
-        await shareCircuitFile(context, note);
-      case CircuitNodeAction.shareOutline:
-        await _shareOutline();
-      case CircuitNodeAction.sharePdf:
-        await _sharePdf();
       case CircuitNodeAction.delete:
         await _deleteNode(id);
-    }
-  }
-
-  // ---- Share as an outline ------------------------------------------------
-
-  /// The circuit as a Markdown outline: the first note as H1, each branch as a
-  /// heading by depth, bullets once past H6. Placeholders are skipped, their
-  /// children taking their level. Reused for the Markdown and PDF shares.
-  String _circuitOutline() {
-    final state = context.read<AppState>();
-    final root = state.noteById(widget.circuitId);
-    if (root == null) return '';
-    final buf = StringBuffer();
-    void visit(Note n, int depth) {
-      if (n.circuitPlaceholder) {
-        for (final c in state.circuitChildren(n.id)) {
-          visit(c, depth);
-        }
-        return;
-      }
-      final title = n.title.trim().isEmpty
-          ? (depth == 0 ? context.t.untitledCircuit : context.t.untitledNote)
-          : n.title.trim();
-      if (depth <= 5) {
-        buf.writeln('${'#' * (depth + 1)} $title');
-      } else {
-        buf.writeln('${'  ' * (depth - 6)}- $title');
-      }
-      final body = _nodeBody(n);
-      if (body.isNotEmpty) {
-        buf
-          ..writeln()
-          ..writeln(body);
-      }
-      buf.writeln();
-      for (final c in state.circuitChildren(n.id)) {
-        visit(c, depth + 1);
-      }
-    }
-
-    visit(root, 0);
-    return buf.toString().trim();
-  }
-
-  String _nodeBody(Note n) {
-    if (n.markdown) {
-      final lines = n.markdownSource.split('\n');
-      var start = 0;
-      while (start < lines.length && lines[start].trim().isEmpty) {
-        start++;
-      }
-      if (start < lines.length &&
-          RegExp(r'^#\s+').hasMatch(lines[start].trim())) {
-        start++;
-      }
-      return lines.sublist(start).join('\n').trim();
-    }
-    return n.textPreview.trim();
-  }
-
-  String _circuitTitle() {
-    final root = context.read<AppState>().noteById(widget.circuitId);
-    return (root == null || root.title.trim().isEmpty)
-        ? context.t.untitledCircuit
-        : root.title.trim();
-  }
-
-  String _circuitFileBase() => safeFileBase(
-      context.read<AppState>().noteById(widget.circuitId)?.title ?? '',
-      fallback: 'circuit');
-
-  Future<void> _shareOutline() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${_circuitFileBase()}.md');
-      await file.writeAsString(_circuitOutline());
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
-    } catch (_) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(context.t.shareFailed)));
-      }
-    }
-  }
-
-  Future<void> _sharePdf() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final bytes =
-          await NotePdf.fromMarkdown(_circuitOutline(), title: _circuitTitle());
-      await Printing.sharePdf(
-          bytes: bytes, filename: '${_circuitFileBase()}.pdf');
-    } catch (_) {
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(context.t.exportFailed)));
-      }
     }
   }
 
@@ -713,7 +635,7 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
               if (_isValidTarget(state, id)) id
           };
 
-    return FrostedScaffold(
+    final map = FrostedScaffold(
       title: title,
       // The first note's title can be long; it drifts so all of it shows.
       scrollingTitle: true,
@@ -807,6 +729,54 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
         ],
       ),
     );
+    // Back first cancels a pick in progress. Then it returns to the note that
+    // opened the map while that is still underneath, or else lands on the
+    // first note (_backToFirstNote).
+    return PopScope(
+      canPop: _pick == null && _openerBelow,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_pick != null) {
+          setState(() => _pick = null);
+        } else {
+          _backToFirstNote();
+        }
+      },
+      child: map,
+    );
+  }
+
+  /// Whether the note screen that opened this map is still open under it
+  /// (not taken out by [_openNode] to reopen above).
+  bool get _openerBelow {
+    final id = widget.openedFromNoteId;
+    return id != null && OpenNoteScreens.routeFor(id) != null;
+  }
+
+  /// Back with no opener underneath: the map gives way to the circuit's first
+  /// note, so back reads map → first note → where you started. If the first
+  /// note is open further down after all, back goes down to it instead of
+  /// opening it twice.
+  void _backToFirstNote() {
+    final navigator = Navigator.of(context);
+    final root = context.read<AppState>().noteById(widget.circuitId);
+    if (root == null || root.deletedAt != null) {
+      navigator.pop();
+      return;
+    }
+    final open = OpenNoteScreens.routeFor(root.id);
+    if (open != null && identical(open.navigator, navigator)) {
+      navigator.popUntil((r) => r == open);
+      return;
+    }
+    // A plain fade: this is going back, so no forward page animation.
+    navigator.pushReplacement(PageRouteBuilder<void>(
+      transitionDuration: const Duration(milliseconds: 220),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, _, _) => noteScreen(root),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+    ));
   }
 
   Widget _pickBanner() {

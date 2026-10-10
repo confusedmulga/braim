@@ -181,6 +181,13 @@ class _RootShellState extends State<RootShell>
     final textParts = <String>[];
     var addedDoc = false;
     for (final f in files) {
+      // A circuit (.braim) — tapped in a messenger, or shared to Braim — is
+      // imported whole, and opens from its snack bar.
+      if (f.type != SharedMediaType.image &&
+          await looksLikeCircuitFile(f.path, mimeType: f.mimeType)) {
+        await _importCircuit(f.path);
+        continue;
+      }
       if (f.type == SharedMediaType.image) {
         try {
           imagePaths.add(await StorageService.instance.saveImage(f.path));
@@ -496,6 +503,18 @@ class _RootShellState extends State<RootShell>
     ));
   }
 
+  /// Imports the circuit file at [path]; its snack bar opens the map. The
+  /// circuit lands on Home, so Home is shown.
+  Future<void> _importCircuit(String path) async {
+    await importCircuitFile(context, path, onOpen: (root) {
+      if (!mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => CircuitMapScreen(circuitId: root.id),
+      ));
+    });
+    if (mounted) _selectTab(0);
+  }
+
   /// Picks a `.md`/`.txt` file and imports it as a Markdown node, keeping the
   /// raw markdown as-is, then opens the rendered result.
   Future<void> _importFile() async {
@@ -525,14 +544,7 @@ class _RootShellState extends State<RootShell>
     final dot = path.lastIndexOf('.');
     final ext = dot < 0 ? '' : path.substring(dot + 1).toLowerCase();
     if (!const {'md', 'markdown', 'txt', 'text'}.contains(ext)) {
-      await importCircuitFile(context, path, onOpen: (root) {
-        if (!mounted) return;
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => CircuitMapScreen(circuitId: root.id),
-        ));
-      });
-      // The circuit lands on Home; show it there.
-      if (mounted) _selectTab(0);
+      await _importCircuit(path);
       return;
     }
     String content;

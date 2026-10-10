@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:uuid/uuid.dart';
@@ -28,11 +29,39 @@ class CircuitFile {
   static const version = 1;
   static const extension = 'braim';
 
+  /// The type it's shared as. Its own, not the generic octet-stream, which
+  /// messengers show (and may save) as a ".bin" file.
+  static const mimeType = 'application/vnd.braim.circuit';
+
   // Limits for a file received from someone else.
   static const maxFileBytes = 200 * 1024 * 1024;
   static const maxImageBytes = 30 * 1024 * 1024;
   static const maxJsonBytes = 20 * 1024 * 1024;
   static const maxNotes = 5000;
+}
+
+/// Whether a received file is a circuit: its type or name says so, or it is a
+/// zip (a shared Markdown or text file never is). The contents decide in the
+/// end, as messengers sometimes rename a file or drop its type on the way;
+/// the import itself then checks it properly.
+Future<bool> looksLikeCircuitFile(String path, {String? mimeType}) async {
+  if (mimeType == CircuitFile.mimeType ||
+      path.toLowerCase().endsWith('.${CircuitFile.extension}')) {
+    return true;
+  }
+  try {
+    final file = File(path);
+    if (!await file.exists()) return false;
+    final head = await file.openRead(0, 4).expand((b) => b).toList();
+    // A zip starts with its local-file signature: P, K, 3, 4.
+    return head.length == 4 &&
+        head[0] == 0x50 &&
+        head[1] == 0x4B &&
+        head[2] == 0x03 &&
+        head[3] == 0x04;
+  } catch (_) {
+    return false;
+  }
 }
 
 /// Why a file couldn't be imported.

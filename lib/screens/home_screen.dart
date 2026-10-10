@@ -210,11 +210,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final showBackupBanner = state.showBackupReminder;
 
-    // Left-edge scrollbar: appears while scrolling, hugs the left side so
-    // it never fights the right-hand fade/toggle area.
+    // Right-edge scrollbar: appears while scrolling, in the gutter beside the
+    // tiles; the margin keeps it clear of the top bar and the bottom nav.
     final feed = RawScrollbar(
       controller: widget.controller,
-      scrollbarOrientation: ScrollbarOrientation.left,
+      scrollbarOrientation: ScrollbarOrientation.right,
       thumbColor: AppPalette.inkSecondary.withValues(alpha: 0.5),
       radius: const Radius.circular(4),
       thickness: 3.4,

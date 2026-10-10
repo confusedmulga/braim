@@ -5,6 +5,7 @@ import '../models/note.dart';
 import '../services/external_links.dart';
 import '../services/wiki_links.dart';
 import '../theme/app_theme.dart';
+import 'find_bar.dart';
 
 /// Renders body text with `[[Title]]` node/spark links (blue) and `[[@Name]]`
 /// impulse/thread mentions (lavender) — brackets and the `@` hidden, colour
@@ -112,6 +113,9 @@ class RichBodyText extends StatefulWidget {
     this.onOpenLink,
     this.onOpenMention,
     this.textAlign,
+    this.highlights = const [],
+    this.currentHighlight,
+    this.currentKey,
   });
 
   final List<RichRun> runs;
@@ -119,6 +123,13 @@ class RichBodyText extends StatefulWidget {
   final void Function(String title)? onOpenLink;
   final void Function(String name)? onOpenMention;
   final TextAlign? textAlign;
+
+  /// Find-in-note matches to mark, as ranges of the shown text (see
+  /// [richRunsDisplayText]); [currentHighlight] indexes the current one, which
+  /// carries [currentKey].
+  final List<TextRange> highlights;
+  final int? currentHighlight;
+  final GlobalKey? currentKey;
 
   @override
   State<RichBodyText> createState() => _RichBodyTextState();
@@ -209,8 +220,24 @@ class _RichBodyTextState extends State<RichBodyText> {
       }
     }
     return Text.rich(
-      TextSpan(style: widget.style, children: spans),
+      TextSpan(
+        style: widget.style,
+        children: highlightSpans(spans, widget.highlights,
+            baseStyle: widget.style,
+            current: widget.currentHighlight,
+            currentKey: widget.currentKey),
+      ),
       textAlign: widget.textAlign ?? TextAlign.start,
     );
   }
 }
+
+/// The text [RichBodyText] shows for [runs]: as written, except that
+/// `[[links]]` and `[[@mentions]]` lose their brackets. Find matches against
+/// this, so its offsets line up with the screen.
+String richRunsDisplayText(List<RichRun> runs) => [
+      for (final run in runs)
+        run.link != null
+            ? run.text
+            : splitWikiSpans(run.text).map((s) => s.text).join(),
+    ].join();

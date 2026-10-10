@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../services/day_lines.dart';
 import '../theme/app_theme.dart';
 
 /// Rotating Home-feed greetings (one is picked at random per session).
@@ -95,36 +96,6 @@ const List<String> kNarrativeGreetings = [
   'Writing a book is just typing with commitment.',
   'Every great novel is 90% sitting back down.',
   'The draft forgives everything except absence.',
-];
-
-/// Rotating greetings for the Journal tab — lines that fit a feed where the
-/// day's tasks and the day's journal live side by side.
-const List<String> kJournalGreetings = [
-  'What got done, and what you felt about it.',
-  'The to-do list and the diary, finally in one room.',
-  'Half productivity, half confession.',
-  'Checkboxes and feelings, side by side.',
-  'What happened, and what you did about it.',
-  "Tasks lie about being finished. Journals don't.",
-  'The list says what to do. The entry says how it went.',
-  'Some days you check boxes. Some days you just survive them.',
-  'Progress and processing, same screen.',
-  'What you did today, and what you thought about it.',
-  'The plan and the reality, sitting next to each other.',
-  'Ticked boxes, untidy thoughts.',
-  'One column for doing, one for dealing.',
-  "Today's tasks. Today's mess. Both valid.",
-  'Where the schedule meets the aftermath.',
-  'Structure on one side, chaos on the other. Balanced, technically.',
-  'What needed doing, what actually happened.',
-  'Accountability and honesty, sharing a screen.',
-  'The list keeps you moving. The journal keeps you honest.',
-  'Some tasks get done. Some just get written about instead.',
-  'Executive function and emotional processing, cohabiting peacefully.',
-  'Half planner, half therapist.',
-  'Where "done" and "how are you, really" coexist.',
-  'efficiency and reflection. pick your poison.',
-  'Today, itemized and narrated.',
 ];
 
 /// Rotating greetings for the Sparks (cards) tab — the saved-links pile.
@@ -238,8 +209,15 @@ String pickHomeGreeting({Random? random, DateTime? now}) {
 String pickNarrativeGreeting({Random? random}) =>
     _cachedGreeting('narrative', kNarrativeGreetings, random);
 
-String pickJournalGreeting({Random? random}) =>
-    _cachedGreeting('journal', kJournalGreetings, random);
+/// The Journal's greeting is today's date, told a different way each day
+/// (see [pickDayLine]); cached per day, so it changes at midnight, not on
+/// every scroll.
+String pickJournalGreeting({Random? random, DateTime? now}) {
+  final day = now ?? DateTime.now();
+  if (random != null) return pickDayLine(day, random: random);
+  return _greetingCache['journal ${day.year}-${day.month}-${day.day}'] ??=
+      pickDayLine(day);
+}
 
 String pickCardsGreeting({Random? random}) =>
     _cachedGreeting('cards', kCardsGreetings, random);
@@ -248,8 +226,8 @@ String pickCortexGreeting({Random? random}) =>
     _cachedGreeting('cortex', kCortexGreetings, random);
 
 /// The big display text that opens every feed (in place of the old title
-/// header). The line is chosen once per mount, so it changes per app open,
-/// not per scroll.
+/// header). Each picker caches its line (per app open; the Journal's per
+/// day), so it changes per app open, not per scroll.
 class FeedGreeting extends StatefulWidget {
   const FeedGreeting({super.key, this.text, this.picker});
 
@@ -262,10 +240,11 @@ class FeedGreeting extends StatefulWidget {
 }
 
 class _FeedGreetingState extends State<FeedGreeting> {
-  late final String _line = widget.text ?? widget.picker!();
-
   @override
   Widget build(BuildContext context) {
+    // Asked on every build: the pickers cache, and the Journal's date line
+    // has to move on if the screen is still up after midnight.
+    final line = widget.text ?? widget.picker!();
     final base = TextStyle(
       fontFamily: 'Lora',
       fontSize: 40,
@@ -287,10 +266,10 @@ class _FeedGreetingState extends State<FeedGreeting> {
           // its line metrics, the first line is fully bold when rendered,
           // so its wrap point matches this measurement exactly.
           final tp = TextPainter(
-            text: TextSpan(text: _line, style: bold),
+            text: TextSpan(text: line, style: bold),
             textDirection: TextDirection.ltr,
           )..layout(maxWidth: constraints.maxWidth);
-          var split = _line.length;
+          var split = line.length;
           final lines = tp.computeLineMetrics();
           if (lines.length > 1) {
             final first = lines.first;
@@ -302,8 +281,8 @@ class _FeedGreetingState extends State<FeedGreeting> {
           tp.dispose();
           return Text.rich(
             TextSpan(children: [
-              TextSpan(text: _line.substring(0, split), style: bold),
-              TextSpan(text: _line.substring(split), style: base),
+              TextSpan(text: line.substring(0, split), style: bold),
+              TextSpan(text: line.substring(split), style: base),
             ]),
           );
         },

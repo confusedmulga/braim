@@ -6,6 +6,7 @@ import '../models/note.dart';
 import '../models/note_block.dart';
 import '../services/external_links.dart';
 import '../theme/app_theme.dart';
+import 'find_bar.dart';
 import 'wiki_text.dart';
 
 /// The read view of a rich-text body — a note's, or the note on a spark. It
@@ -24,6 +25,7 @@ class NoteReadBody extends StatelessWidget {
     this.onOpenLink,
     this.onOpenMention,
     this.onToggleCheck,
+    this.find,
   });
 
   final List<NoteBlock> blocks;
@@ -50,9 +52,42 @@ class NoteReadBody extends StatelessWidget {
   final void Function(int blockIndex, int lineIndex, bool nowChecked)?
       onToggleCheck;
 
+  /// Find in note: the matches to mark, and the current one.
+  final FindHighlight? find;
+
+  /// A text block's lines in the order they're shown, each with its index in
+  /// the block (for tap-to-tick): ticked items sink when [checkedToBottom].
+  static List<(int, RichLine)> shownLines(NoteBlock b, bool checkedToBottom) {
+    final lines = richToStyledLines(b.text);
+    final indexed = [for (var i = 0; i < lines.length; i++) (i, lines[i])];
+    if (!checkedToBottom) return indexed;
+    return [
+      ...indexed.where((e) => e.$2.kind != RichLineKind.checkedItem),
+      ...indexed.where((e) => e.$2.kind == RichLineKind.checkedItem),
+    ];
+  }
+
+  static List<RichRun> _runsOf(RichLine l) =>
+      l.runs.isEmpty ? [RichRun(l.text)] : l.runs;
+
+  /// How many times [query] appears in the read view of [blocks].
+  static int countMatches(List<NoteBlock> blocks, String query,
+      {bool checkedToBottom = false}) {
+    var n = 0;
+    for (final b in blocks) {
+      if (!b.isText) continue;
+      for (final (_, l) in shownLines(b, checkedToBottom)) {
+        n += findRanges(richRunsDisplayText(_runsOf(l)), query).length;
+      }
+    }
+    return n;
+  }
+
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[];
+    // Matches are numbered in reading order, as [countMatches] counts them.
+    var seen = 0;
     for (var bi = 0; bi < blocks.length; bi++) {
       final b = blocks[bi];
       if (b.isImage && b.imagePath.isNotEmpty) {
@@ -108,17 +143,10 @@ class NoteReadBody extends StatelessWidget {
         // Render line by line from the styled delta so every inline mark
         // (bold/italic/…) and block format (headings, quotes, lists, indent,
         // alignment) the editor showed survives into the saved read view.
-        final lines = richToStyledLines(b.text);
-        if (lines.isEmpty) continue;
-        // Keep each line's original index (for tap-to-tick), then optionally
-        // sink ticked items to the bottom for display only.
-        var indexed = [for (var i = 0; i < lines.length; i++) (i, lines[i])];
-        if (checkedToBottom) {
-          indexed = [
-            ...indexed.where((e) => e.$2.kind != RichLineKind.checkedItem),
-            ...indexed.where((e) => e.$2.kind == RichLineKind.checkedItem),
-          ];
-        }
+        // Each line keeps its index in the block (for tap-to-tick); ticked
+        // items may sink to the bottom, for display only.
+        final indexed = shownLines(b, checkedToBottom);
+        if (indexed.isEmpty) continue;
         final lineWidgets = <Widget>[];
         var ordinal = 0;
         for (final (li, l) in indexed) {
@@ -127,7 +155,17 @@ class NoteReadBody extends StatelessWidget {
           } else {
             ordinal = 0;
           }
-          lineWidgets.add(_lineWidget(l, bi, li, ordinal));
+          var hits = const <TextRange>[];
+          int? current;
+          final f = find;
+          if (f != null) {
+            hits = findRanges(richRunsDisplayText(_runsOf(l)), f.query);
+            if (f.current >= seen && f.current < seen + hits.length) {
+              current = f.current - seen;
+            }
+            seen += hits.length;
+          }
+          lineWidgets.add(_lineWidget(l, bi, li, ordinal, hits, current));
         }
         children.add(Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -195,20 +233,26 @@ class NoteReadBody extends StatelessWidget {
     }
   }
 
-  Widget _text(RichLine l, TextStyle style) => RichBodyText(
-        runs: l.runs.isEmpty ? [RichRun(l.text)] : l.runs,
+  Widget _text(RichLine l, TextStyle style, List<TextRange> hits,
+          int? current) =>
+      RichBodyText(
+        runs: _runsOf(l),
         style: style,
         onOpenLink: onOpenLink,
         onOpenMention: onOpenMention,
         textAlign: _alignOf(l),
+        highlights: hits,
+        currentHighlight: current,
+        currentKey: find?.currentKey,
       );
 
-  Widget _lineWidget(RichLine l, int blockIndex, int lineIndex, int ordinal) {
+  Widget _lineWidget(RichLine l, int blockIndex, int lineIndex, int ordinal,
+      List<TextRange> hits, int? current) {
     final style = _baseStyle(l);
     Widget content;
     switch (l.kind) {
       case RichLineKind.plain:
-        content = _text(l, style);
+        content = _text(l, style, hits, current);
       case RichLineKind.checkedItem:
       case RichLineKind.uncheckedItem:
         final checked = l.kind == RichLineKind.checkedItem;
@@ -235,7 +279,7 @@ class NoteReadBody extends StatelessWidget {
                     : AppPalette.inkSecondary,
               ),
             ),
-            Expanded(child: _text(l, itemStyle)),
+            Expanded(child: _text(l, itemStyle, hits, current)),
           ],
         );
         content = onToggleCheck == null
@@ -253,7 +297,7 @@ class NoteReadBody extends StatelessWidget {
               padding: const EdgeInsets.only(left: 2, right: 10),
               child: Text('•', style: style),
             ),
-            Expanded(child: _text(l, style)),
+            Expanded(child: _text(l, style, hits, current)),
           ],
         );
       case RichLineKind.ordered:
@@ -264,7 +308,7 @@ class NoteReadBody extends StatelessWidget {
               padding: const EdgeInsets.only(left: 2, right: 10),
               child: Text('$ordinal.', style: style),
             ),
-            Expanded(child: _text(l, style)),
+            Expanded(child: _text(l, style, hits, current)),
           ],
         );
     }

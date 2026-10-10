@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:http/http.dart' as http;
 
@@ -24,6 +25,7 @@ typedef _PageData = ({
   String siteName,
   String imageUrl,
   String articleText,
+  bool paywalled,
 });
 
 /// Best-effort link preview. For tweets it tries Twitter/X oEmbed (no API key
@@ -54,9 +56,15 @@ class LinkPreviewService {
     final siteName = (meta('og:site_name') ?? '').trim();
     final imageUrl = (meta('og:image') ?? meta('twitter:image') ?? '').trim();
 
-    // Reader mode last: extraction mutates the DOM the meta reads used.
+    // Before extraction, which strips the <script> tags this reads.
+    final paywalled = isPaywalled(doc);
+
+    // Reader mode last: extraction mutates the DOM the meta reads used. A
+    // subscriber-only article is never extracted, even when the page carries
+    // its full text behind a script overlay: that would step around the
+    // paywall. Its card keeps the title, summary and picture.
     var articleText = '';
-    if (withArticle) {
+    if (withArticle && !paywalled) {
       try {
         articleText = ArticleExtractor.extract(doc) ?? '';
       } catch (_) {
@@ -70,7 +78,51 @@ class LinkPreviewService {
       siteName: siteName,
       imageUrl: imageUrl,
       articleText: articleText,
+      paywalled: paywalled,
     );
+  }
+
+  /// Whether [doc] marks its article as for paying subscribers, the way
+  /// publishers tell search engines: schema.org `isAccessibleForFree: false`
+  /// (in JSON-LD, anywhere in it, including a paywalled `hasPart`, or in
+  /// microdata), or an `article:content_tier` of `locked` or `metered`. A
+  /// metered article is treated as paywalled too: Braim can't know which of
+  /// the reader's free articles it would be using up.
+  static bool isPaywalled(dom.Document doc) {
+    bool notFree(Object? v) =>
+        v == false || (v is String && v.trim().toLowerCase() == 'false');
+
+    bool search(Object? node) {
+      if (node is Map) {
+        for (final entry in node.entries) {
+          if (entry.key == 'isAccessibleForFree' && notFree(entry.value)) {
+            return true;
+          }
+          if (search(entry.value)) return true;
+        }
+      } else if (node is List) {
+        for (final item in node) {
+          if (search(item)) return true;
+        }
+      }
+      return false;
+    }
+
+    for (final script
+        in doc.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        if (search(jsonDecode(script.text))) return true;
+      } catch (_) {
+        // A malformed block says nothing either way.
+      }
+    }
+    for (final el in doc.querySelectorAll('[itemprop="isAccessibleForFree"]')) {
+      if (notFree(el.attributes['content'] ?? el.text)) return true;
+    }
+    final tier = doc.querySelector('meta[property="article:content_tier"]') ??
+        doc.querySelector('meta[name="article:content_tier"]');
+    final value = tier?.attributes['content']?.trim().toLowerCase();
+    return value == 'locked' || value == 'metered';
   }
 
   /// Fetches just the OG basics for a URL pasted inside a note body.
@@ -218,6 +270,7 @@ class LinkPreviewService {
       if (combined.isNotEmpty) card.text = combined;
     }
     card.articleText = page.articleText;
+    card.articlePaywalled = page.paywalled;
     return card.text.isNotEmpty ||
         card.imageUrl.isNotEmpty ||
         card.articleText.isNotEmpty;

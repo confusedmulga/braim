@@ -9,10 +9,12 @@ import '../l10n/l10n.dart';
 import '../models/note.dart';
 import '../services/circuit_file.dart';
 import '../services/file_names.dart';
+import '../services/note_markdown.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import 'glass.dart';
 import 'quick_actions_menu.dart';
+import 'share_as.dart';
 
 /// Where a new circuit note goes, and what kind it is — the result of the
 /// note screen's **+** sheet.
@@ -109,9 +111,6 @@ enum CircuitNodeAction {
   addExisting,
   toggleFeed,
   remove,
-  shareFile,
-  shareOutline,
-  sharePdf,
   delete,
 }
 
@@ -217,14 +216,16 @@ Future<CircuitNodeAction?> showCircuitNodeSheet(
                   if (!isRoot)
                     _act(sheetCtx, Icons.link_off_rounded, t.circuitRemove,
                         CircuitNodeAction.remove),
-                  if (isRoot) ...[
-                    _act(sheetCtx, Icons.account_tree_rounded,
-                        t.circuitShareFile, CircuitNodeAction.shareFile),
-                    _act(sheetCtx, Icons.ios_share_rounded,
-                        t.circuitShareOutline, CircuitNodeAction.shareOutline),
-                    _act(sheetCtx, Icons.picture_as_pdf_outlined,
-                        t.circuitSharePdf, CircuitNodeAction.sharePdf),
-                  ],
+                  // This note and everything under it (the first note: the
+                  // whole circuit), or the whole circuit as a .braim file.
+                  ShareAsTile(
+                    dense: true,
+                    formats: ShareFormat.forCircuit,
+                    onShare: (format) {
+                      Navigator.pop(sheetCtx);
+                      shareCircuitAs(context, note, format);
+                    },
+                  ),
                   _act(
                       sheetCtx,
                       Icons.delete_outline_rounded,
@@ -597,12 +598,34 @@ Future<void> shareCircuitFile(BuildContext context, Note root) async {
     final name = safeFileBase(root.title, fallback: 'circuit');
     final file = File('${dir.path}/$name.${CircuitFile.extension}');
     await file.writeAsBytes(bytes, flush: true);
+    // Its own type: shared as the generic octet-stream, messengers label
+    // (and may rename) the file as a ".bin".
     await SharePlus.instance.share(ShareParams(files: [
-      XFile(file.path, mimeType: 'application/octet-stream'),
+      XFile(file.path, mimeType: CircuitFile.mimeType),
     ]));
   } catch (_) {
     messenger.showSnackBar(SnackBar(content: Text(failed)));
   }
+}
+
+/// Shares a circuit from [from] down: in a note format, as an outline of
+/// [from] and every note under it (from the first note, the whole circuit);
+/// as [ShareFormat.circuit], the whole circuit's `.braim` file.
+Future<void> shareCircuitAs(
+    BuildContext context, Note from, ShareFormat format) async {
+  final state = context.read<AppState>();
+  if (format == ShareFormat.circuit) {
+    return shareCircuitFile(context, state.circuitRootOf(from) ?? from);
+  }
+  final t = context.t;
+  final title = from.title.trim().isNotEmpty
+      ? from.title.trim()
+      : (from.isCircuitRoot ? t.untitledCircuit : t.untitledNote);
+  return shareNoteAs(context,
+      markdown: circuitOutline(from, state.circuitChildren,
+          untitledCircuit: t.untitledCircuit, untitledNote: t.untitledNote),
+      title: title,
+      format: format);
 }
 
 /// The answer to "you already have this circuit".

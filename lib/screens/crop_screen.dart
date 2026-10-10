@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:crop_your_image/crop_your_image.dart';
@@ -9,9 +10,10 @@ import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 
 /// Opens the in-app cropper for the image at [sourcePath] and returns the path
-/// of a freshly saved cropped image, or null if the user backed out (in which
-/// case the caller should keep the original). [aspectRatio] (width / height)
-/// seeds a fixed crop shape — e.g. 2/3 for a book cover; null starts free-form.
+/// of the image to use: a freshly saved crop, [sourcePath] itself when the
+/// user keeps the Original, or null if they backed out (in which case the
+/// caller should keep the original too). [aspectRatio] (width / height) seeds
+/// a fixed crop shape — e.g. 2/3 for a book cover; null opens on Original.
 Future<String?> cropImageFile(
   BuildContext context,
   String sourcePath, {
@@ -31,11 +33,15 @@ Future<String?> cropImageFile(
     ),
   );
   if (cropped == null) return null;
+  // Original hands back the very bytes it was given: keep the file as it is,
+  // with no re-encode.
+  if (identical(cropped, bytes)) return sourcePath;
   return StorageService.instance.saveImageBytes(cropped);
 }
 
 /// A full-screen, in-app image cropper. Pop returns the cropped bytes
-/// ([Uint8List]) on confirm, or null on cancel.
+/// ([Uint8List]) on confirm — [image] itself when Original is chosen — or
+/// null on cancel.
 class CropScreen extends StatefulWidget {
   const CropScreen({super.key, required this.image, this.aspectRatio});
 
@@ -49,14 +55,53 @@ class CropScreen extends StatefulWidget {
 class _CropScreenState extends State<CropScreen> {
   final _controller = CropController();
   late double? _ratio = widget.aspectRatio;
+
+  /// Original: the picture goes in uncropped. Where it opens unless a crop
+  /// shape was asked for (a book cover asks for 2:3).
+  late bool _original = widget.aspectRatio == null;
   bool _busy = false;
 
-  void _setRatio(double? r) {
-    setState(() => _ratio = r);
-    _controller.aspectRatio = r;
+  /// Whether the cropper has finished preparing the picture. Until then it
+  /// must not be given commands (the package throws), so a shape chosen
+  /// meanwhile waits in [_ratioPending] and ✓ waits too.
+  bool _cropReady = false;
+  bool _ratioPending = false;
+
+  void _choose({required bool original, double? ratio}) {
+    // The cropper only exists while a crop shape is chosen. Coming from
+    // Original it is built fresh with the new shape; the controller is not
+    // connected to anything until then.
+    final cropperShown = !_original;
+    setState(() {
+      _original = original;
+      _ratio = ratio;
+    });
+    if (original) {
+      _cropReady = false;
+      _ratioPending = false;
+    } else if (cropperShown) {
+      if (_cropReady) {
+        _controller.aspectRatio = ratio;
+      } else {
+        _ratioPending = true;
+      }
+    }
+  }
+
+  void _onCropStatus(CropStatus status) {
+    _cropReady = status == CropStatus.ready;
+    if (_cropReady && _ratioPending) {
+      _ratioPending = false;
+      _controller.aspectRatio = _ratio;
+    }
   }
 
   void _confirm() {
+    if (_original) {
+      Navigator.of(context).pop(widget.image);
+      return;
+    }
+    if (!_cropReady) return;
     setState(() => _busy = true);
     _controller.crop();
   }
@@ -76,6 +121,12 @@ class _CropScreenState extends State<CropScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Inset the picture from the screen's edges: room around the corner
+    // handles, and dragging one never starts in Android's back-swipe zone.
+    final gestures = MediaQuery.systemGestureInsetsOf(context);
+    final left = math.max(28.0, gestures.left + 12);
+    final right = math.max(28.0, gestures.right + 12);
+    final media = MediaQuery.of(context);
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -112,23 +163,44 @@ class _CropScreenState extends State<CropScreen> {
                   ),
                 ),
                 Expanded(
-                  child: Crop(
-                    image: widget.image,
-                    controller: _controller,
-                    aspectRatio: _ratio,
-                    baseColor: Colors.black,
-                    maskColor: Colors.black.withValues(alpha: 0.55),
-                    interactive: true,
-                    cornerDotBuilder: (size, edge) =>
-                        const DotControl(color: Colors.white),
-                    onCropped: _onCropped,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(left, 20, right, 8),
+                    child: _original
+                        ? Center(
+                            child: Image.memory(
+                              widget.image,
+                              fit: BoxFit.contain,
+                              // Decoded at screen size: a preview needs no
+                              // more, and a camera photo at full size is tens
+                              // of megabytes of memory.
+                              cacheWidth:
+                                  (media.size.width * media.devicePixelRatio)
+                                      .round(),
+                            ),
+                          )
+                        : Crop(
+                            image: widget.image,
+                            controller: _controller,
+                            aspectRatio: _ratio,
+                            baseColor: Colors.black,
+                            maskColor: Colors.black.withValues(alpha: 0.55),
+                            interactive: true,
+                            cornerDotBuilder: (size, edge) =>
+                                const DotControl(color: Colors.white),
+                            onCropped: _onCropped,
+                            onStatusChanged: _onCropStatus,
+                          ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+                  // Wraps onto a second line on a narrow phone.
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    runSpacing: 10,
                     children: [
+                      _chip(context.t.cropOriginal, _original,
+                          () => _choose(original: true)),
                       _ratioChip(context.t.cropFreeform, null),
                       _ratioChip(context.t.cropSquare, 1),
                       _ratioChip('3:4', 3 / 4),
@@ -152,12 +224,17 @@ class _CropScreenState extends State<CropScreen> {
     );
   }
 
-  Widget _ratioChip(String label, double? ratio) {
-    final selected = _ratio == ratio;
+  Widget _ratioChip(String label, double? ratio) => _chip(
+        label,
+        !_original && _ratio == ratio,
+        () => _choose(original: false, ratio: ratio),
+      );
+
+  Widget _chip(String label, bool selected, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 5),
       child: GestureDetector(
-        onTap: () => _setRatio(ratio),
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
