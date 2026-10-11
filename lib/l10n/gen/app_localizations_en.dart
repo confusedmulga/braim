@@ -481,12 +481,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addPhotos => 'Add photos';
 
   @override
-  String get copyNote => 'Copy node';
-
-  @override
-  String get noteCopied => 'Node copied to clipboard';
-
-  @override
   String get undo => 'Undo';
 
   @override
@@ -1234,9 +1228,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareSave => 'Save';
-
-  @override
-  String get createAndSave => 'Create & save';
 
   @override
   String get folderName => 'Fold name';
@@ -2388,12 +2379,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get circuitExpand => 'Expand';
-
-  @override
-  String get circuitShareOutline => 'Share as outline';
-
-  @override
-  String get circuitSharePdf => 'Share as PDF';
 
   @override
   String circuitBulkDeleteBody(int circuits, int notes) {

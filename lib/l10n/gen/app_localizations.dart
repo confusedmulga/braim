@@ -940,18 +940,6 @@ abstract class AppLocalizations {
   /// **'Add photos'**
   String get addPhotos;
 
-  /// No description provided for @copyNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy node'**
-  String get copyNote;
-
-  /// No description provided for @noteCopied.
-  ///
-  /// In en, this message translates to:
-  /// **'Node copied to clipboard'**
-  String get noteCopied;
-
   /// No description provided for @undo.
   ///
   /// In en, this message translates to:
@@ -2283,12 +2271,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Save'**
   String get shareSave;
-
-  /// No description provided for @createAndSave.
-  ///
-  /// In en, this message translates to:
-  /// **'Create & save'**
-  String get createAndSave;
 
   /// No description provided for @folderName.
   ///
@@ -4323,18 +4305,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Expand'**
   String get circuitExpand;
-
-  /// No description provided for @circuitShareOutline.
-  ///
-  /// In en, this message translates to:
-  /// **'Share as outline'**
-  String get circuitShareOutline;
-
-  /// No description provided for @circuitSharePdf.
-  ///
-  /// In en, this message translates to:
-  /// **'Share as PDF'**
-  String get circuitSharePdf;
 
   /// No description provided for @circuitBulkDeleteBody.
   ///

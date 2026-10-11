@@ -59,6 +59,21 @@ void main() {
     }
   });
 
+  test('10/10 shows its own lines; other days mix in their weekday', () {
+    expect(dayLinePool(saturday).toSet(), kDayOfYearLines['10/10']!.toSet());
+    final sunday = DateTime(2026, 10, 11);
+    final pool = dayLinePool(sunday);
+    expect(pool, containsAll(kDateLines));
+    expect(pool, containsAll(kWeekdayLines[DateTime.sunday]!));
+    expect(pool, isNot(contains(kWeekdayLines[DateTime.monday]!.first)));
+    // Its two weekday lines make up about a quarter of the draws.
+    final weekdayShare = pool
+            .where((l) => kWeekdayLines[DateTime.sunday]!.contains(l))
+            .length /
+        pool.length;
+    expect(weekdayShare, closeTo(0.25, 0.01));
+  });
+
   test('the journal greeting holds for the day and moves on at midnight', () {
     final morning = pickJournalGreeting(now: DateTime(2026, 10, 10, 8));
     expect(pickJournalGreeting(now: DateTime(2026, 10, 10, 23, 59)), morning);

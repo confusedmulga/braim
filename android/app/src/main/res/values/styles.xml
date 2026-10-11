@@ -11,9 +11,14 @@
          Flutter UI initializes, as well as behind your Flutter UI while its
          running.
 
-         This Theme is only used starting with V2 of Flutter's Android embedding. -->
+         This Theme is only used starting with V2 of Flutter's Android embedding.
+
+         Before Android 12 this window shows from the activity's start until
+         Flutter's first frame, which the app holds until the home screen is
+         ready; so it carries the launch screen's background and logo, not a
+         blank page. (Android 12+ keeps its own splash up over that time.) -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
         <!-- Transparent gesture-nav bar with no contrast scrim, so no white
              band paints behind the pill over flat screens like Settings. -->
         <item name="android:navigationBarColor">@android:color/transparent</item>

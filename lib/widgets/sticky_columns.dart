@@ -14,8 +14,8 @@ class StickyColumnPlacer {
   Object? _layout;
 
   /// Splits [ids] (in feed order) into a left and a right column of ids.
-  /// [estimate] gives each item's rough height, used only to place items
-  /// that have no column yet.
+  /// [estimate] gives each item's rough height, used to weigh the columns
+  /// when an item that has no column yet is placed.
   (List<String>, List<String>) place(
     List<String> ids, {
     required double Function(String id) estimate,
@@ -26,14 +26,27 @@ class StickyColumnPlacer {
       _columnOf.clear();
       _layout = layout;
     }
-    final heights = [0.0, 0.0];
+    // Items already placed keep their column. A new one joins whichever
+    // column is shorter overall (on a fresh layout, every item is new, so the
+    // columns fill in feed order). Judged at its own spot instead, a spark
+    // saved just now — first in the feed, where both columns start level —
+    // would always go left, and the left column would run away.
+    final totals = [0.0, 0.0];
+    for (final id in ids) {
+      final column = _columnOf[id];
+      if (column != null) totals[column] += estimate(id) + spacing;
+    }
     final columns = (<String>[], <String>[]);
     final present = <String>{};
     for (final id in ids) {
       present.add(id);
-      final column = _columnOf[id] ??= heights[0] <= heights[1] ? 0 : 1;
+      var column = _columnOf[id];
+      if (column == null) {
+        column = totals[0] <= totals[1] ? 0 : 1;
+        _columnOf[id] = column;
+        totals[column] += estimate(id) + spacing;
+      }
       (column == 0 ? columns.$1 : columns.$2).add(id);
-      heights[column] += estimate(id) + spacing;
     }
     // Forget items that have gone, so one that comes back is placed afresh.
     _columnOf.removeWhere((id, _) => !present.contains(id));

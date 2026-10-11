@@ -43,12 +43,41 @@ void main() {
       expect(left0, ['a']);
       expect(right0, ['b', 'c']);
 
-      // Saved just now, so it is first in the feed.
+      // Saved just now, so it is first in the feed. The right column (200)
+      // is shorter than the left (400).
       heights['new'] = 100;
       final (left, right) = placer.place(['new', 'a', 'b', 'c'],
           estimate: (id) => heights[id]!, layout: 'recent');
-      expect(left, ['new', 'a']);
-      expect(right, ['b', 'c']);
+      expect(left, ['a']);
+      expect(right, ['new', 'b', 'c']);
+    });
+
+    test('sparks saved one after another keep the columns even', () {
+      final placer = StickyColumnPlacer();
+      var ids = ['a', 'b', 'c', 'd'];
+      placer.place(ids, estimate: (_) => 100, layout: 'recent');
+      for (final n in ['n1', 'n2', 'n3', 'n4', 'n5', 'n6']) {
+        ids = [n, ...ids]; // each lands at the top of the feed
+        final (left, right) =
+            placer.place(ids, estimate: (_) => 100, layout: 'recent');
+        expect((left.length - right.length).abs(), lessThanOrEqualTo(1),
+            reason: 'after $n');
+      }
+    });
+
+    test('a gap left by a deleted spark is filled by the next ones', () {
+      final placer = StickyColumnPlacer();
+      final (left0, _) = placer.place(['a', 'b', 'c', 'd', 'e', 'f'],
+          estimate: (_) => 100, layout: 'recent');
+      // Two from the left column go; the next two new sparks go there.
+      final kept = ['a', 'b', 'c', 'd', 'e', 'f']
+        ..remove(left0[0])
+        ..remove(left0[1]);
+      placer.place(kept, estimate: (_) => 100, layout: 'recent');
+      final (left, right) = placer.place(['x', 'y', ...kept],
+          estimate: (_) => 100, layout: 'recent');
+      expect(left, containsAll(['x', 'y']));
+      expect(left.length, right.length);
     });
 
     test('a re-sort or a pin balances afresh', () {

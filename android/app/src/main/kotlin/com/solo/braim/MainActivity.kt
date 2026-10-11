@@ -23,6 +23,9 @@ class MainActivity : FlutterFragmentActivity() {
     private var focusMedia: FocusMedia? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // A file shared to Braim reaches the share plugin as a safe local copy
+        // (see SharedFiles); set before super, which attaches the plugins.
+        intent = SharedFiles.safeCopy(this, intent)
         super.onCreate(savedInstanceState)
         // Draw behind the status and navigation bars from the first frame on
         // every Android version; Android 15+ enforces this anyway. Called after
@@ -39,6 +42,13 @@ class MainActivity : FlutterFragmentActivity() {
             SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         }
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        // The same for a share that arrives while Braim is already open.
+        val safe = SharedFiles.safeCopy(this, intent) ?: intent
+        setIntent(safe)
+        super.onNewIntent(safe)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -51,6 +51,23 @@ void main() {
       }
     });
 
+    test("a link's own brackets stay; the sentence's go", () {
+      for (final (shared, url) in [
+        ('Mercury - Wikipedia https://en.wikipedia.org/wiki/Mercury_(planet)',
+            'https://en.wikipedia.org/wiki/Mercury_(planet)'),
+        ('(see https://en.wikipedia.org/wiki/Mercury_(planet)).',
+            'https://en.wikipedia.org/wiki/Mercury_(planet)'),
+        ('[https://example.com/a[1]]', 'https://example.com/a[1]'),
+        ('"https://example.com/a?b=c"!', 'https://example.com/a?b=c'),
+      ]) {
+        expect(SharedText.parse(shared).url, url, reason: shared);
+      }
+      // Quotes and brackets around the link aren't a headline.
+      expect(SharedText.parse('"https://example.com/a?b=c"!').caption, isEmpty);
+      expect(
+          SharedText.parse('(see https://example.com/a)').caption, 'see');
+    });
+
     test('writing that mentions a link stays a note', () {
       final long = '${'A thought I had while reading this. ' * 10}'
           'https://news.example.com/a';

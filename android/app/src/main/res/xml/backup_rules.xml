@@ -4,4 +4,5 @@
     <exclude domain="external" path="Backups" />
     <exclude domain="root" path="app_flutter/Backups" />
     <exclude domain="root" path="app_flutter/braim_web_sessions.json" />
+    <exclude domain="file" path="dictionary" />
 </full-backup-content>

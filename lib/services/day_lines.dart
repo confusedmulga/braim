@@ -116,12 +116,22 @@ String fillDayTokens(String line, DateTime day) {
       .replaceAll('{daysLeft}', '$daysLeft');
 }
 
-/// The lines today's greeting may be drawn from.
+/// How many times each of the day's own weekday lines counts against the
+/// date lines: its two lines then come up about one day in four.
+const _weekdayWeight = 5;
+
+/// The lines today's greeting may be drawn from. A date with lines of its own
+/// (10/10) shows only those: it comes once a year. Any other day mixes the
+/// date lines with its weekday's, weighted so the weekday's show up often
+/// enough to be noticed.
 List<String> dayLinePool(DateTime day) {
-  // TODO(human): decide how the three kinds of line share a day — the date
-  // lines (any day), kWeekdayLines[day.weekday] and the one-date lines in
-  // kDayOfYearLines['${day.month}/${day.day}'].
-  return kDateLines;
+  final ofTheDate = kDayOfYearLines['${day.month}/${day.day}'];
+  if (ofTheDate != null && ofTheDate.isNotEmpty) return ofTheDate;
+  return [
+    ...kDateLines,
+    for (final line in kWeekdayLines[day.weekday] ?? const <String>[])
+      for (var i = 0; i < _weekdayWeight; i++) line,
+  ];
 }
 
 /// Today's greeting: one line from [dayLinePool], its tokens filled in.

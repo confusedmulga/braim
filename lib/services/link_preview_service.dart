@@ -65,7 +65,7 @@ class LinkPreviewService {
     var articleText = '';
     if (withArticle && !paywalled) {
       try {
-        articleText = ArticleExtractor.extract(doc) ?? '';
+        articleText = ArticleExtractor.extract(doc, paywalled: false) ?? '';
       } catch (_) {
         // Best-effort; the preview alone is still a valid card.
       }

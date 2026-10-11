@@ -26,11 +26,28 @@ class SharedText {
   static final _url = RegExp(r'https?://\S+');
 
   /// Punctuation a link is often written up against ("(see https://x.y).").
-  static final _trailing = RegExp(r'''[)\].,;:!?'"]+$''');
+  static const _trailing = '.,;:!?\'"';
 
-  /// Separators left at either end once the link is lifted out (and an
-  /// opening bracket the link was written inside).
-  static final _edges = RegExp(r'^[\s\-–—|:•·]+|[\s\-–—|:•·(\[]+$');
+  /// [url] without the sentence's punctuation after it. A closing bracket goes
+  /// only when the link didn't open it: "(see https://x.y)" loses it,
+  /// "https://en.wikipedia.org/wiki/Mercury_(planet)" keeps it.
+  static String _trimEnd(String url) {
+    var out = url;
+    while (out.isNotEmpty) {
+      final last = out[out.length - 1];
+      final open = switch (last) { ')' => '(', ']' => '[', _ => null };
+      final strays = open != null &&
+          last.allMatches(out).length > open.allMatches(out).length;
+      if (!_trailing.contains(last) && !strays) break;
+      out = out.substring(0, out.length - 1);
+    }
+    return out;
+  }
+
+  /// Separators left at either end once the link is lifted out, and the
+  /// quotes or opening bracket the link was written inside.
+  static final _edges =
+      RegExp(r'''^[\s\-–—|:•·"“”'(\[]+|[\s\-–—|:•·"“”'(\[]+$''');
 
   factory SharedText.parse(String raw) {
     final text = raw.trim();
@@ -38,9 +55,7 @@ class SharedText {
     if (links.length != 1) return SharedText._(caption: text);
 
     final link = links.single;
-    var url = link.group(0)!;
-    final cut = _trailing.firstMatch(url);
-    if (cut != null) url = url.substring(0, cut.start);
+    final url = _trimEnd(link.group(0)!);
 
     final rest = '${text.substring(0, link.start)}\n${text.substring(link.end)}'
         .split('\n')

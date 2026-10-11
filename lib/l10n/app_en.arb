@@ -197,8 +197,6 @@
   "tapLineToFormat": "Tap a line to format text",
   "savedAutomatically": "Saved automatically",
   "addPhotos": "Add photos",
-  "copyNote": "Copy node",
-  "noteCopied": "Node copied to clipboard",
   "undo": "Undo",
   "redo": "Redo",
   "bold": "Bold",
@@ -522,7 +520,6 @@
       }
     }
   },
-  "createAndSave": "Create & save",
   "folderName": "Fold name",
   "readerSection": "Reader",
   "articlePaywalled": "This article is for the site's subscribers, so Braim saved only its preview. Open the link to read it there.",
@@ -1025,8 +1022,6 @@
   "circuitDeleteCircuitAction": "Delete circuit",
   "circuitCollapse": "Collapse",
   "circuitExpand": "Expand",
-  "circuitShareOutline": "Share as outline",
-  "circuitSharePdf": "Share as PDF",
   "circuitBulkDeleteBody": "{circuits, plural, =1{This includes a circuit, so all {notes} of its notes will move to Recently deleted, where they stay for 30 days.} other{This includes {circuits} circuits, so all {notes} of their notes will move to Recently deleted, where they stay for 30 days.}}",
   "@circuitBulkDeleteBody": {
     "placeholders": {

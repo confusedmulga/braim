@@ -84,12 +84,14 @@ class ArticleExtractor {
   static const _maxChars = 80000;
 
   /// Returns the article as plain text (paragraphs separated by blank
-  /// lines), or null when the page doesn't look like an article.
-  static String? extract(dom.Document doc) {
+  /// lines), or null when the page doesn't look like an article. A caller that
+  /// has already run [isPaywalled] (before anything stripped the scripts)
+  /// passes its answer as [paywalled] rather than having the page read again.
+  static String? extract(dom.Document doc, {bool? paywalled}) {
     final body = doc.body;
     if (body == null) return null;
     // A publisher's subscriber-only article: don't lift text a paywall hides.
-    if (isPaywalled(doc)) return null;
+    if (paywalled ?? isPaywalled(doc)) return null;
 
     // 1. Drop chrome outright so it can't score or leak into the text.
     for (final el in body.querySelectorAll(_chromeTags.join(','))) {
