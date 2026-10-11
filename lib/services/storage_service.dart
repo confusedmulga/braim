@@ -293,6 +293,7 @@ class AppData {
     this.progressImpulseId = '__daily_day__',
     this.journalPaneOpen = false,
     this.cortexPaneOpen = false,
+    this.circuitPlusCreates = 'note',
     this.progressShowAll = false,
     this.typingMillis = 0,
     List<String>? journalOrder,
@@ -347,6 +348,7 @@ class AppData {
         'progressImpulseId': progressImpulseId,
         'journalPaneOpen': journalPaneOpen,
         'cortexPaneOpen': cortexPaneOpen,
+        'circuitPlusCreates': circuitPlusCreates,
         'progressShowAll': progressShowAll,
         'typingMillis': typingMillis,
         'journalOrder': journalOrder,
@@ -417,6 +419,7 @@ class AppData {
           (json['progressImpulseId'] as String?) ?? '__daily_day__',
       journalPaneOpen: (json['journalPaneOpen'] as bool?) ?? false,
       cortexPaneOpen: (json['cortexPaneOpen'] as bool?) ?? false,
+      circuitPlusCreates: (json['circuitPlusCreates'] as String?) ?? 'note',
       progressShowAll: (json['progressShowAll'] as bool?) ?? false,
       typingMillis: (json['typingMillis'] as num?)?.toInt() ?? 0,
       journalOrder:
@@ -505,6 +508,9 @@ class AppData {
   /// Whether the side pane's Journal / Cortex groups are expanded.
   bool journalPaneOpen;
   bool cortexPaneOpen;
+
+  /// What a circuit map node's + adds under it: 'note' or 'markdown'.
+  String circuitPlusCreates;
 
   /// Whether the green progress card aggregates all reflexes.
   bool progressShowAll;

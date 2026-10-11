@@ -1546,6 +1546,36 @@ abstract class AppLocalizations {
   /// **'Journal'**
   String get journalSection;
 
+  /// No description provided for @circuitPrefsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Circuit preferences'**
+  String get circuitPrefsSection;
+
+  /// No description provided for @circuitPlusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'The + on a circuit map adds'**
+  String get circuitPlusLabel;
+
+  /// No description provided for @circuitPlusNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal note'**
+  String get circuitPlusNote;
+
+  /// No description provided for @circuitPlusMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Markdown note'**
+  String get circuitPlusMarkdown;
+
+  /// No description provided for @circuitPlusHint.
+  ///
+  /// In en, this message translates to:
+  /// **'For the other kind, long-press a note on the map.'**
+  String get circuitPlusHint;
+
   /// No description provided for @journalReminderTitle.
   ///
   /// In en, this message translates to:

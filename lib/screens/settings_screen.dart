@@ -659,6 +659,77 @@ class SettingsScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        _SectionLabel(context.t.circuitPrefsSection),
+                        GlassPanel(
+                          borderRadius: 20,
+                          blur: 0,
+                          color: AppPalette.surfaceGlass,
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.account_tree_outlined,
+                                      color: AppPalette.inkSecondary),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(context.t.circuitPlusLabel,
+                                        style: TextStyle(
+                                            fontSize: 15.5,
+                                            color: AppPalette.inkPrimary)),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: AppPalette.bubbleGlass,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: AppPalette.cardOutline),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<bool>(
+                                    isExpanded: true,
+                                    value: state.circuitPlusMarkdown,
+                                    dropdownColor: AppPalette.sheet,
+                                    borderRadius: BorderRadius.circular(14),
+                                    items: [
+                                      for (final (markdown, label) in [
+                                        (false, context.t.circuitPlusNote),
+                                        (true, context.t.circuitPlusMarkdown),
+                                      ])
+                                        DropdownMenuItem(
+                                          value: markdown,
+                                          child: Text(label,
+                                              style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: AppPalette.inkPrimary)),
+                                        ),
+                                    ],
+                                    onChanged: (v) {
+                                      if (v != null) {
+                                        context
+                                            .read<AppState>()
+                                            .setCircuitPlusMarkdown(v);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(context.t.circuitPlusHint,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.35,
+                                      color: AppPalette.inkSecondary)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
                         _SectionLabel(context.t.backupSection),
                         GlassPanel(
                           borderRadius: 20,

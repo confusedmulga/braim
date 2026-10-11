@@ -807,6 +807,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get journalSection => 'Journal';
 
   @override
+  String get circuitPrefsSection => 'Circuit preferences';
+
+  @override
+  String get circuitPlusLabel => 'The + on a circuit map adds';
+
+  @override
+  String get circuitPlusNote => 'Normal note';
+
+  @override
+  String get circuitPlusMarkdown => 'Markdown note';
+
+  @override
+  String get circuitPlusHint =>
+      'For the other kind, long-press a note on the map.';
+
+  @override
   String get journalReminderTitle => 'Daily journal nudge';
 
   @override

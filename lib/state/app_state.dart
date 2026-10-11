@@ -126,6 +126,7 @@ class AppState extends ChangeNotifier {
   bool _progressShowAll = false;
   bool _journalPaneOpen = false;
   bool _cortexPaneOpen = false;
+  String _circuitPlusCreates = 'note';
   List<String> _journalOrder = const ['tasks', 'card', 'entries'];
 
   bool _loaded = false;
@@ -598,6 +599,7 @@ class AppState extends ChangeNotifier {
     _progressImpulseId = data.progressImpulseId;
     _journalPaneOpen = data.journalPaneOpen;
     _cortexPaneOpen = data.cortexPaneOpen;
+    _circuitPlusCreates = data.circuitPlusCreates;
     _progressShowAll = data.progressShowAll;
     _typingMillis = data.typingMillis;
     _journalOrder = data.journalOrder;
@@ -4045,6 +4047,18 @@ class AppState extends ChangeNotifier {
     await _persist();
   }
 
+  /// Whether a circuit map node's + adds a Markdown note under it, rather
+  /// than a normal one (Settings › Circuit preferences).
+  bool get circuitPlusMarkdown => _circuitPlusCreates == 'markdown';
+
+  Future<void> setCircuitPlusMarkdown(bool markdown) async {
+    final value = markdown ? 'markdown' : 'note';
+    if (_circuitPlusCreates == value) return;
+    _circuitPlusCreates = value;
+    notifyListeners();
+    await _persist();
+  }
+
   /// The id of the reflex pinned into the journal feed (default: the daily day).
   String get pinnedReflexId => _pinnedReflexId;
 
@@ -4695,6 +4709,7 @@ class AppState extends ChangeNotifier {
         progressImpulseId: _progressImpulseId,
         journalPaneOpen: _journalPaneOpen,
         cortexPaneOpen: _cortexPaneOpen,
+        circuitPlusCreates: _circuitPlusCreates,
         progressShowAll: _progressShowAll,
         typingMillis: _typingMillis,
         journalOrder: _journalOrder,

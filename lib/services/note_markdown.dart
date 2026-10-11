@@ -167,14 +167,34 @@ String markdownTitle(String md) {
 }
 
 /// Builds a note body block (a Quill Delta JSON string) from [md], skipping the
-/// leading title line if [skipTitle] matched it. Handles headings, checkboxes,
-/// bullets, numbered items, quotes, and inline bold/italic/strikethrough/links.
+/// leading title line if [skipTitle] matched it.
+///
+/// Markdown as people and AI chats write it, mapped onto what a note can show:
+/// headings (`#` a heading; `##`/`###` a sub-heading; deeper, a bold line),
+/// bullets (`-`, `*`, `+`), numbered items, checkboxes and quotes, nested by
+/// indentation; inline bold, italic, strikethrough and links. A note has no
+/// code style, so code keeps its text without the backticks (and a fenced
+/// block isn't read as Markdown at all); rules (`---`) are dropped, and a
+/// table becomes one line per row, its header row bold.
 String markdownToDeltaJson(String md, {String? skipTitle}) {
   final ops = <Map<String, Object?>>[];
   final lines = const LineSplitter().convert(md);
   var skippedTitle = false;
-  for (final raw in lines) {
-    var line = raw;
+  String? fence; // the open code fence's marker, inside a fenced block
+  final indents = <int>[]; // the list's indentation widths, outermost first
+  var blankPending = false;
+
+  void emit(List<Map<String, Object?>> runs, Map<String, Object?>? attrs) {
+    if (blankPending && ops.isNotEmpty) ops.add({'insert': '\n'});
+    blankPending = false;
+    ops.addAll(runs);
+    ops.add(attrs == null
+        ? {'insert': '\n'}
+        : {'insert': '\n', 'attributes': attrs});
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
     // Drop the one title line we lifted into the note title.
     if (!skippedTitle && skipTitle != null && skipTitle.isNotEmpty) {
       final m = RegExp(r'^#\s+(.*)$').firstMatch(line.trim());
@@ -184,78 +204,172 @@ String markdownToDeltaJson(String md, {String? skipTitle}) {
       }
     }
 
+    // Fenced code: its lines go in as they are, Markdown and all.
+    final fenceMark = RegExp(r'^\s{0,3}(`{3,}|~{3,})').firstMatch(line);
+    if (fence != null) {
+      if (fenceMark != null && fenceMark.group(1)!.startsWith(fence)) {
+        fence = null;
+      } else {
+        emit([{'insert': line}], null);
+      }
+      continue;
+    }
+    if (fenceMark != null) {
+      fence = fenceMark.group(1)!.substring(0, 3);
+      indents.clear();
+      continue;
+    }
+
+    if (line.trim().isEmpty) {
+      // A blank line between two items of one list (a "loose" list) isn't
+      // a break in it; any other run of blank lines is one empty line.
+      final next = lines.skip(i + 1).firstWhere((l) => l.trim().isNotEmpty,
+          orElse: () => '');
+      if (indents.isEmpty || !_isListItem(next)) {
+        blankPending = true;
+        indents.clear();
+      }
+      continue;
+    }
+
+    // A rule: nothing to show but the gap.
+    if (RegExp(r'^\s{0,3}([-*_])(\s*\1){2,}\s*$').hasMatch(line)) {
+      blankPending = true;
+      indents.clear();
+      continue;
+    }
+
+    // A table: one line per row, cells joined; the separator row goes.
+    if (RegExp(r'^\s*\|.*\|\s*$').hasMatch(line)) {
+      if (RegExp(r'^\s*\|[\s:|-]+\|\s*$').hasMatch(line)) continue;
+      final cells = line.trim().substring(1, line.trim().length - 1)
+          .split('|')
+          .map((c) => c.trim())
+          .toList();
+      final isHeader = i + 1 < lines.length &&
+          RegExp(r'^\s*\|[\s:|-]+\|\s*$').hasMatch(lines[i + 1]);
+      emit(
+          _inlineRuns(
+              cells.join('  ·  '), isHeader ? {'bold': true} : const {}),
+          null);
+      continue;
+    }
+
     Map<String, Object?>? lineAttr;
-    // Block-level prefixes.
-    final h1 = RegExp(r'^#\s+(.*)$').firstMatch(line);
-    final h2 = RegExp(r'^##\s+(.*)$').firstMatch(line);
-    final checked = RegExp(r'^\s*[-*]\s+\[[xX]\]\s+(.*)$').firstMatch(line);
-    final unchecked = RegExp(r'^\s*[-*]\s+\[ \]\s+(.*)$').firstMatch(line);
-    final bullet = RegExp(r'^\s*[-*]\s+(.*)$').firstMatch(line);
-    final ordered = RegExp(r'^\s*\d+\.\s+(.*)$').firstMatch(line);
-    final quote = RegExp(r'^>\s?(.*)$').firstMatch(line);
+    final heading =
+        RegExp(r'^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$').firstMatch(line);
+    final item = RegExp(r'^(\s*)([-*+]|\d+[.)])\s+(.*)$').firstMatch(line);
+    final quote = RegExp(r'^\s{0,3}>\s?(.*)$').firstMatch(line);
+    var runAttrs = const <String, Object?>{};
 
-    if (h2 != null) {
-      line = h2.group(1)!;
-      lineAttr = {'header': 2};
-    } else if (h1 != null) {
-      line = h1.group(1)!;
-      lineAttr = {'header': 1};
-    } else if (checked != null) {
-      line = checked.group(1)!;
-      lineAttr = {'list': 'checked'};
-    } else if (unchecked != null) {
-      line = unchecked.group(1)!;
-      lineAttr = {'list': 'unchecked'};
-    } else if (ordered != null) {
-      line = ordered.group(1)!;
-      lineAttr = {'list': 'ordered'};
-    } else if (bullet != null) {
-      line = bullet.group(1)!;
-      lineAttr = {'list': 'bullet'};
+    if (heading != null) {
+      indents.clear();
+      final level = heading.group(1)!.length;
+      line = heading.group(2)!;
+      if (level == 1) {
+        lineAttr = {'header': 1};
+      } else if (level <= 3) {
+        lineAttr = {'header': 2};
+      } else {
+        runAttrs = const {'bold': true};
+      }
+    } else if (item != null) {
+      final width = item.group(1)!.replaceAll('\t', '    ').length;
+      // Nesting follows the indentation, however many spaces a level is.
+      while (indents.isNotEmpty && width < indents.last) {
+        indents.removeLast();
+      }
+      if (indents.isEmpty || width > indents.last) indents.add(width);
+      final depth = (indents.length - 1).clamp(0, 4);
+      final marker = item.group(2)!;
+      var rest = item.group(3)!;
+      final box = RegExp(r'^\[([ xX])\]\s+(.*)$').firstMatch(rest);
+      String kind;
+      if (box != null && !RegExp(r'\d').hasMatch(marker)) {
+        kind = box.group(1) == ' ' ? 'unchecked' : 'checked';
+        rest = box.group(2)!;
+      } else {
+        kind = RegExp(r'\d').hasMatch(marker) ? 'ordered' : 'bullet';
+      }
+      line = rest;
+      lineAttr = {'list': kind, if (depth > 0) 'indent': depth};
     } else if (quote != null) {
-      line = quote.group(1)!;
+      indents.clear();
+      line = quote.group(1)!.replaceFirst(RegExp(r'^(>\s?)+'), '');
       lineAttr = {'blockquote': true};
+    } else {
+      indents.clear();
     }
 
-    for (final run in _inlineRuns(line)) {
-      ops.add(run);
-    }
-    ops.add(lineAttr == null
-        ? {'insert': '\n'}
-        : {'insert': '\n', 'attributes': lineAttr});
+    emit(_inlineRuns(line.trim(), runAttrs), lineAttr);
   }
   if (ops.isEmpty) ops.add({'insert': '\n'});
   return jsonEncode(ops);
 }
 
-/// Splits one line's inline Markdown (`**bold**`, `*italic*`, `~~strike~~`,
-/// `[text](url)`) into Quill insert ops.
-List<Map<String, Object?>> _inlineRuns(String line) {
+bool _isListItem(String line) =>
+    RegExp(r'^\s*([-*+]|\d+[.)])\s+\S').hasMatch(line);
+
+/// Whether pasted [text] is Markdown (as an AI chat's Copy button gives it)
+/// rather than plain words: a heading, a list, a quote or a fence, or bold,
+/// strikethrough, code or a link written out in Markdown.
+bool looksLikeMarkdown(String text) {
+  if (text.trim().isEmpty) return false;
+  final block = RegExp(
+      r'^\s{0,3}(#{1,6}\s+\S|[-*+]\s+\S|\d+[.)]\s+\S|>\s?\S|```|~~~)',
+      multiLine: true);
+  final inline = RegExp(r'\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|'
+      r'`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\)');
+  return block.hasMatch(text) || inline.hasMatch(text);
+}
+
+/// Splits one line's inline Markdown into Quill insert ops carrying [attrs]
+/// plus their own: `***both***`, `**bold**`/`__bold__`, `*italic*`,
+/// `~~strike~~`, `[text](url)` and `<url>` links. Code spans keep their text
+/// (a note has no code style) and nothing inside them is read; `\*` and its
+/// like are the character itself.
+List<Map<String, Object?>> _inlineRuns(String line,
+    [Map<String, Object?> attrs = const {}]) {
   final out = <Map<String, Object?>>[];
-  // Ordered so ** is tried before *.
-  final pattern = RegExp(
-      r'(\*\*(?<b>.+?)\*\*)|(\*(?<i>.+?)\*)|(~~(?<s>.+?)~~)|(\[(?<lt>[^\]]+)\]\((?<lu>[^)]+)\))');
+  void text(String s) {
+    if (s.isEmpty) return;
+    out.add(attrs.isEmpty ? {'insert': s} : {'insert': s, 'attributes': attrs});
+  }
+
+  final pattern = RegExp(r'(\\(?<esc>[\\`*_{}\[\]()#+\-.!~>|]))'
+      r'|(`(?<code>[^`]+)`)'
+      r'|(\*\*\*(?<bi>\S(?:.*?\S)?)\*\*\*)'
+      r'|(\*\*(?<b>\S(?:.*?\S)?)\*\*)'
+      r'|(__(?<b2>\S(?:.*?\S)?)__)'
+      r'|(\*(?<i>[^\s*](?:[^*]*?[^\s*])?)\*)'
+      r'|(~~(?<s>\S(?:.*?\S)?)~~)'
+      r'|(\[(?<lt>[^\]]+)\]\((?<lu>[^)\s]+)(?:\s+"[^"]*")?\))'
+      r'|(<(?<au>https?://[^>\s]+)>)');
   var idx = 0;
   for (final m in pattern.allMatches(line)) {
-    if (m.start > idx) {
-      out.add({'insert': line.substring(idx, m.start)});
-    }
-    if (m.namedGroup('b') != null) {
-      out.add({'insert': m.namedGroup('b'), 'attributes': {'bold': true}});
-    } else if (m.namedGroup('i') != null) {
-      out.add({'insert': m.namedGroup('i'), 'attributes': {'italic': true}});
-    } else if (m.namedGroup('s') != null) {
-      out.add({'insert': m.namedGroup('s'), 'attributes': {'strike': true}});
-    } else if (m.namedGroup('lt') != null) {
-      out.add({
-        'insert': m.namedGroup('lt'),
-        'attributes': {'link': m.namedGroup('lu')}
-      });
+    if (m.start > idx) text(line.substring(idx, m.start));
+    String? g(String name) => m.namedGroup(name);
+    if (g('esc') != null) {
+      text(g('esc')!);
+    } else if (g('code') != null) {
+      text(g('code')!);
+    } else if (g('bi') != null) {
+      out.addAll(
+          _inlineRuns(g('bi')!, {...attrs, 'bold': true, 'italic': true}));
+    } else if ((g('b') ?? g('b2')) != null) {
+      out.addAll(_inlineRuns((g('b') ?? g('b2'))!, {...attrs, 'bold': true}));
+    } else if (g('i') != null) {
+      out.addAll(_inlineRuns(g('i')!, {...attrs, 'italic': true}));
+    } else if (g('s') != null) {
+      out.addAll(_inlineRuns(g('s')!, {...attrs, 'strike': true}));
+    } else if (g('lt') != null) {
+      out.addAll(_inlineRuns(g('lt')!, {...attrs, 'link': g('lu')}));
+    } else if (g('au') != null) {
+      out.add({'insert': g('au'), 'attributes': {...attrs, 'link': g('au')}});
     }
     idx = m.end;
   }
-  if (idx < line.length) out.add({'insert': line.substring(idx)});
-  if (out.isEmpty) out.add({'insert': ''});
+  if (idx < line.length) text(line.substring(idx));
   return out;
 }
 

@@ -15,6 +15,7 @@ import '../screens/crop_screen.dart';
 import '../services/external_links.dart';
 import '../services/image_service.dart';
 import '../services/link_preview_service.dart';
+import '../services/note_markdown.dart';
 import '../services/storage_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -242,10 +243,48 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     } else {
       doc = Document()..insert(0, raw);
     }
-    return QuillController(
+    late final QuillController controller;
+    controller = QuillController(
       document: doc,
       selection: const TextSelection.collapsed(offset: 0),
+      // Quill marks its paste hooks experimental; a change there shows up as
+      // pasted Markdown arriving raw (note_paste_test catches it).
+      config: QuillControllerConfig(
+        // ignore: experimental_member_use
+        clipboardConfig: QuillClipboardConfig(
+          // ignore: experimental_member_use
+          onClipboardPaste: () => _pasteMarkdown(controller),
+        ),
+      ),
     );
+    return controller;
+  }
+
+  /// Pastes Markdown, which is what an AI chat's Copy button gives, formatted
+  /// the way it was meant to look: bold where it was bold, bullets as
+  /// bullets, headings as headings. Anything else (plain words, rich text
+  /// from a web page, a picture, formatting copied within Braim) is left to
+  /// the editor's own paste.
+  Future<bool> _pasteMarkdown(QuillController c) async {
+    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    if (text == null || !looksLikeMarkdown(text)) return false;
+    final ops = (jsonDecode(markdownToDeltaJson(text)) as List)
+        .cast<Map<String, dynamic>>()
+        .toList();
+    // A line pasted mid-sentence stays in that sentence: the plain line break
+    // ending the converted text goes. (A list item's carries its format, so
+    // it stays.)
+    if (ops.isNotEmpty &&
+        ops.last['insert'] == '\n' &&
+        ops.last['attributes'] == null) {
+      ops.removeLast();
+    }
+    if (ops.isEmpty || !mounted) return false;
+    final pasted = Delta.fromJson(ops);
+    final sel = c.selection;
+    c.replaceText(sel.start, sel.end - sel.start, pasted,
+        TextSelection.collapsed(offset: sel.start + pasted.length));
+    return true;
   }
 
   /// Back-fills a readable dark ink onto highlighted runs saved before the

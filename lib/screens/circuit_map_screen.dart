@@ -412,9 +412,12 @@ class _CircuitMapScreenState extends State<CircuitMapScreen>
     }
   }
 
+  /// A node's +: a new note under it, normal or Markdown as chosen in
+  /// Settings › Circuit preferences.
   Future<void> _addChild(String parentId) async {
     final state = context.read<AppState>();
-    final created = await state.addCircuitChild(parentId, noteTitle: _noteTitleFmt);
+    final created = await state.addCircuitChild(parentId,
+        markdown: state.circuitPlusMarkdown, noteTitle: _noteTitleFmt);
     if (!mounted) return;
     _focusOn(created.id, highlight: true);
   }
