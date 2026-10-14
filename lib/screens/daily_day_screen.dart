@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/l10n.dart';
 import '../models/impulse.dart';
 import '../services/notification_service.dart';
+import '../services/calendar_days.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass.dart';
@@ -378,10 +379,8 @@ class _TodayProgressRing extends StatelessWidget {
         for (var i = 0; i < history.length; i++)
           _miniBar(
             history[i],
-            label: letters[now
-                    .subtract(Duration(days: history.length - 1 - i))
-                    .weekday -
-                1],
+            label: letters[
+                addDays(now, i - (history.length - 1)).weekday - 1],
             isToday: i == history.length - 1,
           ),
         const Icon(Icons.chevron_right_rounded,

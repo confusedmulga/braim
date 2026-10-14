@@ -127,7 +127,10 @@ class _SharePopupScreenState extends State<SharePopupScreen> {
       } else {
         _bodyCtrl.text = parsed.caption;
       }
+      // Only folders in use: not archived ones, nor any in Recently Deleted.
       _spaces = data.spaces
+          .where((s) => !s.archived && s.deletedAt == null)
+          .toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       _loading = false;
     });

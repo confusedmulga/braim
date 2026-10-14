@@ -148,19 +148,38 @@ AppSnapshot snapshotFromAppData(AppData data) => AppSnapshot(
 
 /// rows -> [AppData]. Entities come from each row's `body`; settings from the
 /// decoded key/value map.
-AppData appDataFromSnapshot(AppSnapshot snap) {
+///
+/// A row that can't be read (a damaged body, or one a newer build wrote)
+/// throws, unless [onUnreadable] is given: then that row is left out and
+/// reported, and the rest of the library loads.
+AppData appDataFromSnapshot(
+  AppSnapshot snap, {
+  void Function(String table, String id)? onUnreadable,
+}) {
+  List<T> read<T>(String table, List<Map<String, Object?>> rows,
+      T Function(Map<String, dynamic>) fromJson) {
+    final out = <T>[];
+    for (final r in rows) {
+      try {
+        out.add(fromJson(_body(r)));
+      } catch (_) {
+        if (onUnreadable == null) rethrow;
+        onUnreadable(table, '${r['id']}');
+      }
+    }
+    return out;
+  }
+
   final settings = <String, dynamic>{
     for (final e in snap.settings.entries) e.key: jsonDecode(e.value),
   };
   return AppData.fromJson(
     settings,
-    notesOverride: [for (final r in snap.notes) Note.fromJson(_body(r))],
-    cardsOverride: [for (final r in snap.cards) TweetCard.fromJson(_body(r))],
-    booksOverride: [for (final r in snap.books) Book.fromJson(_body(r))],
-    impulsesOverride: [
-      for (final r in snap.impulses) Impulse.fromJson(_body(r))
-    ],
-    spacesOverride: [for (final r in snap.spaces) Space.fromJson(_body(r))],
+    notesOverride: read('notes', snap.notes, Note.fromJson),
+    cardsOverride: read('cards', snap.cards, TweetCard.fromJson),
+    booksOverride: read('books', snap.books, Book.fromJson),
+    impulsesOverride: read('impulses', snap.impulses, Impulse.fromJson),
+    spacesOverride: read('spaces', snap.spaces, Space.fromJson),
   );
 }
 

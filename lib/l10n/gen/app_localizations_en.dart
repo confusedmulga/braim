@@ -410,6 +410,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get unlockCrypt => 'Unlock Crypt';
 
   @override
+  String deletedFromCrypt(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count items from the Crypt',
+      one: '1 item from the Crypt',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get deletedFromCryptHint => 'Unlock to see them';
+
+  @override
   String get unlockFailed => 'Unlock failed';
 
   @override

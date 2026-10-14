@@ -12,6 +12,7 @@ import 'screens/pomodoro_screen.dart';
 import 'screens/root_shell.dart';
 import 'screens/share_popup.dart';
 import 'services/dnd_service.dart';
+import 'services/focus_media_service.dart';
 import 'services/notification_service.dart';
 import 'state/app_state.dart';
 import 'state/pomodoro_controller.dart';
@@ -98,8 +99,11 @@ Future<void> main() async {
   // launch), not here: setting up reads the time-zone database, which took
   // most of a second of every launch.
   NotificationService.onSelect = _onNotificationTap;
-  // If a focus session was killed with DND still on, turn it back off.
+  // If a focus session was killed with DND still on, turn it back off, and
+  // clear its notification: a new process starts with the timer idle.
   await DndService.instance.restoreIfLeftOn();
+  unawaited(DndService.instance.cancelScheduledEnd());
+  unawaited(FocusMediaService.instance.hide());
   // Draw behind the status bar and the gesture-nav pill, and turn off the
   // system's auto contrast scrim so no white/black band paints behind the pill.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);

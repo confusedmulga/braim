@@ -139,7 +139,9 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
   void setRounds(int v) => _configure(() => rounds = v.clamp(1, 8));
 
   void _configure(void Function() change) {
-    if (_started) return; // config is locked once a session is under way
+    // Config is locked once a session is under way; a finished one is over.
+    if (_started && !completed) return;
+    if (completed) _resetState();
     change();
     _pausedRemaining = phases.first.seconds;
     notifyListeners();
@@ -148,7 +150,10 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setDnd(DndMode mode) async {
     dnd = mode;
     notifyListeners();
-    if (running) await DndService.instance.apply(mode);
+    if (running) {
+      await DndService.instance.apply(mode);
+      _armEnd();
+    }
   }
 
   // ---- Control ------------------------------------------------------------
@@ -177,11 +182,19 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
     _startTicker();
     notifyListeners();
     await DndService.instance.apply(dnd);
+    _armEnd();
     _syncMedia();
   }
 
   Future<void> pause() async {
     if (!running) return;
+    // Away a while with no ticks (the app was frozen): catch up first, so the
+    // pause lands where the session really is. It may even have ended.
+    _reconcile();
+    if (!running) {
+      notifyListeners();
+      return;
+    }
     _pausedRemaining = remaining;
     running = false;
     _phaseEnd = null;
@@ -189,6 +202,7 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     // Paused = not focusing: drop the phone's DND; the media entry stays but
     // shows a paused (straight, non-wiggly) bar.
+    unawaited(DndService.instance.cancelScheduledEnd());
     await DndService.instance.restore();
     _syncMedia();
   }
@@ -197,6 +211,7 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
     _ticker?.cancel();
     _resetState();
     notifyListeners();
+    unawaited(DndService.instance.cancelScheduledEnd());
     await FocusMediaService.instance.hide();
     await DndService.instance.restore();
   }
@@ -215,6 +230,7 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
     if (!_started || completed) return;
     if (running) {
       _phaseEnd = DateTime.now().add(Duration(seconds: current.seconds));
+      _armEnd();
       _syncMedia();
     } else {
       _pausedRemaining = current.seconds;
@@ -233,6 +249,7 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
       _pausedRemaining = 0;
       _ticker?.cancel();
       FocusMediaService.instance.hide();
+      DndService.instance.cancelScheduledEnd();
       DndService.instance.restore();
       notifyListeners();
       return;
@@ -240,6 +257,7 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
     _index++;
     if (running) {
       _phaseEnd = DateTime.now().add(Duration(seconds: ph[_index].seconds));
+      _armEnd();
       _syncMedia();
     } else {
       _pausedRemaining = ph[_index].seconds;
@@ -280,6 +298,7 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
         _ticker?.cancel();
         HapticFeedback.mediumImpact();
         FocusMediaService.instance.hide();
+        DndService.instance.cancelScheduledEnd();
         DndService.instance.restore();
         break;
       }
@@ -287,6 +306,26 @@ class PomodoroController extends ChangeNotifier with WidgetsBindingObserver {
       _phaseEnd = _phaseEnd!.add(Duration(seconds: ph[_index].seconds));
     }
     return _index != startIndex || completed;
+  }
+
+  /// When the whole session ends, while it runs.
+  DateTime? get _sessionEnd {
+    final end = _phaseEnd;
+    if (!running || end == null) return null;
+    final ph = phases;
+    var after = 0;
+    for (var i = _index + 1; i < ph.length; i++) {
+      after += ph[i].seconds;
+    }
+    return end.add(Duration(seconds: after));
+  }
+
+  /// Arms the native end-of-session alarm, which puts the phone's DND back
+  /// and clears the notification even if the app is frozen by then: the
+  /// ticker here only runs while Android lets the app run.
+  void _armEnd() {
+    final at = _sessionEnd;
+    if (at != null) unawaited(DndService.instance.scheduleEnd(at));
   }
 
   // ---- Media notification -------------------------------------------------

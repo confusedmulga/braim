@@ -572,6 +572,13 @@ class Note {
         'updatedAt': updatedAt.toIso8601String(),
       };
 
+  /// A stored text size, kept to the editor's 0.8–1.6: a file from someone
+  /// else could hold anything (negative, zero, infinite).
+  static double _fontScale(Object? raw) {
+    final v = raw is num ? raw.toDouble() : 1.0;
+    return v.isFinite ? v.clamp(0.8, 1.6) : 1.0;
+  }
+
   factory Note.fromJson(Map<String, dynamic> json) => Note(
         id: json['id'] as String?,
         title: (json['title'] as String?) ?? '',
@@ -597,7 +604,7 @@ class Note {
         history: ((json['history'] as List?) ?? [])
             .map((e) => NoteSnapshot.fromJson(e as Map<String, dynamic>))
             .toList(),
-        fontScale: (json['fontScale'] as num?)?.toDouble() ?? 1.0,
+        fontScale: _fontScale(json['fontScale']),
         checkedToBottom: (json['checkedToBottom'] as bool?) ?? false,
         markdown: (json['markdown'] as bool?) ?? false,
         circuitId: json['circuitId'] as String?,

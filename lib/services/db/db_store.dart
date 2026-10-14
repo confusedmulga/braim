@@ -108,8 +108,9 @@ class DbStore {
     _baseline.clear();
     for (final (table, rows) in _tablesOf(snap)) {
       for (final row in rows) {
-        _baseline['$table:${row['id']}'] =
-            (table: table, body: row['body'] as String);
+        final key = '$table:${row['id']}';
+        if (_unreadable.contains(key)) continue;
+        _baseline[key] = (table: table, body: row['body'] as String);
       }
     }
     _baselineSettings = Map.of(snap.settings);
@@ -261,8 +262,18 @@ class DbStore {
   Future<AppData?> readAppData() async {
     final db = _db;
     if (db == null) return null;
-    return appDataFromSnapshot(await db.readSnapshot());
+    return appDataFromSnapshot(await db.readSnapshot(),
+        onUnreadable: (table, id) {
+      // Left in the DB exactly as it is, for a build that can read it: out
+      // of the baseline, a save never rewrites or deletes it.
+      final key = '$table:$id';
+      _unreadable.add(key);
+      _baseline.remove(key);
+    });
   }
+
+  /// Rows [readAppData] couldn't read ('table:id'), kept out of every sync.
+  final Set<String> _unreadable = {};
 
   Future<void> close() async {
     await _db?.close();

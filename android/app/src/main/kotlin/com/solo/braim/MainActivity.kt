@@ -25,7 +25,13 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // A file shared to Braim reaches the share plugin as a safe local copy
         // (see SharedFiles); set before super, which attaches the plugins.
-        intent = SharedFiles.safeCopy(this, intent)
+        // Reopened from Recents (or restored after Android ended the app), the
+        // activity gets the intent that first started it again: a share that
+        // was already saved would be saved twice, so it opens plainly instead.
+        val reopened = savedInstanceState != null ||
+            ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        intent = if (reopened) Intent(Intent.ACTION_MAIN)
+        else SharedFiles.safeCopy(this, intent)
         super.onCreate(savedInstanceState)
         // Draw behind the status and navigation bars from the first frame on
         // every Android version; Android 15+ enforces this anyway. Called after
@@ -136,6 +142,20 @@ class MainActivity : FlutterFragmentActivity() {
                         } else {
                             result.success(false)
                         }
+                    }
+                    // The focus session's end, armed natively (FocusReceiver).
+                    "scheduleEnd" -> {
+                        FocusReceiver.scheduleEnd(
+                            applicationContext,
+                            (call.argument<Number>("atMs") ?: 0).toLong(),
+                            call.argument<Int>("filter") ?: -1,
+                            call.argument<String>("marker") ?: "",
+                        )
+                        result.success(true)
+                    }
+                    "cancelEnd" -> {
+                        FocusReceiver.cancelEnd(applicationContext)
+                        result.success(true)
                     }
                     else -> result.notImplemented()
                 }

@@ -161,6 +161,13 @@
   "noFoldersYetCreate": "No folds yet, create one in Cortex.",
   "noFoldersYet": "No folds yet",
   "unlockCrypt": "Unlock Crypt",
+  "deletedFromCrypt": "{count, plural, =1{1 item from the Crypt} other{{count} items from the Crypt}}",
+  "@deletedFromCrypt": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "deletedFromCryptHint": "Unlock to see them",
   "unlockFailed": "Unlock failed",
   "newSpace": "New fold",
   "editSpace": "Edit fold",

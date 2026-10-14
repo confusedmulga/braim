@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
 import '../models/impulse.dart';
+import '../services/calendar_days.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/frosted_chrome.dart';
@@ -50,7 +51,7 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
         if (e == null) return 1;
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
-        return today.difference(e).inDays + 1;
+        return daysBetween(e, today) + 1;
     }
   }
 
@@ -72,7 +73,8 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
     final pct = scheduled == 0 ? 0 : (done / scheduled * 100).round();
     final missed = (scheduled - done).clamp(0, scheduled);
 
-    final currentStreak = state.activityStreak();
+    // Both for the chosen scope, counted the same way.
+    final currentStreak = _currentStreak(state, scope);
     final bestStreak = _bestStreak(state, scope);
 
     return FrostedScaffold(
@@ -119,6 +121,14 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
         ],
       ),
     );
+  }
+
+  int _currentStreak(AppState state, List<Impulse> scope) {
+    var current = 0;
+    for (final i in scope) {
+      current = math.max(current, state.streakFor(i).current);
+    }
+    return current;
   }
 
   int _bestStreak(AppState state, List<Impulse> scope) {
@@ -386,12 +396,12 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
       case _Range.week:
         return [
           for (var i = 6; i >= 0; i--)
-            _frac(state.scopeTallyOn(scope, today.subtract(Duration(days: i))))
+            _frac(state.scopeTallyOn(scope, addDays(today, -i)))
         ];
       case _Range.month:
         return [
           for (var i = 29; i >= 0; i--)
-            _frac(state.scopeTallyOn(scope, today.subtract(Duration(days: i))))
+            _frac(state.scopeTallyOn(scope, addDays(today, -i)))
         ];
       case _Range.year:
         return [
@@ -431,13 +441,13 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
       case _Range.week:
         return [
           for (var i = 6; i >= 0; i--)
-            DateFormat('E').format(today.subtract(Duration(days: i)))[0]
+            DateFormat('E').format(addDays(today, -i))[0]
         ];
       case _Range.month:
         return [
           for (var i = 29; i >= 0; i--)
             (i == 0 || i == 7 || i == 14 || i == 21 || i == 28)
-                ? DateFormat('d').format(today.subtract(Duration(days: i)))
+                ? DateFormat('d').format(addDays(today, -i))
                 : ''
         ];
       case _Range.year:
@@ -467,12 +477,12 @@ class _ImpulseAnalyticsScreenState extends State<ImpulseAnalyticsScreen> {
       case _Range.week:
         return [
           for (var i = 6; i >= 0; i--)
-            DateFormat('EEE').format(today.subtract(Duration(days: i)))
+            DateFormat('EEE').format(addDays(today, -i))
         ];
       case _Range.month:
         return [
           for (var i = 29; i >= 0; i--)
-            DateFormat('MMM d').format(today.subtract(Duration(days: i)))
+            DateFormat('MMM d').format(addDays(today, -i))
         ];
       case _Range.year:
         return [
@@ -793,20 +803,20 @@ class _AnalyticsHeatmapState extends State<_AnalyticsHeatmap> {
 
     var startDay = widget.scope.length == 1
         ? widget.scope.first.consistencyStart
-        : (state.earliestActivityDay() ?? today.subtract(const Duration(days: 27)));
+        : (state.earliestActivityDay() ?? addDays(today, -27));
     if (startDay.isAfter(today)) startDay = today;
     // Cap the span so a very old start doesn't build an enormous grid.
-    final earliestAllowed = today.subtract(const Duration(days: 365 * 2));
+    final earliestAllowed = addDays(today, -365 * 2);
     if (startDay.isBefore(earliestAllowed)) startDay = earliestAllowed;
 
-    final gridOrigin = startDay.subtract(Duration(days: startDay.weekday - 1));
-    final cols = (today.difference(gridOrigin).inDays / 7).floor() + 1;
+    final gridOrigin = mondayOf(startDay);
+    final cols = (daysBetween(gridOrigin, today) / 7).floor() + 1;
 
     if (!_didAutoScroll) {
       _didAutoScroll = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollCtrl.hasClients) return;
-        final col = (today.difference(gridOrigin).inDays / 7).floor();
+        final col = (daysBetween(gridOrigin, today) / 7).floor();
         final target =
             (col + 1) * _colW - _scrollCtrl.position.viewportDimension;
         _scrollCtrl
@@ -857,7 +867,7 @@ class _AnalyticsHeatmapState extends State<_AnalyticsHeatmap> {
                         Padding(
                           padding: EdgeInsets.only(bottom: d == 6 ? 0 : _gap),
                           child: _cell2(state,
-                              gridOrigin.add(Duration(days: w * 7 + d)),
+                              addDays(gridOrigin, w * 7 + d),
                               startDay, today),
                         ),
                     ],

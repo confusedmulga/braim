@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../l10n/l10n.dart';
 import '../models/impulse.dart';
 import '../models/note.dart';
+import '../services/calendar_days.dart';
 import '../services/journal_format.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -38,6 +39,10 @@ class JournalScreenState extends State<JournalScreen> {
   late DateTime _selected;
   late final PageController _weekCtrl;
 
+  /// The day this screen last took for today, to notice the date change.
+  late DateTime _today;
+  late final AppState _appState;
+
   /// Months away from the current month for the calendar sheet's pager.
   int _monthDelta = 0;
 
@@ -53,20 +58,34 @@ class JournalScreenState extends State<JournalScreen> {
   }
 
   /// Monday of the week containing [d] (the strip runs Mon..Sun).
-  static DateTime _mondayOf(DateTime d) =>
-      _dateOnly(d).subtract(Duration(days: d.weekday - 1));
+  static DateTime _mondayOf(DateTime d) => mondayOf(d);
 
   @override
   void initState() {
     super.initState();
-    _selected = _dateOnly(DateTime.now());
+    _today = _dateOnly(DateTime.now());
+    _selected = _today;
     _weekCtrl = PageController(initialPage: _basePage);
+    // The library notifies when the date changes (see AppState).
+    _appState = context.read<AppState>()..addListener(_onLibrary);
   }
 
   @override
   void dispose() {
+    _appState.removeListener(_onLibrary);
     _weekCtrl.dispose();
     super.dispose();
+  }
+
+  /// A new day while the journal stayed open: if it was on today, it moves on
+  /// with it, so new entries and ticks aren't filed on yesterday.
+  void _onLibrary() {
+    final today = _dateOnly(DateTime.now());
+    if (today == _today || !mounted) return;
+    setState(() {
+      if (_selected == _today) _selected = today;
+      _today = today;
+    });
   }
 
   /// Snaps the strip back to now and re-selects today (active-tab re-tap).
@@ -93,7 +112,7 @@ class JournalScreenState extends State<JournalScreen> {
           (day.year - today.year) * 12 + day.month - today.month;
     });
     if (_weekCtrl.hasClients) {
-      final weeks = _mondayOf(day).difference(_mondayOf(today)).inDays ~/ 7;
+      final weeks = daysBetween(_mondayOf(today), _mondayOf(day)) ~/ 7;
       _weekCtrl.animateToPage(
         _basePage + weeks,
         duration: const Duration(milliseconds: 280),
@@ -451,18 +470,18 @@ class _WeekStrip extends StatelessWidget {
         child: PageView.builder(
           controller: controller,
           itemBuilder: (context, page) {
-            final weekMonday = monday.add(
-                Duration(days: 7 * (page - JournalScreenState._basePage)));
+            final weekMonday = addDays(
+                monday, 7 * (page - JournalScreenState._basePage));
             return Row(
               children: [
                 for (var i = 0; i < 7; i++)
                   Expanded(
                     child: _DayCell(
-                      day: weekMonday.add(Duration(days: i)),
+                      day: addDays(weekMonday, i),
                       selected: selected,
                       today: today,
                       completion:
-                          _completionFor(pinned, weekMonday.add(Duration(days: i))),
+                          _completionFor(pinned, addDays(weekMonday, i)),
                       onSelect: onSelect,
                       onDoubleTap: onNewEntry,
                     ),

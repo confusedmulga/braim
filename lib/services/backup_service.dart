@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:path_provider/path_provider.dart';
@@ -41,6 +42,15 @@ class BackupService {
 
   String _base(String path) => path.split(RegExp(r'[\\/]')).last;
 
+  String _lastStamp = '';
+  int _stampRepeat = 1;
+
+  /// The most one backup entry may inflate to: data.json is read into memory,
+  /// and an image is a single photo. A crafted zip can declare a tiny size and
+  /// inflate to gigabytes, so the real length is counted (see [CappedOutput]).
+  static const maxDataBytes = 128 * 1024 * 1024;
+  static const maxImageBytes = 256 * 1024 * 1024;
+
   /// Streams a backup zip (data.json + images/) to a temporary file, one
   /// source file at a time — a large image library never sits in RAM at once.
   /// [onProgress] reports (filesDone, filesTotal).
@@ -50,8 +60,17 @@ class BackupService {
     String two(int n) => n.toString().padLeft(2, '0');
     final stamp =
         '${now.year}${two(now.month)}${two(now.day)}-${two(now.hour)}${two(now.minute)}';
+    // Two backups in one minute (an auto-backup and an export, say) must not
+    // share a temp file: one would truncate the zip the other is writing.
+    var name = 'braim-backup-$stamp';
+    if (stamp == _lastStamp) {
+      name += '-${++_stampRepeat}';
+    } else {
+      _lastStamp = stamp;
+      _stampRepeat = 1;
+    }
     final tmp = await getTemporaryDirectory();
-    final out = File('${tmp.path}/braim-backup-$stamp.zip');
+    final out = File('${tmp.path}/$name.zip');
 
     final dataFile = await _dataFile();
     final imagesDir = await _imagesDir();
@@ -206,23 +225,59 @@ class BackupService {
 
   /// Restores from a backup zip: extracts images, rewrites their paths to this
   /// device's images folder, and replaces the data file.
-  Future<void> restoreFromZipBytes(List<int> zipBytes) async {
-    final archive = ZipDecoder().decodeBytes(zipBytes);
+  Future<void> restoreFromZipBytes(List<int> zipBytes) =>
+      _restore(readZipEntries(InputMemoryStream(zipBytes)));
+
+  /// Restores from a backup zip on disk. The zip is read as a stream and each
+  /// image is inflated straight into its file, so a large backup never sits in
+  /// memory whole.
+  Future<void> restoreFromFile(String path) async {
+    final input = InputFileStream(path);
+    try {
+      await _restore(readZipEntries(input));
+    } finally {
+      await input.close();
+    }
+  }
+
+  Future<void> _restore(Archive archive) async {
     final imagesDir = await _imagesDir();
 
     String? dataJson;
     for (final f in archive) {
       if (!f.isFile) continue;
       if (f.name == 'data.json') {
-        dataJson = utf8.decode(f.content as List<int>);
+        final out = BytesBuilder(copy: false);
+        try {
+          inflateEntry(f, maxDataBytes, out.add);
+        } on EntryTooLarge {
+          throw const FormatException(
+              'Not a valid Braim backup (data too large).');
+        }
+        dataJson = utf8.decode(out.takeBytes());
       } else {
         // An image goes in only under a plain file name: a backup can come
         // from someone else, and a crafted entry name must never write
         // outside the images folder.
         final base = safeEntryFileName(f.name, folder: 'images/');
         if (base == null) continue;
-        await File('${imagesDir.path}/$base')
-            .writeAsBytes(f.content as List<int>);
+        final target = '${imagesDir.path}/$base';
+        // Inflated straight into the file, a chunk at a time.
+        final out = File(target).openSync(mode: FileMode.write);
+        var tooLarge = false;
+        try {
+          inflateEntry(f, maxImageBytes, out.writeFromSync);
+        } on EntryTooLarge {
+          tooLarge = true;
+        } finally {
+          out.closeSync();
+        }
+        // Not a photo this app made: leave nothing half-written behind.
+        if (tooLarge) {
+          try {
+            await File(target).delete();
+          } catch (_) {}
+        }
       }
     }
 
@@ -232,17 +287,17 @@ class BackupService {
 
     final map = jsonDecode(dataJson) as Map<String, dynamic>;
     _rewritePaths(map, imagesDir.path);
+    final restored = AppData.fromJson(map);
+    // The DB still holds the library being replaced. Until the app folds the
+    // restored JSON into it, the JSON is the newer copy: say so on disk, so a
+    // crash before that happens can't bring the old library back.
+    await StorageService.instance.markJsonAhead();
     // Land it through the normal atomic save (temp file, flush, rename) so a
     // crash mid-restore can never leave a torn data file behind; the library
     // being replaced rotates into .bak as usual. Parsing it first also means a
     // malformed backup fails here, loudly, instead of after it overwrote the
     // store.
-    await StorageService.instance.save(AppData.fromJson(map));
-  }
-
-  Future<void> restoreFromFile(String path) async {
-    final bytes = await File(path).readAsBytes();
-    await restoreFromZipBytes(bytes);
+    await StorageService.instance.save(restored);
   }
 
   /// Points every stored image path at this device's images folder using the
@@ -268,7 +323,26 @@ class BackupService {
     }
 
     for (final n in (map['notes'] as List? ?? [])) {
-      if (n is Map) fixBlocks(n['blocks'] as List?);
+      if (n is! Map) continue;
+      fixBlocks(n['blocks'] as List?);
+      // A chapter's saved versions keep their own image blocks.
+      for (final h in (n['history'] as List? ?? [])) {
+        if (h is Map) fixBlocks(h['blocks'] as List?);
+      }
+    }
+    for (final b in (map['books'] as List? ?? [])) {
+      if (b is Map && b['coverPath'] is String) {
+        final v = b['coverPath'] as String;
+        if (v.isNotEmpty) b['coverPath'] = fix(v);
+      }
+    }
+    for (final key in const [
+      'feedBackgroundPath',
+      'feedBackgroundLight',
+      'feedBackgroundDark',
+    ]) {
+      final v = map[key];
+      if (v is String && v.isNotEmpty) map[key] = fix(v);
     }
     for (final s in (map['spaces'] as List? ?? [])) {
       if (s is Map && s['thumbnailPath'] is String) {

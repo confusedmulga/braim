@@ -213,6 +213,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   }
 
   void _startEditing() {
+    // Deleted meanwhile (on Braim Web, say): don't write into the trash.
+    final live = _appState.noteById(_note.id);
+    if (live != null ? live.deletedAt != null : !widget.isNew || _persisted) {
+      Navigator.of(context).pop();
+      return;
+    }
     if (!_takeLease()) return;
     _closeFind();
     // A browser may have changed the note while it was being read here.
@@ -401,8 +407,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                     },
                   ),
                 // A branch inherits archive from its first note, so it has no
-                // Archive control of its own.
-                if (!widget.isNew && !_isJournal && !_note.isCircuitNode)
+                // Archive control of its own. Nor does a Crypt note (the
+                // Archive never shows them), unless it is already archived.
+                if (!widget.isNew &&
+                    !_isJournal &&
+                    !_note.isCircuitNode &&
+                    (_note.spaceId != kCryptSpaceId || _note.archived))
                   _menuTile(
                     sheetCtx,
                     _note.archived
@@ -410,7 +420,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
                         : Icons.archive_outlined,
                     _note.archived ? context.t.unarchive : context.t.archive,
                     () {
-                      _note.archived = !_note.archived;
+                      // Reading, _close saves nothing: archive through the
+                      // library so the change is stored.
+                      if (_readOnly) {
+                        state.setNoteArchived(_note.id, !_note.archived);
+                      } else {
+                        _note.archived = !_note.archived;
+                      }
                       _close();
                     },
                   ),
@@ -479,6 +495,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
   /// persisted (and synced when signed in) — an open note updates on other
   /// devices mid-writing, Keep-style, and nothing is lost if the app dies.
   Timer? _autosave;
+  late final AppLifecycleListener _lifecycle;
   String _savedFingerprint = '';
 
   String _fingerprint() => jsonEncode([
@@ -535,6 +552,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     }
     _autosave = Timer.periodic(
         const Duration(seconds: 3), (_) => _autosaveTick());
+    // Sent to the background, where Android may end the app: save now rather
+    // than at the next tick.
+    _lifecycle = AppLifecycleListener(onHide: _autosaveTick);
     // Snapshot a book chapter's pre-edit state when a writing session opens,
     // so a heavy revise stays reversible (throttled inside AppState).
     if (_note.isManuscriptPage && !widget.isNew) {
@@ -580,6 +600,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     final route = _route;
     if (route != null) OpenNoteScreens.unregister(_note.id, route);
     _autosave?.cancel();
+    _lifecycle.dispose();
     // A pending delayed save hands the lease back itself, once it has saved.
     if (!_saveReleasesLease) _releaseLease();
     _expand.dispose();
@@ -639,7 +660,13 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
         }
         // Emptied out: drop it, including a note this session created and
         // already wrote (autosave or an article Save).
-        if (!widget.isNew || _persisted) await state.deleteNote(_note.id);
+        if (!widget.isNew || _persisted) {
+          await state.deleteNote(_note.id);
+        } else if (state.noteById(_note.id) != null) {
+          // A new note the library already holds (a book's workshop note is
+          // added before it opens) and nothing was written into: remove it.
+          await state.permanentlyDeleteNote(_note.id);
+        }
         return;
       }
       await state.upsertNote(_note);
@@ -750,7 +777,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen>
     // Persist now so the reminder survives even before the next autosave.
     _persisted = true;
     context.read<AppState>().upsertNote(_note);
-    await NotificationService.instance.syncNote(_note);
+    await NotificationService.instance.syncNote(_note,
+        private: _note.spaceId == kCryptSpaceId);
     if (at != null && mounted) {
       await showReminderHint(context, notificationsAllowed: granted);
     }

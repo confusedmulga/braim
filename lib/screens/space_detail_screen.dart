@@ -81,6 +81,8 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
           ? () => confirmAndDeleteCircuitNote(context, note)
           : null,
       allowCrypt: !note.inCircuit,
+      // The Archive never shows Crypt items: archiving one would hide it.
+      allowArchive: note.spaceId != kCryptSpaceId,
     );
   }
 
@@ -95,6 +97,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       onSetArchived: (a) => state.setCardArchived(card.id, a),
       onMove: (spaceId) => state.moveCardToSpace(card.id, spaceId),
       onDelete: () => state.deleteCard(card.id),
+      allowArchive: card.spaceId != kCryptSpaceId,
     );
   }
 
@@ -110,6 +113,12 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
     }
     var notes = state.notesForSpace(spaceId);
     var cards = state.cardsForSpace(spaceId);
+    // The tag picked in this folder's sort sheet narrows its notes too. Not
+    // in the Crypt: its tags are never offered, so it would only empty it.
+    final tag = spaceId == kCryptSpaceId ? null : state.activeTag;
+    if (tag != null) {
+      notes = notes.where((n) => n.tags.contains(tag)).toList();
+    }
     final q = _query.trim().toLowerCase();
     if (q.isNotEmpty) {
       notes = notes
@@ -221,6 +230,27 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
             ),
           ),
         ),
+      // The tag filter (shared with Home), shown as Home shows it.
+      if (tag != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: InputChip(
+              avatar: Icon(Icons.label_rounded,
+                  size: 16, color: AppPalette.scheme.onSecondaryContainer),
+              label: Text('#$tag'),
+              backgroundColor: AppPalette.scheme.secondaryContainer,
+              labelStyle: TextStyle(
+                  color: AppPalette.scheme.onSecondaryContainer,
+                  fontWeight: FontWeight.w600),
+              deleteIcon: Icon(Icons.close_rounded,
+                  size: 18, color: AppPalette.scheme.onSecondaryContainer),
+              onDeleted: () => state.setActiveTag(null),
+              onPressed: () => state.setActiveTag(null),
+            ),
+          ),
+        ),
       if (q.isNotEmpty && notes.isEmpty && cards.isEmpty)
         Padding(
           padding: const EdgeInsets.fromLTRB(6, 26, 6, 0),
@@ -257,7 +287,9 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
 
     // While searching, the sections always render (they hold the search bar
     // and the no-matches note), so the empty-folder placeholder stays out.
-    final isEmpty = !_searching && notes.isEmpty && cards.isEmpty;
+    // Emptied by the tag filter, it still shows the chip that clears it.
+    final isEmpty =
+        !_searching && notes.isEmpty && cards.isEmpty && tag == null;
     final cover = space.thumbnailPath;
     final hasCover = cover != null && cover.isNotEmpty;
     final searchButton = FrostedCircleButton(

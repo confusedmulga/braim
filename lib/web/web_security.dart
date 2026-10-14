@@ -51,7 +51,21 @@ bool isLoopbackIPv4(InternetAddress a) =>
 
 /// Whether [a] is a private or loopback IPv4 address: 10.0.0.0/8,
 /// 172.16.0.0/12, 192.168.0.0/16 or 127.0.0.0/8. Everything else, IPv6
-/// included, is refused; that keeps out the mobile-data interface.
+/// included, is refused. A carrier can give mobile data a 10.x address too,
+/// so the interface itself is checked as well (see [isCellularInterface]).
+/// Whether a network interface named [name] is the phone's mobile data
+/// rather than Wi-Fi or its hotspot. Android names these after the modem
+/// driver: rmnet (Qualcomm), ccmni (MediaTek), and the like; clat is the
+/// IPv4 tunnel over an IPv6-only mobile network.
+bool isCellularInterface(String name) {
+  final n = name.toLowerCase();
+  const prefixes = [
+    'rmnet', 'v4-rmnet', 'ccmni', 'v4-ccmni', 'pdp', 'wwan', 'clat',
+    'v4-wwan', 'seth_lte', 'rev_rmnet',
+  ];
+  return prefixes.any(n.startsWith);
+}
+
 bool isPrivateIPv4(InternetAddress a) {
   if (a.type != InternetAddressType.IPv4) return false;
   final b = a.rawAddress;

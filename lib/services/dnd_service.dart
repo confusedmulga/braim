@@ -32,7 +32,12 @@ class DndService {
   static const int _priority = 2;
   static const int _none = 3;
 
-  bool get _supported => !kIsWeb && Platform.isAndroid;
+  /// Lets tests run the Android path off a device.
+  @visibleForTesting
+  static bool? debugSupportedOverride;
+
+  bool get _supported =>
+      debugSupportedOverride ?? (!kIsWeb && Platform.isAndroid);
 
   Future<bool> hasAccess() async {
     if (!_supported) return false;
@@ -61,34 +66,80 @@ class DndService {
     }
   }
 
-  /// Applies [mode] and drops a marker so a killed session's DND is restored on
-  /// next launch. [DndMode.off] just restores.
+  Future<int?> _getFilter() async {
+    try {
+      final f = await _ch.invokeMethod<int>('getFilter');
+      return f == null || f < 1 ? null : f;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Applies [mode]. The first time in a session, the phone's own filter is
+  /// written to a marker file, so a killed session's DND is undone on next
+  /// launch and ending one puts back exactly what was on before. [DndMode.off]
+  /// leaves the phone alone, undoing only what an earlier mode set.
   Future<void> apply(DndMode mode) async {
     if (mode == DndMode.off) {
       await restore();
       return;
     }
+    final before = await savedFilter();
+    final previous = before ?? await _getFilter() ?? _all;
     final ok =
         await _setFilter(mode == DndMode.silence ? _none : _priority);
-    if (ok) await _writeMarker();
+    if (ok && before == null) await _writeMarker(previous);
   }
 
-  /// Turns DND back to normal and clears the marker.
+  /// Puts back the filter that was on before the timer changed it, if it did.
   Future<void> restore() async {
-    await _setFilter(_all);
+    final previous = await savedFilter();
+    if (previous == null) return; // the timer didn't touch it
+    await _setFilter(previous);
     await _clearMarker();
   }
 
   /// Called at startup: if a previous run left DND on (the app was killed
-  /// mid-session), turn it back off so the phone isn't stuck muted.
+  /// mid-session), turn it back to what it was so the phone isn't stuck muted.
   Future<void> restoreIfLeftOn() async {
     if (!_supported) return;
+    await restore();
+  }
+
+  /// The filter to put back when the session ends, or null when the timer
+  /// hasn't changed the phone's DND.
+  Future<int?> savedFilter() async {
+    if (!_supported) return null;
     try {
       final marker = await _markerFile();
-      if (await marker.exists()) {
-        await _setFilter(_all);
-        await marker.delete();
-      }
+      if (!await marker.exists()) return null;
+      final v = int.tryParse((await marker.readAsString()).trim());
+      // An older marker held just "1": it means "turn DND off" (all).
+      return v == null || v < 1 || v > 4 ? _all : v;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Arms an Android alarm for [at], the end of the session: it puts back the
+  /// saved filter and clears the timer's notification even if Braim is frozen
+  /// or killed in the background by then, so the phone is never left muted.
+  Future<void> scheduleEnd(DateTime at) async {
+    if (!_supported) return;
+    try {
+      await _ch.invokeMethod('scheduleEnd', {
+        'atMs': at.millisecondsSinceEpoch,
+        'filter': await savedFilter() ?? -1,
+        'marker': (await _markerFile()).path,
+      });
+    } catch (_) {}
+  }
+
+  /// Disarms [scheduleEnd] (paused, reset or ended in the app).
+  Future<void> cancelScheduledEnd() async {
+    if (!_supported) return;
+    try {
+      await _ch.invokeMethod('cancelEnd');
     } catch (_) {}
   }
 
@@ -97,9 +148,9 @@ class DndService {
     return File('${dir.path}/focus_dnd.on');
   }
 
-  Future<void> _writeMarker() async {
+  Future<void> _writeMarker(int previous) async {
     try {
-      await (await _markerFile()).writeAsString('1', flush: true);
+      await (await _markerFile()).writeAsString('$previous', flush: true);
     } catch (_) {}
   }
 

@@ -83,15 +83,11 @@
                 <data android:pathPattern=".*\\..*\\..*\\..*\\.braim" />
             </intent-filter>
         </activity>
-        <!-- Routes the focus media notification's play/pause button to the
-             MediaSession. -->
+        <!-- The focus notification's play/pause button and the alarm that
+             ends a focus session's Do Not Disturb. Only this app reaches it. -->
         <receiver
-            android:name="androidx.media.session.MediaButtonReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-            </intent-filter>
-        </receiver>
+            android:name=".FocusReceiver"
+            android:exported="false" />
         <!-- Translucent popup for shared links: shows a tiny folder picker over
              the sharing app (Pinterest-style) instead of opening the full app. -->
         <activity

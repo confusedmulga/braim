@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
+import '../services/calendar_days.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/frosted_chrome.dart';
@@ -427,9 +428,9 @@ class _YearHeatmap extends StatelessWidget {
   Widget build(BuildContext context) {
     final first = DateTime(year, 1, 1);
     // Monday on or before Jan 1 — the top-left of the grid.
-    final firstMonday = first.subtract(Duration(days: first.weekday - 1));
+    final firstMonday = mondayOf(first);
     final last = DateTime(year, 12, 31);
-    final cols = (last.difference(firstMonday).inDays ~/ 7) + 1;
+    final cols = (daysBetween(firstMonday, last) ~/ 7) + 1;
     const gap = 2.5;
 
     return GlassPanel(
@@ -486,7 +487,7 @@ class _YearHeatmap extends StatelessWidget {
                       children: [
                         for (var col = 0; col < cols; col++) ...[
                           if (col > 0) const SizedBox(width: gap),
-                          _cell(firstMonday.add(Duration(days: col * 7 + r)),
+                          _cell(addDays(firstMonday, col * 7 + r),
                               cell),
                         ],
                       ],

@@ -808,6 +808,18 @@ abstract class AppLocalizations {
   /// **'Unlock Crypt'**
   String get unlockCrypt;
 
+  /// No description provided for @deletedFromCrypt.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 item from the Crypt} other{{count} items from the Crypt}}'**
+  String deletedFromCrypt(int count);
+
+  /// No description provided for @deletedFromCryptHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock to see them'**
+  String get deletedFromCryptHint;
+
   /// No description provided for @unlockFailed.
   ///
   /// In en, this message translates to:

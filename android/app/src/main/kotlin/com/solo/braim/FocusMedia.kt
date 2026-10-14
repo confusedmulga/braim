@@ -12,7 +12,6 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
-import androidx.media.session.MediaButtonReceiver
 
 /// A real MediaSession-backed notification for the Pomodoro focus timer. Because
 /// it carries a PlaybackState with position + duration, Android renders the
@@ -26,9 +25,26 @@ class FocusMedia(private val context: Context) {
     /// tapped, so Flutter can toggle the timer.
     var onAction: ((String) -> Unit)? = null
 
+    /// Whether the last notification shown was for a running timer.
+    private var playing = false
+
     companion object {
         private const val CHANNEL_ID = "braim_focus"
-        private const val NOTIF_ID = 900001
+        const val NOTIF_ID = 900001
+
+        /// The live instance, for [FocusReceiver]; null when the app's engine
+        /// isn't running.
+        @Volatile
+        var current: FocusMedia? = null
+    }
+
+    init {
+        current = this
+    }
+
+    /// The notification's play/pause button (see [FocusReceiver]).
+    fun toggle() {
+        onAction?.invoke(if (playing) "pause" else "play")
     }
 
     private fun notificationManager(): NotificationManager =
@@ -110,6 +126,7 @@ class FocusMedia(private val context: Context) {
     ) {
         ensureChannel()
         val s = ensureSession()
+        this.playing = playing
 
         val meta = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
@@ -144,9 +161,7 @@ class FocusMedia(private val context: Context) {
         val toggle = NotificationCompat.Action(
             if (playing) R.drawable.ic_pomo_pause else R.drawable.ic_pomo_play,
             if (playing) "Pause" else "Play",
-            MediaButtonReceiver.buildMediaButtonPendingIntent(
-                context, PlaybackStateCompat.ACTION_PLAY_PAUSE
-            )
+            FocusReceiver.togglePendingIntent(context)
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)

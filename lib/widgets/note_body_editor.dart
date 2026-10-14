@@ -41,6 +41,65 @@ typedef EditorMatch = ({String blockId, TextRange range});
 /// place; call [NoteBodyEditorState.sync] before persisting. The [activeController]
 /// notifier is shared with a [NoteFormatBar] so the toolbar targets the focused
 /// line.
+/// Joins two block deltas end to end, [b]'s first line continuing [a]'s last
+/// (a line merge, as when the photo between two blocks is removed or Backspace
+/// is pressed at the start of the lower one).
+///
+/// An empty side adds nothing, so the other is kept exactly, line kinds and
+/// all: a checklist item above a removed photo stays one. Otherwise the joined
+/// line takes the upper line's kind, as the editor itself does within a block.
+@visibleForTesting
+Delta joinBlockDeltas(Delta a, Delta b) {
+  bool blank(Delta d) => d.toList().every(
+      (op) => op.data is String && (op.data as String).trim().isEmpty);
+  Delta ending(Delta d) {
+    final ops = d.toList();
+    if (ops.isEmpty) return Delta()..insert('\n');
+    final last = ops.last.data;
+    if (last is String && last.endsWith('\n')) return d;
+    return d..insert('\n');
+  }
+
+  if (blank(b)) return ending(a);
+  if (blank(a)) return ending(b);
+
+  final out = Delta();
+  final aOps = a.toList();
+  // The upper line's kind (checklist, heading...) rides on its newline.
+  Map<String, dynamic>? upperLine;
+  for (var i = 0; i < aOps.length; i++) {
+    final op = aOps[i];
+    final data = op.data;
+    if (i == aOps.length - 1 && data is String && data.endsWith('\n')) {
+      final trimmed = data.substring(0, data.length - 1);
+      if (trimmed.isNotEmpty) {
+        out.insert(trimmed, op.attributes);
+      } else {
+        upperLine = op.attributes;
+      }
+    } else {
+      out.insert(op.data, op.attributes);
+    }
+  }
+  var joined = false;
+  for (final op in b.toList()) {
+    final data = op.data;
+    if (!joined && data is String && data.contains('\n')) {
+      // The first newline below ends the joined line: give it the upper
+      // line's kind.
+      joined = true;
+      final at = data.indexOf('\n');
+      if (at > 0) out.insert(data.substring(0, at), op.attributes);
+      out.insert('\n', upperLine);
+      final rest = data.substring(at + 1);
+      if (rest.isNotEmpty) out.insert(rest, op.attributes);
+    } else {
+      out.insert(op.data, op.attributes);
+    }
+  }
+  return ending(out);
+}
+
 class NoteBodyEditor extends StatefulWidget {
   const NoteBodyEditor({
     super.key,
@@ -644,41 +703,13 @@ class NoteBodyEditorState extends State<NoteBodyEditor> {
     return true;
   }
 
-  /// Quill documents must end with a newline insert.
-  Delta _normalized(Delta d) {
-    final ops = d.toList();
-    if (ops.isEmpty) return Delta()..insert('\n');
-    final last = ops.last.data;
-    if (last is String && last.endsWith('\n')) return d;
-    return d..insert('\n');
-  }
-
   bool _isTextBlockEmpty(NoteBlock b) {
     final c = _quillCtrls[b.id];
     if (c != null) return c.document.toPlainText().trim().isEmpty;
     return b.text.trim().isEmpty;
   }
 
-  /// Joins two block deltas end-to-end, dropping [a]'s single terminating
-  /// newline so [b]'s content continues [a]'s last line — a line merge.
-  Delta _concatDeltas(Delta a, Delta b) {
-    final out = Delta();
-    final aOps = a.toList();
-    for (var i = 0; i < aOps.length; i++) {
-      final op = aOps[i];
-      final data = op.data;
-      if (i == aOps.length - 1 && data is String && data.endsWith('\n')) {
-        final trimmed = data.substring(0, data.length - 1);
-        if (trimmed.isNotEmpty) out.insert(trimmed, op.attributes);
-      } else {
-        out.insert(op.data, op.attributes);
-      }
-    }
-    for (final op in b.toList()) {
-      out.insert(op.data, op.attributes);
-    }
-    return _normalized(out);
-  }
+  Delta _concatDeltas(Delta a, Delta b) => joinBlockDeltas(a, b);
 
   /// Merges the text block at [curIdx] into the text block just before it,
   /// preserving both sides' formatting. Rebuilds the previous block from the

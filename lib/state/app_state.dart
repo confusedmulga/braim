@@ -14,6 +14,7 @@ import '../models/space.dart';
 import '../models/tweet_card.dart';
 import '../services/backup_service.dart';
 import '../services/book_text_ops.dart';
+import '../services/calendar_days.dart';
 import '../services/circuit_file.dart';
 import '../services/external_links.dart';
 import '../services/link_preview_service.dart';
@@ -170,7 +171,14 @@ class AppState extends ChangeNotifier {
   /// The tag the Home feed is filtered to, or null for everything. A transient
   /// view filter (not persisted) set from the sort sheet or the side pane.
   String? _activeTag;
-  String? get activeTag => _activeTag;
+  ///
+  /// A tag no note carries any more (its last note deleted, archived or
+  /// untagged) counts as no filter, rather than leaving an empty feed with
+  /// nothing to clear it.
+  String? get activeTag {
+    final tag = _activeTag;
+    return tag != null && allTags.contains(tag) ? tag : null;
+  }
 
   void setActiveTag(String? tag) {
     if (_activeTag == tag) return;
@@ -404,8 +412,20 @@ class AppState extends ChangeNotifier {
   /// carries the whole image library, so it's built only when actually due). A
   /// failure is swallowed and retried on the next pause.
   Future<void> maybeBackupOnPause() async {
-    if (!_localAutoBackupDue()) return;
+    // A second pause while a large zip is still being built would start
+    // another one: let the first finish.
+    if (_localBackupRunning || !_localAutoBackupDue()) return;
+    _localBackupRunning = true;
+    try {
+      await _backUpNow();
+    } finally {
+      _localBackupRunning = false;
+    }
+  }
 
+  bool _localBackupRunning = false;
+
+  Future<void> _backUpNow() async {
     await flushNow();
     final File zip;
     try {
@@ -487,12 +507,17 @@ class AppState extends ChangeNotifier {
     final jsonAhead = restored || await _storage.jsonAhead;
 
     // Pick this launch's source of truth.
-    final AppData data;
+    AppData? fromDb;
     if (!jsonAhead && DbStore.readFromDb && _dbStore.usableForReads) {
-      data = (await _dbStore.readAppData()) ?? await loadLegacy();
-    } else {
-      data = await loadLegacy();
+      try {
+        fromDb = await _dbStore.readAppData();
+      } catch (_) {
+        // A damaged row: run on the JSON this launch, saving to it (flagged
+        // as newer) so the next launch folds everything back into the DB.
+        _dbReadFailed = true;
+      }
     }
+    final AppData data = fromDb ?? await loadLegacy();
 
     await _applyData(data);
 
@@ -513,6 +538,11 @@ class AppState extends ChangeNotifier {
       if (synced) {
         await _storage.clearJsonAhead();
         _jsonAheadMarked = false;
+      } else {
+        // The DB still lacks it: keep the JSON as the newer copy, and keep
+        // writing it on every save until a launch folds it in.
+        await _storage.markJsonAhead();
+        _jsonAheadMarked = true;
       }
     }
 
@@ -534,7 +564,35 @@ class AppState extends ChangeNotifier {
   /// note objects out from under any open editor.
   Future<void> resume() async {
     if (!_loaded) return;
+    _checkNewDay();
     await _importSharedInbox();
+  }
+
+  /// Today's key as of the last look, so a new day can be noticed.
+  String _seenDay = '';
+  Timer? _midnight;
+
+  /// Wakes the screens when the date changes. Whatever read "today" when it
+  /// was built (the journal's selected day, the reflex lists) must move on to
+  /// the new day instead of filing ticks and entries on yesterday. Checked at
+  /// midnight while the app runs, and on resume after time in the background.
+  void _watchForNewDay() {
+    _seenDay = todayKey;
+    _midnight?.cancel();
+    final now = DateTime.now();
+    final next = DateTime(now.year, now.month, now.day + 1);
+    _midnight = Timer(
+        next.difference(now) + const Duration(seconds: 1), _checkNewDay);
+  }
+
+  void _checkNewDay() {
+    if (_disposed) return;
+    final changed = todayKey != _seenDay;
+    _watchForNewDay();
+    if (changed) {
+      _viewRev++;
+      notifyListeners();
+    }
   }
 
   /// Ranked full-text hits (best first) for [query] from the SQLite index, or
@@ -618,6 +676,7 @@ class AppState extends ChangeNotifier {
     await _repairCircuits();
     await _importSharedInbox();
     _loaded = true;
+    _watchForNewDay();
     notifyListeners();
     // Re-arm reminders once the app is up, not during the launch: the first
     // one reads the time-zone database, most of a second on a slow phone.
@@ -1006,7 +1065,7 @@ class AppState extends ChangeNotifier {
     if (_notesRev != _rev ||
         _notesViewRev != _viewRev ||
         _notesCache == null) {
-      _notesCache = _feedNotes(_activeTag);
+      _notesCache = _feedNotes(activeTag);
       _notesRev = _rev;
       _notesViewRev = _viewRev;
     }
@@ -1061,8 +1120,13 @@ class AppState extends ChangeNotifier {
       _spaces.where((s) => s.deletedAt != null).toList()
         ..sort((a, b) => b.deletedAt!.compareTo(a.deletedAt!));
 
+  /// A folder's notes. The Crypt also lists its archived ones: the Archive
+  /// screen never shows Crypt items, so there they would be lost from sight.
   List<Note> notesForSpace(String spaceId) => _notes
-      .where((n) => n.spaceId == spaceId && !n.archived && n.deletedAt == null)
+      .where((n) =>
+          n.spaceId == spaceId &&
+          (!n.archived || spaceId == kCryptSpaceId) &&
+          n.deletedAt == null)
       .toList()
     ..sort(_compareNotes);
 
@@ -1105,9 +1169,13 @@ class AppState extends ChangeNotifier {
   /// population plus hidden folds, minus Crypt.
   List<TweetCard> get searchableCards => _cards.where(_isFeedCard).toList();
 
+  /// A folder's cards; the Crypt also lists its archived ones (see
+  /// [notesForSpace]).
   List<TweetCard> cardsForSpace(String spaceId) => (_cards
       .where((c) =>
-          c.spaceId == spaceId && !c.archived && c.deletedAt == null)
+          c.spaceId == spaceId &&
+          (!c.archived || spaceId == kCryptSpaceId) &&
+          c.deletedAt == null)
       .toList()
     ..sort(_compareCards));
 
@@ -1636,28 +1704,31 @@ class AppState extends ChangeNotifier {
     }
     if (_childrenOf(id).isNotEmpty) return;
     _notes.remove(note);
-    for (final path in note.imagePaths) {
-      await _storage.deleteImage(path);
-    }
+    await _deleteUnusedImages(note.imagePaths);
     final parentId = note.circuitParentId;
     if (parentId != null) _renumber(_childrenOf(parentId));
     unawaited(NotificationService.instance.cancel(id));
     await _persist();
   }
 
-  Future<void> emptyTrash() async {
-    for (final n in _notes.where((n) => n.deletedAt != null).toList()) {
+  /// Deletes everything in Recently Deleted for good. With [keepCrypt], items
+  /// from the Crypt stay (the screen hasn't been unlocked to show them).
+  Future<void> emptyTrash({bool keepCrypt = false}) async {
+    bool goes(String? spaceId) => !keepCrypt || spaceId != kCryptSpaceId;
+    final dropped = <String>[];
+    for (final n in _notes
+        .where((n) => n.deletedAt != null && goes(n.spaceId))
+        .toList()) {
       _notes.remove(n);
-      for (final path in n.imagePaths) {
-        await _storage.deleteImage(path);
-      }
+      dropped.addAll(n.imagePaths);
     }
-    for (final c in _cards.where((c) => c.deletedAt != null).toList()) {
+    for (final c in _cards
+        .where((c) => c.deletedAt != null && goes(c.spaceId))
+        .toList()) {
       _cards.remove(c);
-      for (final path in c.imagePaths) {
-        await _storage.deleteImage(path);
-      }
+      dropped.addAll(c.imagePaths);
     }
+    await _deleteUnusedImages(dropped);
     for (final sp in _spaces.where((s) => s.deletedAt != null).toList()) {
       await _reallyDeleteSpace(sp);
     }
@@ -1680,18 +1751,16 @@ class AppState extends ChangeNotifier {
         expiredSpaces.isEmpty) {
       return;
     }
+    final dropped = <String>[];
     for (final n in expiredNotes) {
       _notes.remove(n);
-      for (final path in n.imagePaths) {
-        await _storage.deleteImage(path);
-      }
+      dropped.addAll(n.imagePaths);
     }
     for (final c in expiredCards) {
       _cards.remove(c);
-      for (final path in c.imagePaths) {
-        await _storage.deleteImage(path);
-      }
+      dropped.addAll(c.imagePaths);
     }
+    await _deleteUnusedImages(dropped);
     for (final sp in expiredSpaces) {
       await _reallyDeleteSpace(sp);
     }
@@ -2469,6 +2538,8 @@ class AppState extends ChangeNotifier {
           ..deletedAt = null
           ..updatedAt = now
           ..trashGroupId = null;
+        // Deleting cancelled its reminder; bring it back with the note.
+        if (m.reminderAt != null) _syncNoteReminder(m);
       }
     }
 
@@ -2559,12 +2630,8 @@ class AppState extends ChangeNotifier {
     }
     if (group == null) return;
     final ids = group.members.map((m) => m.id).toSet();
-    for (final m in group.members) {
-      for (final path in m.imagePaths) {
-        await _storage.deleteImage(path);
-      }
-    }
     _notes.removeWhere((n) => ids.contains(n.id));
+    await _deleteUnusedImages([for (final m in group.members) ...m.imagePaths]);
     await _persist();
   }
 
@@ -2714,6 +2781,8 @@ class AppState extends ChangeNotifier {
     if (note.isCircuitRoot && spaceId == kCryptSpaceId) return;
     note.spaceId = spaceId;
     note.updatedAt = DateTime.now();
+    // In or out of the Crypt changes what its reminder may show.
+    if (note.reminderAt != null) _syncNoteReminder(note);
     await _persist();
   }
 
@@ -2794,6 +2863,7 @@ class AppState extends ChangeNotifier {
       n
         ..spaceId = spaceId
         ..updatedAt = DateTime.now();
+      if (n.reminderAt != null) _syncNoteReminder(n);
     }
     await _persist();
   }
@@ -2832,10 +2902,42 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// Deletes an image file that was removed from a note in the editor.
+  /// Deletes an image file that was removed from a note in the editor,
+  /// unless something else still shows it (see [_deleteUnusedImages]).
   Future<void> refreshAfterImageRemoval(String path) async {
     if (path.isEmpty) return;
-    await _storage.deleteImage(path);
+    await _deleteUnusedImages([path]);
+  }
+
+  /// Every image file something in the library still points at: note and
+  /// card blocks, a chapter's saved versions, book covers, folder pictures
+  /// and the feed backgrounds.
+  Set<String> _imagesInUse() => {
+        for (final n in _notes) ...[
+          ...n.imagePaths,
+          for (final h in n.history)
+            for (final b in h.blocks)
+              if (b.isImage && b.imagePath.isNotEmpty) b.imagePath,
+        ],
+        for (final c in _cards) ...c.imagePaths,
+        for (final s in _spaces)
+          if (s.thumbnailPath != null) s.thumbnailPath!,
+        for (final b in _books)
+          if (b.coverPath != null) b.coverPath!,
+        ..._journalMonthCovers.values,
+        _feedBackgroundLight,
+        _feedBackgroundDark,
+      };
+
+  /// Deletes those of [paths] that nothing in the library uses any more. A
+  /// file can be shared: a chapter's saved version keeps a photo the chapter
+  /// itself dropped, and an imported circuit can give two notes one file.
+  Future<void> _deleteUnusedImages(Iterable<String> paths) async {
+    final inUse = _imagesInUse();
+    for (final p in paths.toSet()) {
+      if (p.isEmpty || inUse.contains(p)) continue;
+      await _storage.deleteImage(p);
+    }
   }
 
   // ---- Spaces ------------------------------------------------------------
@@ -3128,28 +3230,59 @@ class AppState extends ChangeNotifier {
   /// reminders on live reflexes, and the journal nudge. Run at launch, and
   /// again when exact alarms are allowed, since an alarm keeps the precision
   /// it was armed with.
+  ///
+  /// Any other reminder the OS still holds belongs to something no longer in
+  /// the library (a restore replaced it, it was cleared, or a cancel was
+  /// missed) and is cancelled.
   void rescheduleReminders() {
+    final keep = <int>{};
     for (final n in _notes) {
       if (n.reminderAt != null && n.deletedAt == null) {
-        unawaited(NotificationService.instance.syncNote(n));
+        keep.add(NotificationService.idFor(n.id));
+        _syncNoteReminder(n);
       }
     }
     for (final i in _impulses) {
       if (i.deletedAt != null || i.archived) continue;
       for (final t in i.allThreads) {
-        final m = t.reminderMinutes;
-        if (!t.notify || m == null) continue;
-        unawaited(NotificationService.instance.scheduleThreadReminder(
-          threadId: t.id,
-          title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
-          body: 'From your daily day',
-          hour: m ~/ 60,
-          minute: m % 60,
-          weekdays: t.days,
-        ));
+        if (!_threadReminds(t)) continue;
+        keep.addAll(NotificationService.threadIdsFor(t.id));
+        _syncThreadReminder(t);
       }
     }
+    unawaited(NotificationService.instance.cancelRemindersExcept(keep));
     unawaited(_syncJournalReminder());
+  }
+
+  /// Whether a task's reminder should be armed: it opts in and has a start
+  /// time, and it isn't a one-time task already done.
+  bool _threadReminds(Thread t) =>
+      t.notify &&
+      t.reminderMinutes != null &&
+      !(t.once && t.doneDays.isNotEmpty);
+
+  /// Arms one task's reminder on its own weekdays (empty = every day), or
+  /// clears it when it shouldn't remind (see [_threadReminds]).
+  void _syncThreadReminder(Thread t) {
+    final m = t.reminderMinutes;
+    if (_threadReminds(t) && m != null) {
+      unawaited(NotificationService.instance.scheduleThreadReminder(
+        threadId: t.id,
+        title: t.title.trim().isEmpty ? 'Daily day' : t.title.trim(),
+        body: 'From your daily day',
+        hour: m ~/ 60,
+        minute: m % 60,
+        weekdays: t.days,
+      ));
+    } else {
+      unawaited(NotificationService.instance.cancelThreadReminder(t.id));
+    }
+  }
+
+  /// Arms (or clears) a note's reminder. A Crypt note's says nothing of it.
+  void _syncNoteReminder(Note n) {
+    unawaited(NotificationService.instance
+        .syncNote(n, private: n.spaceId == kCryptSpaceId));
   }
 
   Future<void> _syncJournalReminder() async {
@@ -3353,29 +3486,21 @@ class AppState extends ChangeNotifier {
     await updateBook(book);
   }
 
-  /// Permanently removes a book page and its images.
-  Future<void> deleteBookPage(String noteId) async {
-    final idx = _notes.indexWhere((n) => n.id == noteId);
-    if (idx < 0) return;
-    final page = _notes.removeAt(idx);
-    for (final p in page.imagePaths) {
-      await _storage.deleteImage(p);
-    }
-    await _persist();
-  }
+  /// Deletes a book page or workshop note into Recently Deleted, the same as
+  /// deleting it from its editor: restorable for 30 days, history included.
+  Future<void> deleteBookPage(String noteId) => deleteNote(noteId);
 
   /// Deletes a book for good, along with all its pages and their images.
   Future<void> deleteBook(String bookId) async {
     final idx = _books.indexWhere((b) => b.id == bookId);
     if (idx < 0) return;
     final book = _books.removeAt(idx);
-    if (book.coverPath != null) await _storage.deleteImage(book.coverPath!);
+    final dropped = <String>[if (book.coverPath != null) book.coverPath!];
     for (final n in _notes.where((n) => n.bookId == bookId).toList()) {
       _notes.remove(n);
-      for (final p in n.imagePaths) {
-        await _storage.deleteImage(p);
-      }
+      dropped.addAll(n.imagePaths);
     }
+    await _deleteUnusedImages(dropped);
     await _persist();
   }
 
@@ -3394,8 +3519,12 @@ class AppState extends ChangeNotifier {
   Future<TweetCard> addCardFromUrl(String url, {String? spaceId}) async {
     final cleaned = _extractUrl(url);
     final normalized = _normalizeUrl(cleaned);
-    final existing = _cards.where(
-        (c) => c.deletedAt == null && _normalizeUrl(c.url) == normalized);
+    // A card kept in the Crypt isn't merged into: that would move it out, or,
+    // from Braim Web, reveal that the link is in there. Save a new one.
+    final existing = _cards.where((c) =>
+        c.deletedAt == null &&
+        c.spaceId != kCryptSpaceId &&
+        _normalizeUrl(c.url) == normalized);
     if (existing.isNotEmpty) {
       final card = existing.first;
       // Merge: adopt the requested folder and surface it again.
@@ -3567,9 +3696,7 @@ class AppState extends ChangeNotifier {
     final idx = _cards.indexWhere((c) => c.id == id);
     if (idx < 0) return;
     final card = _cards.removeAt(idx);
-    for (final path in card.imagePaths) {
-      await _storage.deleteImage(path);
-    }
+    await _deleteUnusedImages(card.imagePaths);
     await _persist();
   }
 
@@ -3642,6 +3769,8 @@ class AppState extends ChangeNotifier {
     _notes.clear();
     _spaces.clear();
     _cards.clear();
+    // The cleared notes' reminders would still fire.
+    rescheduleReminders();
     await _persist();
   }
 
@@ -3766,18 +3895,18 @@ class AppState extends ChangeNotifier {
     final todayP = dueProgressOn(day);
     // Today still in progress doesn't count yet — start from yesterday.
     if (!(todayP.total > 0 && todayP.done >= todayP.total)) {
-      day = day.subtract(const Duration(days: 1));
+      day = addDays(day, -1);
     }
     var streak = 0;
     for (var i = 0; i < 180; i++) {
       final p = dueProgressOn(day);
       if (p.total == 0) {
-        day = day.subtract(const Duration(days: 1)); // nothing due: neutral
+        day = addDays(day, -1); // nothing due: neutral
         continue;
       }
       if (p.done >= p.total) {
         streak++;
-        day = day.subtract(const Duration(days: 1));
+        day = addDays(day, -1);
       } else {
         break;
       }
@@ -3791,8 +3920,7 @@ class AppState extends ChangeNotifier {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     return [
-      for (var i = days - 1; i >= 0; i--)
-        dueProgressOn(today.subtract(Duration(days: i)))
+      for (var i = days - 1; i >= 0; i--) dueProgressOn(addDays(today, -i))
     ];
   }
 
@@ -3841,26 +3969,50 @@ class AppState extends ChangeNotifier {
   // the curve and the period stats — so they always agree. It mirrors the
   // per-impulse heatmap/history rules, aggregated over a set of impulses.
 
-  /// (done, scheduled) across [scope] for [day].
-  (int done, int scheduled) scopeTallyOn(List<Impulse> scope, DateTime day) {
+  /// (done, scheduled) for one impulse on [day]: how many of the day's due
+  /// threads are ticked, and how many were due. A long-term goal counts its
+  /// nested threads too. A one-time [Thread.once] task, and every milestone of
+  /// a checklist, counts only on the day it was completed; every other thread
+  /// counts on the weekdays it runs (empty = every day). The heatmaps, the
+  /// analytics and the streaks all count days this one way.
+  static (int done, int scheduled) dayTally(Impulse imp, DateTime day) {
     final key = dayKeyFor(day);
+    final threads = imp.isLongTerm ? imp.allThreads : imp.threads;
+    final onceLike = imp.mode == ImpulseMode.checklist;
+    var done = 0;
+    var scheduled = 0;
+    for (final t in threads) {
+      if (t.once || onceLike) {
+        if (t.doneDays.contains(key)) {
+          scheduled++;
+          done++;
+        }
+      } else if (t.days.isEmpty || t.days.contains(day.weekday)) {
+        scheduled++;
+        if (t.doneDays.contains(key)) done++;
+      }
+    }
+    return (done, scheduled);
+  }
+
+  /// (done, scheduled) across [scope] for [day]. An impulse counts only from
+  /// its first day to its deadline, as on its own heatmap: a reflex begun
+  /// this week didn't miss last month.
+  (int done, int scheduled) scopeTallyOn(List<Impulse> scope, DateTime day) {
+    final date = DateTime(day.year, day.month, day.day);
     var done = 0;
     var scheduled = 0;
     for (final imp in scope) {
       if (imp.deletedAt != null) continue;
-      final threads = imp.isLongTerm ? imp.allThreads : imp.threads;
-      final onceLike = imp.mode == ImpulseMode.checklist;
-      for (final t in threads) {
-        if (t.once || onceLike) {
-          if (t.doneDays.contains(key)) {
-            scheduled++;
-            done++;
-          }
-        } else if (t.days.isEmpty || t.days.contains(day.weekday)) {
-          scheduled++;
-          if (t.doneDays.contains(key)) done++;
-        }
+      if (date.isBefore(imp.consistencyStart)) continue;
+      final deadline = imp.deadline;
+      if (deadline != null &&
+          date.isAfter(DateTime(deadline.year, deadline.month, deadline.day))) {
+        continue;
       }
+      final (d, s) = dayTally(imp, date);
+      done += d;
+      scheduled += s;
     }
     return (done, scheduled);
   }
@@ -3872,7 +4024,7 @@ class AppState extends ChangeNotifier {
     var done = 0;
     var scheduled = 0;
     for (var i = 0; i < days; i++) {
-      final (d, s) = scopeTallyOn(scope, today.subtract(Duration(days: i)));
+      final (d, s) = scopeTallyOn(scope, addDays(today, -i));
       done += d;
       scheduled += s;
     }
@@ -3900,9 +4052,7 @@ class AppState extends ChangeNotifier {
     final p = dayKey.split('-');
     if (p.length != 3) return 0;
     final d = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return d.difference(today).inDays;
+    return daysBetween(DateTime.now(), d);
   }
 
   /// Whether ticking a thread on [dayKey] needs the "you're editing the
@@ -4000,12 +4150,12 @@ class AppState extends ChangeNotifier {
     var day = DateTime(now.year, now.month, now.day);
     // Today still in progress: start counting from today if done, else yesterday.
     if (!done.contains(_dayKey(day))) {
-      day = day.subtract(const Duration(days: 1));
+      day = addDays(day, -1);
     }
     var streak = 0;
     while (done.contains(_dayKey(day))) {
       streak++;
-      day = day.subtract(const Duration(days: 1));
+      day = addDays(day, -1);
     }
     return streak;
   }
@@ -4238,6 +4388,11 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteImpulse(String id) async {
+    // Its tasks' reminders repeat: once the reflex is gone nothing could
+    // cancel them any more.
+    for (final t in impulseById(id)?.allThreads ?? const <Thread>[]) {
+      unawaited(NotificationService.instance.cancelThreadReminder(t.id));
+    }
     _impulses.removeWhere((i) => i.id == id);
     // A deleted reflex can't stay pinned — fall back to the daily day.
     if (_pinnedReflexId == id) _pinnedReflexId = dailyDayId;
@@ -4263,6 +4418,14 @@ class AppState extends ChangeNotifier {
     impulse.archived = archived;
     impulse.updatedAt = DateTime.now();
     if (archived && _pinnedReflexId == id) _pinnedReflexId = dailyDayId;
+    // An archived reflex reminds of nothing; brought back, its reminders are.
+    for (final t in impulse.allThreads) {
+      if (archived) {
+        unawaited(NotificationService.instance.cancelThreadReminder(t.id));
+      } else {
+        _syncThreadReminder(t);
+      }
+    }
     await _persist();
   }
 
@@ -4295,14 +4458,16 @@ class AppState extends ChangeNotifier {
     if (fromId == toId) return;
     final from = impulseById(fromId);
     if (from == null) return;
-    final idx = from.threads.indexWhere((t) => t.id == threadId);
-    if (idx < 0) return;
+    // Anywhere in it: a long-term goal keeps threads in its subsections too.
+    final thread = from.findThread(threadId);
+    if (thread == null) return;
     var to = impulseById(toId);
     if (to == null) {
       if (toId != dailyDayId) return;
       to = _dailyDayImpulse();
     }
-    to.threads.add(from.threads.removeAt(idx));
+    from.removeThread(threadId);
+    to.threads.add(thread);
     from.updatedAt = DateTime.now();
     to.updatedAt = DateTime.now();
     await _persist();
@@ -4338,10 +4503,15 @@ class AppState extends ChangeNotifier {
   /// The current and best run of complete days for an impulse, counted over
   /// its scheduled days only (a missed scheduled day breaks the run; a not-yet-
   /// done today is treated as still in progress, not a break).
+  ///
+  /// A day is complete when every thread due on it is ticked, counted as on
+  /// the heatmap ([dayTally]); a day with nothing due neither extends nor
+  /// breaks the run.
   ReflexStreak streakFor(Impulse imp) {
-    if (imp.threads.isEmpty) return const ReflexStreak(0, 0);
+    final threads = imp.isLongTerm ? imp.allThreads : imp.threads;
+    if (threads.isEmpty) return const ReflexStreak(0, 0);
     String? minDay;
-    for (final t in imp.threads) {
+    for (final t in threads) {
       for (final d in t.doneDays) {
         if (minDay == null || d.compareTo(minDay) < 0) minDay = d;
       }
@@ -4355,13 +4525,27 @@ class AppState extends ChangeNotifier {
     if (start.isAfter(end)) return const ReflexStreak(0, 0);
     // Never scan more than ~a year: bounds the cost (and guards bad data). A
     // streak beyond a year isn't worth walking day by day to display.
-    final earliest = end.subtract(const Duration(days: 366));
+    final earliest = addDays(end, -366);
     if (start.isBefore(earliest)) start = earliest;
 
+    // A checklist's milestones (and one-time tasks) count only on the day
+    // they're ticked, so nothing is ever "due": there, a day without a tick
+    // breaks the run instead of passing as a day off.
+    final ticksOnly = imp.mode == ImpulseMode.checklist ||
+        threads.every((t) => t.once);
+    // Null when nothing is due that day.
+    bool? complete(DateTime c) {
+      if (!imp.scheduledOn(c.weekday)) return null;
+      final (done, scheduled) = dayTally(imp, c);
+      if (scheduled == 0) return ticksOnly ? false : null;
+      return done >= scheduled;
+    }
+
     var best = 0, run = 0;
-    for (var c = start; !c.isAfter(end); c = c.add(const Duration(days: 1))) {
-      if (!imp.scheduledOn(c.weekday)) continue;
-      if (imp.allDoneOn(_dayKey(c))) {
+    for (var c = start; !c.isAfter(end); c = addDays(c, 1)) {
+      final day = complete(c);
+      if (day == null) continue;
+      if (day) {
         run++;
         if (run > best) best = run;
       } else {
@@ -4370,9 +4554,10 @@ class AppState extends ChangeNotifier {
     }
 
     var current = 0;
-    for (var c = end; !c.isBefore(start); c = c.subtract(const Duration(days: 1))) {
-      if (!imp.scheduledOn(c.weekday)) continue;
-      if (imp.allDoneOn(_dayKey(c))) {
+    for (var c = end; !c.isBefore(start); c = addDays(c, -1)) {
+      final day = complete(c);
+      if (day == null) continue;
+      if (day) {
         current++;
       } else if (c == end) {
         continue; // today, still in progress
@@ -4408,6 +4593,7 @@ class AppState extends ChangeNotifier {
       } else {
         t.doneDays.remove(dayKey);
       }
+      if (t.once) _syncThreadReminder(t);
     }
     impulse.updatedAt = DateTime.now();
     await _persist();
@@ -4442,12 +4628,14 @@ class AppState extends ChangeNotifier {
     final thread = impulse.findThread(threadId);
     if (thread == null) return;
     if (thread.once) {
-      // One-time task: done for good, so flip the whole thing on/off.
+      // One-time task: done for good, so flip the whole thing on/off. Done, it
+      // stops reminding; undone, it reminds again.
       if (thread.doneDays.isEmpty) {
         thread.doneDays.add(dayKey);
       } else {
         thread.doneDays.clear();
       }
+      _syncThreadReminder(thread);
     } else if (impulse.isDaily || impulse.isLongTerm) {
       if (!thread.doneDays.remove(dayKey)) thread.doneDays.add(dayKey);
     } else if (thread.doneDays.isEmpty) {
@@ -4470,21 +4658,7 @@ class AppState extends ChangeNotifier {
     if (impulse == null) return;
     if (!impulse.replaceThread(thread)) return;
     impulse.updatedAt = DateTime.now();
-    final m = thread.reminderMinutes;
-    // A reminder fires only when the thread opts in AND has a start time, on its
-    // own chosen weekdays (empty = every day).
-    if (thread.notify && m != null) {
-      unawaited(NotificationService.instance.scheduleThreadReminder(
-        threadId: thread.id,
-        title: thread.title.trim().isEmpty ? 'Daily day' : thread.title.trim(),
-        body: 'From your daily day',
-        hour: m ~/ 60,
-        minute: m % 60,
-        weekdays: thread.days,
-      ));
-    } else {
-      unawaited(NotificationService.instance.cancelThreadReminder(thread.id));
-    }
+    _syncThreadReminder(thread);
     await _persist();
   }
 
@@ -4659,7 +4833,12 @@ class AppState extends ChangeNotifier {
   /// Whether SQLite is the live store this launch: it imported cleanly and the
   /// read flag is on. When false (fallback, or unit tests where sqflite is off)
   /// the app runs on the JSON store exactly as it did before the migration.
-  bool get _dbIsPrimary => DbStore.readFromDb && _dbStore.usableForReads;
+  bool get _dbIsPrimary =>
+      DbStore.readFromDb && _dbStore.usableForReads && !_dbReadFailed;
+
+  /// Set when this launch couldn't read the library back out of the DB: the
+  /// JSON is the live store until the next launch reconciles them.
+  bool _dbReadFailed = false;
 
   /// Marks the library dirty and notifies immediately; the actual disk write
   /// is coalesced (~400ms) and runs on a background isolate. A burst of
@@ -4728,12 +4907,17 @@ class AppState extends ChangeNotifier {
     // the whole library. Serialized on its own chain; a failed DB write is
     // retried on the next save and never surfaces.
     _dbWriteChain = _dbWriteChain.then((_) async {
-      await _dbStore.syncFromAppData(snapshot);
+      // A DB this launch couldn't read is left as it is: syncing the JSON's
+      // library into it would delete whatever the JSON lacks.
+      if (_dbReadFailed) return;
+      final synced = await _dbStore.syncFromAppData(snapshot);
+      if (!synced && _dbIsPrimary) _dbMissedSave();
     }).catchError((_) {});
     // The whole-file JSON is written per save only when the DB isn't the live
-    // store (fallback / unit tests) or the Phase 2 mirror is kept on; otherwise
-    // it's refreshed at checkpoints in flushNow() as a rollback + backup copy.
-    if (!_dbIsPrimary || DbStore.writeJsonOnSave) {
+    // store (fallback / unit tests), the Phase 2 mirror is kept on, or the DB
+    // has missed a save (the JSON is then the newer copy); otherwise it's
+    // refreshed at checkpoints in flushNow() as a rollback + backup copy.
+    if (!_dbIsPrimary || DbStore.writeJsonOnSave || _jsonAheadMarked) {
       _revAtJsonCheckpoint = _rev;
       // Saving to JSON because the DB isn't the live store: flag the JSON as
       // ahead (once per stretch), so the next launch that does get the DB
@@ -4747,6 +4931,22 @@ class AppState extends ChangeNotifier {
         await _storage.save(snapshot);
       }).catchError((_) {});
     }
+  }
+
+  /// The DB failed to take a save while it is the live store. Until a launch
+  /// reconciles them, the JSON must hold everything: flag it as the newer copy
+  /// and write the library as it is now (never an older snapshot, which could
+  /// land after a newer checkpoint). Later saves keep writing it (see _flush).
+  void _dbMissedSave() {
+    if (_disposed) return;
+    final firstMiss = !_jsonAheadMarked;
+    _jsonAheadMarked = true;
+    _revAtJsonCheckpoint = _rev;
+    final latest = _snapshot();
+    _writeChain = _writeChain.then((_) async {
+      if (firstMiss) await _storage.markJsonAhead();
+      await _storage.save(latest);
+    }).catchError((_) {});
   }
 
   /// Forces any pending changes to disk now (app pause, before backup or
@@ -4773,6 +4973,8 @@ class AppState extends ChangeNotifier {
     }
     await _writeChain;
     await _dbWriteChain;
+    // A save the DB missed queues a JSON write of its own.
+    await _writeChain;
   }
 
   bool _disposed = false;
@@ -4781,6 +4983,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _flushTimer?.cancel();
+    _midnight?.cancel();
     super.dispose();
   }
 }

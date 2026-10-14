@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/space.dart';
 import '../models/tweet_card.dart';
+import '../services/crypt_auth.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/frosted_chrome.dart';
@@ -14,9 +15,30 @@ import '../widgets/space_tile.dart';
 import '../widgets/tweet_card_widget.dart';
 
 /// Recently Deleted — notes, cards and folders are kept for 30 days, then
-/// purged. Tap an item to restore it or delete it permanently.
-class RecentlyDeletedScreen extends StatelessWidget {
+/// purged. Tap an item to restore it or delete it permanently. Items deleted
+/// from the Crypt stay out of sight behind one row until the Crypt's own
+/// unlock.
+class RecentlyDeletedScreen extends StatefulWidget {
   const RecentlyDeletedScreen({super.key});
+
+  @override
+  State<RecentlyDeletedScreen> createState() => _RecentlyDeletedScreenState();
+}
+
+class _RecentlyDeletedScreenState extends State<RecentlyDeletedScreen> {
+  /// Whether the Crypt's items are shown (unlocked on this visit).
+  bool _cryptShown = false;
+
+  Future<void> _unlockCrypt() async {
+    final ok = await authenticateForCrypt(reason: context.t.unlockCrypt);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _cryptShown = true);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(context.t.unlockFailed)));
+    }
+  }
 
   Future<String?> _ask(BuildContext context) {
     return showModalBottomSheet<String>(
@@ -140,8 +162,17 @@ class RecentlyDeletedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final groups = state.deletedNoteGroups;
-    final cards = state.deletedCards;
+    bool inCrypt(String? spaceId) => spaceId == kCryptSpaceId;
+    final allGroups = state.deletedNoteGroups;
+    final allCards = state.deletedCards;
+    final groups = _cryptShown
+        ? allGroups
+        : allGroups.where((g) => !inCrypt(g.top.spaceId)).toList();
+    final cards = _cryptShown
+        ? allCards
+        : allCards.where((c) => !inCrypt(c.spaceId)).toList();
+    final hiddenCount =
+        allGroups.length - groups.length + allCards.length - cards.length;
     final spaces = state.deletedSpaces;
 
     final left = <TrashGroup>[];
@@ -162,19 +193,25 @@ class RecentlyDeletedScreen extends StatelessWidget {
           ),
         );
 
-    final isEmpty = groups.isEmpty && cards.isEmpty && spaces.isEmpty;
+    final isEmpty = groups.isEmpty &&
+        cards.isEmpty &&
+        spaces.isEmpty &&
+        hiddenCount == 0;
 
     return FrostedScaffold(
       title: context.t.recentlyDeleted,
       actions: [
-        if (!isEmpty)
+        // Only what is shown: Crypt items stay until it is unlocked here.
+        if (groups.isNotEmpty || cards.isNotEmpty || spaces.isNotEmpty)
           FrostedCircleButton(
             icon: Icons.delete_sweep_outlined,
             tooltip: context.t.empty,
             onTap: () async {
               final ok = await _confirmEmpty(context);
               if (ok == true && context.mounted) {
-                await context.read<AppState>().emptyTrash();
+                await context
+                    .read<AppState>()
+                    .emptyTrash(keepCrypt: !_cryptShown);
               }
             },
           ),
@@ -209,6 +246,18 @@ class RecentlyDeletedScreen extends StatelessWidget {
                               color: AppPalette.inkSecondary,
                               fontSize: 12.5)),
                     ),
+                    if (hiddenCount > 0)
+                      ListTile(
+                        leading: Icon(Icons.lock_outline_rounded,
+                            color: AppPalette.inkPrimary),
+                        title: Text(context.t.deletedFromCrypt(hiddenCount),
+                            style: TextStyle(color: AppPalette.inkPrimary)),
+                        subtitle: Text(context.t.deletedFromCryptHint,
+                            style: TextStyle(
+                                color: AppPalette.inkSecondary,
+                                fontSize: 12.5)),
+                        onTap: _unlockCrypt,
+                      ),
                     if (spaces.isNotEmpty) ...[
                       _label(context, context.t.sectionFolders),
                       Row(

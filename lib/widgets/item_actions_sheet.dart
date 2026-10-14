@@ -28,12 +28,17 @@ Future<void> showItemActions(
   required Future<void> Function() onDelete,
   Future<bool> Function()? onConfirmAndDelete,
   bool allowCrypt = true,
+  bool allowArchive = true,
 }) async {
   final t = context.t;
   final action = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: Colors.transparent,
-    builder: (_) => _ActionsSheet(pinned: pinned, archived: archived),
+    builder: (_) => _ActionsSheet(
+        pinned: pinned,
+        archived: archived,
+        // An archived item can always be brought back.
+        showArchive: allowArchive || archived),
   );
   if (action == null || !context.mounted) return;
 
@@ -63,7 +68,9 @@ Future<void> showItemActions(
       if (result == null || !context.mounted) return;
       final space = await context
           .read<AppState>()
-          .addSpace(result.name, thumbnailPath: result.thumbnailPath);
+          .addSpace(result.name,
+              thumbnailPath: result.thumbnailPath,
+              colorValue: result.colorValue);
       await onMove(space.id);
       messenger.showSnackBar(
         SnackBar(content: Text(t.movedToName(space.name))),
@@ -84,9 +91,14 @@ Future<void> showItemActions(
 }
 
 class _ActionsSheet extends StatelessWidget {
-  const _ActionsSheet({required this.pinned, required this.archived});
+  const _ActionsSheet({
+    required this.pinned,
+    required this.archived,
+    required this.showArchive,
+  });
   final bool pinned;
   final bool archived;
+  final bool showArchive;
 
   @override
   Widget build(BuildContext context) {
@@ -109,18 +121,19 @@ class _ActionsSheet extends StatelessWidget {
                     style: TextStyle(color: AppPalette.inkPrimary)),
                 onTap: () => Navigator.pop(context, 'pin'),
               ),
-              ListTile(
-                leading: Icon(
-                  archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
-                  color: AppPalette.inkPrimary,
+              if (showArchive)
+                ListTile(
+                  leading: Icon(
+                    archived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    color: AppPalette.inkPrimary,
+                  ),
+                  title: Text(
+                      archived ? context.t.unarchive : context.t.archive,
+                      style: TextStyle(color: AppPalette.inkPrimary)),
+                  onTap: () => Navigator.pop(context, 'archive'),
                 ),
-                title: Text(
-                    archived ? context.t.unarchive : context.t.archive,
-                    style: TextStyle(color: AppPalette.inkPrimary)),
-                onTap: () => Navigator.pop(context, 'archive'),
-              ),
               ListTile(
                 leading: Icon(Icons.drive_file_move_outlined,
                     color: AppPalette.inkPrimary),

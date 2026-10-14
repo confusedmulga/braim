@@ -177,6 +177,35 @@ class NotificationService {
   /// A stable notification id for a note (fits a 32-bit int).
   static int idFor(String noteId) => noteId.hashCode & 0x7fffffff;
 
+  /// Every id a task's reminder can use: daily, or one per weekday.
+  static Set<int> threadIdsFor(String threadId) => {
+        idFor(threadId),
+        for (var w = 1; w <= 7; w++) idFor('$threadId#$w'),
+      };
+
+  /// The scheduled half of [sendTest].
+  static const int _testScheduledId = 555002;
+
+  /// Cancels every scheduled reminder whose id isn't in [keep]. One left by a
+  /// note or task that no longer exists (deleted, cleared, or replaced by a
+  /// restore) would otherwise go on firing, and a task's repeats forever. The
+  /// journal nudge, the focus timer and the test notification are left alone.
+  Future<void> cancelRemindersExcept(Set<int> keep) async {
+    if (!_ready) await init();
+    if (!_ready) return;
+    try {
+      for (final p in await _plugin.pendingNotificationRequests()) {
+        if (keep.contains(p.id) ||
+            p.id == _journalDailyId ||
+            p.id == _focusOngoingId ||
+            p.id == _testScheduledId) {
+          continue;
+        }
+        await _plugin.cancel(p.id);
+      }
+    } catch (_) {}
+  }
+
   /// Schedules (or reschedules) a reminder for [noteId] at [when]. A time in
   /// the past is ignored.
   Future<void> schedule({
@@ -257,7 +286,7 @@ class NotificationService {
         shown = true;
         // Delayed: proves scheduling reaches you end-to-end.
         await _plugin.zonedSchedule(
-          555002,
+          _testScheduledId,
           'Braim scheduled reminder',
           'This one was scheduled 10 seconds ago.',
           tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10)),
@@ -284,11 +313,8 @@ class NotificationService {
     if (!_ready) await init();
     if (!_ready) return;
     try {
-      final now = tz.TZDateTime.now(tz.local);
-      var when =
-          tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
       // If today's time has already passed, start from tomorrow.
-      if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+      final when = _nextAt(hour, minute);
       await _plugin.zonedSchedule(
         _journalDailyId,
         title,
@@ -345,10 +371,7 @@ class NotificationService {
     final mode = await _scheduleMode();
     try {
       if (weekdays.isEmpty) {
-        final now = tz.TZDateTime.now(tz.local);
-        var when = tz.TZDateTime(
-            tz.local, now.year, now.month, now.day, hour, minute);
-        if (!when.isAfter(now)) when = when.add(const Duration(days: 1));
+        final when = _nextAt(hour, minute);
         await _plugin.zonedSchedule(
           idFor(threadId),
           safeTitle,
@@ -367,7 +390,7 @@ class NotificationService {
             idFor('$threadId#$w'),
             safeTitle,
             body,
-            _nextWeekday(w, hour, minute),
+            _nextAt(hour, minute, weekday: w),
             details,
             androidScheduleMode: mode,
             uiLocalNotificationDateInterpretation:
@@ -382,14 +405,19 @@ class NotificationService {
     }
   }
 
-  /// The next occurrence of [weekday] (1 = Mon … 7 = Sun) at [hour]:[minute].
-  tz.TZDateTime _nextWeekday(int weekday, int hour, int minute) {
+  /// The next [hour]:[minute] on the local clock, on [weekday] when given
+  /// (1 = Mon … 7 = Sun). Stepped by calendar day: adding 24 hours would
+  /// move the clock time by an hour across a daylight-saving change, and the
+  /// repeat keeps whatever time the first one was armed at.
+  tz.TZDateTime _nextAt(int hour, int minute, {int? weekday}) {
     final now = tz.TZDateTime.now(tz.local);
-    var d = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    while (d.weekday != weekday || !d.isAfter(now)) {
-      d = d.add(const Duration(days: 1));
+    for (var i = 0;; i++) {
+      final d = tz.TZDateTime(
+          tz.local, now.year, now.month, now.day + i, hour, minute);
+      if (d.isAfter(now) && (weekday == null || d.weekday == weekday)) {
+        return d;
+      }
     }
-    return d;
   }
 
   /// Cancels a thread's reminder, whether it was scheduled daily or per-weekday.
@@ -526,12 +554,16 @@ class NotificationService {
   }
 
   /// Brings the scheduled notification in line with a note's reminder: schedule
-  /// when it's set in the future, cancel otherwise.
-  Future<void> syncNote(Note note) async {
+  /// when it's set in the future, cancel otherwise. A [private] note (one in
+  /// the Crypt) says nothing of itself: the notification can sit on the lock
+  /// screen, outside the Crypt's lock.
+  Future<void> syncNote(Note note, {bool private = false}) async {
     final at = note.reminderAt;
     if (at != null && at.isAfter(DateTime.now())) {
-      final title = note.title.trim();
-      var body = note.textPreview.trim().replaceAll('\n', ' ');
+      final title = private ? '' : note.title.trim();
+      var body = private
+          ? 'Open Braim to see it.'
+          : note.textPreview.trim().replaceAll('\n', ' ');
       if (body.length > 120) body = '${body.substring(0, 120)}…';
       await schedule(
         noteId: note.id,

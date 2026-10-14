@@ -1236,8 +1236,9 @@ class ContentsScreen extends StatelessWidget {
     // Everything except the Contents page itself.
     final pages =
         all.where((p) => p.bookPageKind != BookPageKind.contents).toList();
-    // Offset so reorder indices map back onto the full page list.
-    final offset = all.length - pages.length;
+    // Reorder indices map back onto the full page list by page, since the
+    // Contents page itself can sit anywhere in it.
+    int inAll(int i) => i < pages.length ? all.indexOf(pages[i]) : all.length;
 
     return FrostedScaffold(
       title: context.t.contentsPage,
@@ -1246,7 +1247,7 @@ class ContentsScreen extends StatelessWidget {
         itemCount: pages.length,
         onReorder: (from, to) => context
             .read<AppState>()
-            .reorderBookPages(bookId, from + offset, to + offset),
+            .reorderBookPages(bookId, inAll(from), inAll(to)),
         itemBuilder: (context, i) => Padding(
           key: ValueKey(pages[i].id),
           padding: const EdgeInsets.only(bottom: 12),
@@ -1272,6 +1273,18 @@ class _ContentsRowState extends State<_ContentsRow> {
       TextEditingController(text: widget.page.title);
   final _focus = FocusNode();
 
+  /// The library, kept for [dispose], where the context may no longer be used.
+  late final AppState _state;
+
+  @override
+  void initState() {
+    super.initState();
+    _state = context.read<AppState>();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit();
+    });
+  }
+
   @override
   void didUpdateWidget(covariant _ContentsRow old) {
     super.didUpdateWidget(old);
@@ -1283,13 +1296,22 @@ class _ContentsRowState extends State<_ContentsRow> {
 
   @override
   void dispose() {
+    // Leaving with the back gesture neither submits nor taps outside: keep
+    // the title typed. Saved after this frame, as the tree is locked now.
+    final id = widget.page.id;
+    final title = _ctrl.text;
+    if (title != widget.page.title) {
+      Future.microtask(() => _state.setBookPageTitle(id, title));
+    }
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
   }
 
   void _commit() {
-    context.read<AppState>().setBookPageTitle(widget.page.id, _ctrl.text);
+    // Unchanged: don't re-date a page a browser may be editing.
+    if (_ctrl.text == widget.page.title) return;
+    _state.setBookPageTitle(widget.page.id, _ctrl.text);
   }
 
   @override

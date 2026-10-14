@@ -97,11 +97,8 @@ class LinkPreviewService {
       );
     }
     try {
-      final res = await http
-          .get(Uri.parse(url), headers: {'User-Agent': _userAgent})
-          .timeout(const Duration(seconds: 10));
-      if (res.statusCode != 200) return null;
-      final bytes = res.bodyBytes;
+      final bytes = await _fetchPage(url, const Duration(seconds: 10));
+      if (bytes == null) return null;
       final page =
           await Isolate.run(() => _parsePage(bytes, withArticle: false));
       return BasicLinkPreview(
@@ -201,12 +198,42 @@ class LinkPreviewService {
     return true;
   }
 
+  /// The most of a page read for a preview: plenty for any article's text
+  /// and tags, while a link to a video or a disk image isn't fetched whole.
+  static const _maxPageBytes = 3 * 1024 * 1024;
+
+  /// [url]'s page, or null when it isn't one (or doesn't answer in [timeout]).
+  /// Streamed and cut off at [_maxPageBytes], and the connection is closed
+  /// when done or out of time, so nothing goes on downloading behind it.
+  static Future<Uint8List?> _fetchPage(String url, Duration timeout) async {
+    final client = http.Client();
+    Future<Uint8List?> read() async {
+      final request = http.Request('GET', Uri.parse(url))
+        ..headers['User-Agent'] = _userAgent;
+      final res = await client.send(request);
+      if (res.statusCode != 200) return null;
+      final type = res.headers['content-type'] ?? '';
+      if (type.isNotEmpty && !type.contains('html') && !type.contains('xml')) {
+        return null;
+      }
+      final out = BytesBuilder(copy: false);
+      await for (final chunk in res.stream) {
+        out.add(chunk);
+        if (out.length >= _maxPageBytes) break;
+      }
+      return out.takeBytes();
+    }
+
+    try {
+      return await read().timeout(timeout);
+    } finally {
+      client.close();
+    }
+  }
+
   Future<bool> _tryOpenGraph(TweetCard card, {bool imageOnly = false}) async {
-    final res = await http
-        .get(Uri.parse(card.url), headers: {'User-Agent': _userAgent})
-        .timeout(const Duration(seconds: 12));
-    if (res.statusCode != 200) return false;
-    final bytes = res.bodyBytes;
+    final bytes = await _fetchPage(card.url, const Duration(seconds: 12));
+    if (bytes == null) return false;
     final page = await Isolate.run(
         () => _parsePage(bytes, withArticle: !imageOnly));
 

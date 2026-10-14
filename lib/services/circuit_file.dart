@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:uuid/uuid.dart';
@@ -247,7 +248,7 @@ CircuitBundle decodeCircuitFile(List<int> bytes) {
   }
   final Archive archive;
   try {
-    archive = ZipDecoder().decodeBytes(bytes);
+    archive = readZipEntries(InputMemoryStream(bytes));
   } catch (_) {
     throw const CircuitFileException(CircuitFileProblem.notACircuit);
   }
@@ -270,14 +271,23 @@ CircuitBundle _decode(Archive archive) {
     return null;
   }
 
+  // An entry's declared size is the sender's word: inflate it through a cap
+  // that stops at [max], so a few-kilobyte "zip bomb" can't fill memory.
+  List<int> inflate(ArchiveFile f, int max) {
+    if (f.size > max) {
+      throw const CircuitFileException(CircuitFileProblem.tooLarge);
+    }
+    final out = BytesBuilder(copy: false);
+    try {
+      inflateEntry(f, max, out.add);
+    } on EntryTooLarge {
+      throw const CircuitFileException(CircuitFileProblem.tooLarge);
+    }
+    return out.takeBytes();
+  }
+
   Map<String, dynamic> readJson(ArchiveFile f) {
-    if (f.size > CircuitFile.maxJsonBytes) {
-      throw const CircuitFileException(CircuitFileProblem.tooLarge);
-    }
-    final content = f.content as List<int>;
-    if (content.length > CircuitFile.maxJsonBytes) {
-      throw const CircuitFileException(CircuitFileProblem.tooLarge);
-    }
+    final content = inflate(f, CircuitFile.maxJsonBytes);
     final decoded = jsonDecode(utf8.decode(content));
     if (decoded is! Map<String, dynamic>) {
       throw const CircuitFileException(CircuitFileProblem.damaged);
@@ -365,13 +375,9 @@ CircuitBundle _decode(Archive archive) {
         ? name.substring(name.lastIndexOf('.') + 1).toLowerCase()
         : '';
     if (!_imageExtensions.contains(ext)) continue;
-    if (f.size > CircuitFile.maxImageBytes) {
-      throw const CircuitFileException(CircuitFileProblem.tooLarge);
-    }
-    final content = f.content as List<int>;
+    final content = inflate(f, CircuitFile.maxImageBytes);
     total += content.length;
-    if (content.length > CircuitFile.maxImageBytes ||
-        total > CircuitFile.maxFileBytes) {
+    if (total > CircuitFile.maxFileBytes) {
       throw const CircuitFileException(CircuitFileProblem.tooLarge);
     }
     images[name] = content;

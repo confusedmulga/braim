@@ -196,6 +196,28 @@ void main() {
       expect(sanitizeDelta([1, 2]), isNull);
     });
 
+    test('keeps call and text links the phone keeps', () {
+      for (final link in ['tel:+15551234', 'sms:+44 20 7946 0000']) {
+        final cleaned = sanitizeDelta([
+          {
+            'insert': 'Mom',
+            'attributes': {'link': link},
+          },
+        ]);
+        expect(cleaned!.first['attributes'], {'link': link});
+      }
+      // Never a script, however it is dressed.
+      expect(
+        sanitizeDelta([
+          {
+            'insert': 'x',
+            'attributes': {'link': 'tel:1"><script>'},
+          },
+        ])!.first['attributes'],
+        isNull,
+      );
+    });
+
     test('the editor loads legacy plain text as a Delta', () {
       expect(jsonDecode(editorDelta('line one\nline two')), [
         {'insert': 'line one\nline two\n'},
@@ -856,13 +878,21 @@ void main() {
     });
 
     test('adding the URL of a Crypt spark reveals nothing', () async {
+      final hidden = state.cardById('crypt-spark')!;
+      final before = hidden.updatedAt;
       final r = await send(
         'POST',
         '/api/sparks',
         json: {'url': 'https://example.com/hidden'},
       );
+      // Answered like any new link: a spark of its own...
       expect(r.statusCode, 201);
-      expect(await body(r), isEmpty);
+      final id = (await body(r))['id'] as String;
+      expect(id, isNot('crypt-spark'));
+      expect(state.cardById(id)!.spaceId, isNot(kCryptSpaceId));
+      // ...while the Crypt's copy is left exactly as it was.
+      expect(hidden.spaceId, kCryptSpaceId);
+      expect(hidden.updatedAt, before);
       expect(
         (await send(
           'PUT',

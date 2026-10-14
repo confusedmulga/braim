@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/book.dart';
 import '../models/note.dart';
 import 'file_names.dart';
+import 'note_markdown.dart';
 
 /// Turns a book into something shareable: a typeset PDF, a Markdown file, or
 /// a real ePub. Everything here is pure data work, so it stays off the UI's
@@ -222,6 +223,29 @@ class BookExport {
     required String untitledLabel,
   }) async {
     final title = _titleOf(book, untitledLabel);
+    final markdown = markdownOf(
+      book: book,
+      pages: pages,
+      author: author,
+      untitledLabel: untitledLabel,
+    );
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/${_safeName(title)}.md');
+    await file.writeAsString(markdown);
+    await SharePlus.instance
+        .share(ShareParams(files: [XFile(file.path)], title: title));
+  }
+
+  /// The book as one Markdown document: its title, author and description,
+  /// then each page under its own heading, written as the note exporter
+  /// writes a note (lines, lists and emphasis kept).
+  static String markdownOf({
+    required Book book,
+    required List<Note> pages,
+    required String author,
+    required String untitledLabel,
+  }) {
+    final title = _titleOf(book, untitledLabel);
     final buffer = StringBuffer()..writeln('# $title');
     if (author.isNotEmpty) buffer.writeln('\n*by $author*');
     if (book.description.trim().isNotEmpty) {
@@ -231,14 +255,9 @@ class BookExport {
       if (page.bookPageKind == BookPageKind.contents) continue;
       final heading = page.title.trim();
       buffer.writeln('\n\n## ${heading.isEmpty ? '-' : heading}\n');
-      buffer.writeln(page.textPreview.trim());
+      buffer.writeln(noteBodyToMarkdown(page));
     }
-
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/${_safeName(title)}.md');
-    await file.writeAsString(buffer.toString());
-    await SharePlus.instance
-        .share(ShareParams(files: [XFile(file.path)], title: title));
+    return buffer.toString();
   }
 
   // ---- ePub ----------------------------------------------------------------

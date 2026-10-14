@@ -411,7 +411,8 @@ class _SettingsSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final locked = !controller.idle;
+        // A finished session is over: its settings can change again.
+        final locked = !controller.idle && !controller.completed;
         return SafeArea(
           top: false,
           child: Container(

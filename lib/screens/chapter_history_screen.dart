@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
 import '../models/note.dart';
+import '../services/calendar_days.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
@@ -440,7 +441,7 @@ String _relTime(BuildContext context, DateTime t) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final that = DateTime(t.year, t.month, t.day);
-  final diff = today.difference(that).inDays;
+  final diff = daysBetween(that, today);
   final time = DateFormat('h:mm a').format(t);
   if (now.difference(t).inMinutes < 1) return context.t.versionJustNow;
   if (diff == 0) return context.t.versionToday(time);

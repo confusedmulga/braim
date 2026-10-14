@@ -102,12 +102,38 @@ String _compose(String title, String? url, List<NoteBlock> blocks) {
     if (!block.isText) continue;
     final lines = richToStyledLines(block.text);
     if (lines.isEmpty) continue;
-    for (final line in lines) {
-      buf.writeln(_lineToMarkdown(line));
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final next = i + 1 < lines.length ? lines[i + 1] : null;
+      buf
+        ..write(_lineToMarkdown(line))
+        ..write(_lineEnd(line, next));
     }
     buf.writeln();
   }
   return '${buf.toString().trimRight()}\n';
+}
+
+bool _isListLine(RichLine l) =>
+    l.header == 0 && !l.quote && l.kind != RichLineKind.plain;
+
+/// What ends [line] when [next] follows it. Each editor line is a line of its
+/// own, but in Markdown one newline only continues a paragraph (it reads as a
+/// space in plain text and Word), and a plain line after a list item or a
+/// quote is folded into it. So lines of one paragraph end in a hard break, and
+/// a list or quote ends with a blank line before whatever follows.
+String _lineEnd(RichLine line, RichLine? next) {
+  if (next == null || line.header > 0) return '\n';
+  final text = line.text.trim();
+  if (text.isEmpty) return '\n';
+  if (_isListLine(line)) return _isListLine(next) ? '\n' : '\n\n';
+  final nextEmpty = next.text.trim().isEmpty;
+  if (line.quote) return next.quote && !nextEmpty ? '\\\n' : '\n\n';
+  // A plain line. A backslash at the very end of a paragraph would print.
+  if (next.kind == RichLineKind.plain && next.header == 0 && !next.quote) {
+    return nextEmpty || text.endsWith('\\') ? '\n' : '\\\n';
+  }
+  return '\n\n';
 }
 
 String _lineToMarkdown(RichLine line) {

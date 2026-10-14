@@ -9,6 +9,7 @@ import 'package:shelf/shelf.dart';
 
 import 'package:braim/models/note.dart';
 import 'package:braim/state/app_state.dart';
+import 'package:braim/web/web_api.dart';
 import 'package:braim/web/web_assets.dart';
 import 'package:braim/web/web_auth.dart';
 import 'package:braim/web/web_security.dart';
@@ -204,6 +205,15 @@ void main() {
         421,
       );
       expect((await send('GET', '/pair', host: null)).statusCode, 421);
+    });
+
+    test('mobile data is never offered, whatever its address', () {
+      for (final name in ['rmnet_data0', 'v4-rmnet_data2', 'ccmni1', 'clat4']) {
+        expect(isCellularInterface(name), isTrue, reason: name);
+      }
+      for (final name in ['wlan0', 'swlan0', 'ap0', 'rndis0', 'eth0']) {
+        expect(isCellularInterface(name), isFalse, reason: name);
+      }
     });
 
     test('remote addresses outside private ranges get 403', () async {
@@ -458,6 +468,15 @@ void main() {
       expect((await send('GET', '/', session: token)).statusCode, 200);
       now = now.add(const Duration(days: 30));
       expect((await send('GET', '/', session: token)).statusCode, 302);
+    });
+
+    test('turning Braim Web off frees the notes browsers were editing',
+        () async {
+      await pair();
+      final holder = webLeaseHolder(sessions.sessions.single.id);
+      expect(state.acquireEditLease('n', holder), isTrue);
+      await server.stop();
+      expect(state.editLeaseHolder('n'), isNull);
     });
 
     test('sessions survive a restart of the server', () async {

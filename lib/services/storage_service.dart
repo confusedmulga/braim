@@ -90,9 +90,23 @@ class StorageService {
     // Try the main file, then the last-good backup: a torn write must never
     // silently erase the library (the next save would overwrite it with
     // nothing).
-    final data = await _tryLoad(await _dataFile) ??
-        await _tryLoad(await _bakFile);
-    return data ?? AppData.empty();
+    final main = await _dataFile;
+    final bak = await _bakFile;
+    final data = await _tryLoad(main) ?? await _tryLoad(bak);
+    if (data != null) return data;
+    // A store is there but neither copy reads (a torn write, or fields a newer
+    // build wrote): the next two saves would rotate both away. Keep a copy of
+    // each first, so the library can still be recovered by hand.
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    for (final f in [main, bak]) {
+      try {
+        if (await f.exists()) {
+          await f.copy('${f.parent.path}/keepy_data.unreadable-$stamp'
+              '${f == main ? '.json' : '.bak'}');
+        }
+      } catch (_) {}
+    }
+    return AppData.empty();
   }
 
   /// The legacy JSON library for the one-time SQLite import. Unlike [load],

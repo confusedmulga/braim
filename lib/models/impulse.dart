@@ -424,10 +424,14 @@ class Impulse {
   double progress(String dayKey) =>
       threads.isEmpty ? 0 : doneCount(dayKey) / threads.length;
 
+  /// Done: marked so by hand, or a checklist with every milestone ticked. A
+  /// long-term goal's flat threads are daily reminders, ticked per day, so
+  /// ticking them never completes the goal.
   bool get isComplete =>
       completedAt != null ||
       (threads.isNotEmpty &&
           !isDaily &&
+          !isLongTerm &&
           threads.every((t) => t.doneDays.isNotEmpty));
 
   Map<String, dynamic> toJson() => {

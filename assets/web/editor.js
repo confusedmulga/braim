@@ -37,6 +37,8 @@
   var again = false;
   var locked = false;
   var conflicted = false;
+  // A photo going up or coming out: the page reloads when it's done.
+  var busy = false;
   var navigating = false;
   var timer = null;
 
@@ -127,11 +129,32 @@
     return editors.every(function (e) { return !e.quill.getText().trim(); });
   }
 
+  // A block already saved goes only when it changed. One sent back as it was
+  // would still pass through this editor's link rules, which keep fewer kinds
+  // of link than the phone does (a tel: or app link would be lost).
   function blocks(withIds) {
-    return editors.map(function (e) {
-      var b = { delta: e.quill.getContents().ops };
-      if (withIds && e.blockId) b.id = e.blockId;
-      return b;
+    var out = [];
+    editors.forEach(function (e) {
+      // Only what this save sends counts once it lands (see markSent).
+      e.sending = undefined;
+      var ops = e.quill.getContents().ops;
+      var json = JSON.stringify(ops);
+      if (withIds && e.blockId) {
+        if (json === e.sent) return;
+        out.push({ id: e.blockId, delta: ops });
+      } else {
+        out.push({ delta: ops });
+      }
+      e.sending = json;
+    });
+    return out;
+  }
+
+  // After a save: what was sent is now what the note holds.
+  function markSent() {
+    editors.forEach(function (e) {
+      if (e.sending !== undefined) e.sent = e.sending;
+      e.sending = undefined;
     });
   }
 
@@ -206,6 +229,7 @@
           if (!id && b.id) created(b.id);
           if (b.updatedAt) base = b.updatedAt;
           adoptBlockIds(b.blockIds);
+          markSent();
           retitle();
           setState(S.saved);
           return true;
@@ -249,7 +273,10 @@
     }).catch(function () {});
   }
 
-  setInterval(function () { if (id && !locked && !conflicted) takeLease(); }, 20000);
+  // Renewed while a photo goes up too (the editor is locked meanwhile).
+  setInterval(function () {
+    if (id && (!locked || busy) && !conflicted) takeLease();
+  }, 20000);
   window.addEventListener('pagehide', function () {
     if (id) req('DELETE', itemUrl('/lease'), undefined, true).catch(function () {});
   });
@@ -270,7 +297,8 @@
       }
       return res.ok ? res.json() : null;
     }).then(function (m) {
-      if (!m || saving || m.updatedAt === base) return;
+      // Its own photo going up changes the note too: that isn't the phone.
+      if (!m || saving || busy || m.updatedAt === base) return;
       showBanner(S.changed, [
         [S.reload, function () { location.reload(); }],
         [S.keep, hideBanner]
@@ -288,7 +316,11 @@
       });
       q.setContents(JSON.parse(el.getAttribute('data-delta')), 'silent');
       q.history.clear();
-      var entry = { quill: q, blockId: el.getAttribute('data-block-id') };
+      var entry = {
+        quill: q,
+        blockId: el.getAttribute('data-block-id'),
+        sent: JSON.stringify(q.getContents().ops)
+      };
       q.on('text-change', function (d, old, source) { if (source === 'user') changed(); });
       q.on('selection-change', function (range) {
         if (range) { active = q; syncToolbar(); }
@@ -375,7 +407,8 @@
   }
 
   // Saves what is typed, then sends [files] one by one, then reloads to show
-  // them in place (the server adds a line to write on after each).
+  // them in place (the server adds a line to write on after each). The text
+  // is read-only meanwhile: the reload would drop anything typed during it.
   function uploadImages(files) {
     if (!id || locked || conflicted) return;
     var list = Array.prototype.slice.call(files);
@@ -384,6 +417,8 @@
     if (!fits.length) return;
     save().then(function (ok) {
       if (!ok) return;
+      setLocked(true);
+      busy = true;
       setState(S.saving);
       var added = 0;
       var chain = Promise.resolve(true);
@@ -396,11 +431,15 @@
             headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Braim-CSRF': csrf },
             body: f
           }).then(function (res) {
-            if (res.ok) { added++; return true; }
             return res.json().catch(function () { return {}; }).then(function (b) {
+              if (res.ok) {
+                added++;
+                if (b.updatedAt) base = b.updatedAt;
+                return true;
+              }
               if (res.status === 401) location.replace('/pair');
               else if (res.status === 413) setState(S.imageTooBig);
-              else if (b.error === 'leased') lock(b.message);
+              else if (b.error === 'leased') { busy = false; lock(b.message); }
               else setState(b.message || S.failed);
               return false;
             });
@@ -408,7 +447,9 @@
         });
       });
       chain.catch(function () { setState(S.failed); }).then(function () {
-        if (added) { navigating = true; location.reload(); }
+        if (added) { navigating = true; location.reload(); return; }
+        // Nothing went up: writing can go on.
+        if (busy) { busy = false; setLocked(false); }
       });
     });
   }
@@ -417,13 +458,21 @@
     if (!id || locked || conflicted) return;
     save().then(function (ok) {
       if (!ok) return;
+      // Read-only until the reload, which would drop anything typed now.
+      setLocked(true);
+      busy = true;
+      function failed() {
+        busy = false;
+        setLocked(false);
+        setState(S.failed);
+      }
       req('DELETE', itemUrl('/images/' + encodeURIComponent(blockId))).then(function (res) {
         if (res.ok) { navigating = true; location.reload(); return; }
         return res.json().catch(function () { return {}; }).then(function (b) {
-          if (b.error === 'leased') lock(b.message);
-          else setState(S.failed);
+          if (b.error === 'leased') { busy = false; lock(b.message); }
+          else failed();
         });
-      }).catch(function () { setState(S.failed); });
+      }).catch(failed);
     });
   }
 

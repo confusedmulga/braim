@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -108,6 +110,23 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   /// Web can't edit it at the same time.
   bool _holdsLease = false;
 
+  /// Live save while writing, as the rich editor does: changed source is
+  /// written every few seconds, and when the app is sent to the background
+  /// (where Android may end it), so typing is never lost.
+  Timer? _autosave;
+  late final AppLifecycleListener _lifecycle;
+
+  void _autosaveTick() {
+    if (!_editing || !mounted) return;
+    // Covered by the circuit map, which may rename this note: saving now would
+    // write the old heading back.
+    if (_route?.isCurrent == false) return;
+    final src = _ctrl.text;
+    // An emptied note is dealt with on leaving, never mid-writing.
+    if (src.trim().isEmpty || src == _note.markdownSource) return;
+    _save();
+  }
+
   /// Takes the edit lease; false, with a message, while a browser holds it.
   bool _takeLease() {
     if (_appState.acquireEditLease(_note.id, kPhoneLease)) {
@@ -142,6 +161,9 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
         });
       }
     }
+    _autosave =
+        Timer.periodic(const Duration(seconds: 3), (_) => _autosaveTick());
+    _lifecycle = AppLifecycleListener(onHide: _autosaveTick);
   }
 
   @override
@@ -159,6 +181,8 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   void dispose() {
     final route = _route;
     if (route != null) OpenNoteScreens.unregister(_note.id, route);
+    _autosave?.cancel();
+    _lifecycle.dispose();
     _releaseLease();
     _ctrl.dispose();
     _findCtrl.dispose();
@@ -166,7 +190,9 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  /// Writes the source into the note. Returns true when that removed the note
+  /// (an emptied note that was already saved).
+  Future<bool> _save() async {
     final src = _ctrl.text;
     final state = context.read<AppState>();
     if (src.trim().isEmpty) {
@@ -183,11 +209,12 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
           ..blocks = [NoteBlock(type: NoteBlockType.text, text: src)];
         await state.upsertNote(_note);
         _persisted = true;
-        return;
+        return false;
       }
+      final deleted = _persisted;
       if (_persisted) await state.deleteNote(_note.id);
       _persisted = false;
-      return;
+      return deleted;
     }
     _note
       ..markdown = true
@@ -195,6 +222,7 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
       ..blocks = [NoteBlock(type: NoteBlockType.text, text: src)];
     await state.upsertNote(_note);
     _persisted = true;
+    return false;
   }
 
   /// Back button: persist any edits, then leave, handing [result] to the
@@ -249,9 +277,14 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   }
 
   Future<void> _done() async {
-    await _save();
+    final deleted = await _save();
     _releaseLease();
     if (!mounted) return;
+    // Emptied out and removed: there is no note left to read here.
+    if (deleted) {
+      Navigator.of(context).pop();
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() {
       _editing = false;
@@ -260,6 +293,12 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
   }
 
   void _startEditing() {
+    // Deleted meanwhile (on Braim Web, say): don't write into the trash.
+    final live = _appState.noteById(_note.id);
+    if (live != null ? live.deletedAt != null : _persisted) {
+      Navigator.of(context).pop();
+      return;
+    }
     if (!_takeLease()) return;
     _closeFind();
     // A browser may have changed the source while it was being read here.
@@ -303,14 +342,16 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
     if (_ctrl.text != src) setState(() => _ctrl.text = src);
   }
 
+  // Reading, there is nothing to save: the source held here may be older than
+  // the note, which a browser on Braim Web can change meanwhile.
   Future<void> _circuitMap() async {
-    await _save();
+    if (_editing) await _save();
     if (!mounted) return;
     _goToMap(_note.id, highlight: false);
   }
 
   Future<void> _circuitAdd() async {
-    await _save();
+    if (_editing) await _save();
     if (!mounted) return;
     final state = context.read<AppState>();
     final choice =
@@ -376,7 +417,10 @@ class _MarkdownNoteScreenState extends State<MarkdownNoteScreen> {
                 if (!_note.isCircuitNode)
                   _tile(sheetCtx, Icons.drive_file_move_outline,
                       context.t.moveToFolder, _move),
-                if (!_note.isCircuitNode)
+                // Not for a Crypt note (the Archive never shows them),
+                // unless it is already archived.
+                if (!_note.isCircuitNode &&
+                    (_note.spaceId != kCryptSpaceId || _note.archived))
                   _tile(
                     sheetCtx,
                     _note.archived

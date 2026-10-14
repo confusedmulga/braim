@@ -40,12 +40,23 @@ const _lineFormats = {'header', 'blockquote', 'list', 'indent', 'align'};
 
 final _hexColour = RegExp(r'^#[0-9a-fA-F]{6}$');
 
+final _callOrText =
+    RegExp(r'^(tel|sms):[0-9+*#(),;.\- ]+$', caseSensitive: false);
+
+/// A `tel:` or `sms:` link, which the phone opens and the web editor keeps.
+String? _phoneLink(String url) {
+  final u = url.trim();
+  return _callOrText.hasMatch(u) ? u : null;
+}
+
 Object? _cleanAttribute(String key, Object? value) {
   if (_inlineFlags.contains(key)) return value == true ? true : null;
   switch (key) {
     case 'link':
       if (value is! String) return null;
-      return safeUrl(value);
+      // Stored as the phone stores links, tel: and sms: included; a page
+      // still links only what safeUrl allows.
+      return safeUrl(value) ?? _phoneLink(value);
     case 'background':
     case 'color':
       return value is String && _hexColour.hasMatch(value) ? value : null;
@@ -454,8 +465,9 @@ class WebApi {
         'message': l10n.webBadLink,
       });
     }
+    // A link kept in the Crypt isn't merged into (see addCardFromUrl): it gets
+    // a spark of its own, so the reply is the same as for any new link.
     final card = await state.addCardFromUrl(safe);
-    // An existing spark kept in the Crypt stays out of sight.
     return jsonResponse(201, {
       if (visibleSpark(card.id) != null) 'id': card.id,
     });

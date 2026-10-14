@@ -122,6 +122,10 @@ class BraimWebServer {
     final server = _server;
     _server = null;
     _port = null;
+    // No browser can save any more: the phone may edit its notes at once.
+    for (final s in sessions.sessions) {
+      state.releaseEditLeasesOf(webLeaseHolder(s.id));
+    }
     events.closeAll();
     await server?.close(force: true);
     await sessions.flush();
@@ -146,8 +150,9 @@ class BraimWebServer {
     return saved;
   }
 
-  /// The phone's private, non-loopback IPv4 addresses (Wi-Fi and hotspot can
-  /// both be present).
+  /// The phone's private, non-loopback IPv4 addresses on Wi-Fi or its
+  /// hotspot (both can be present). Mobile data is left out even when the
+  /// carrier gives it a private address: the site is for the local network.
   static Future<List<String>> privateAddresses() async {
     final out = <String>[];
     try {
@@ -155,6 +160,7 @@ class BraimWebServer {
         type: InternetAddressType.IPv4,
       );
       for (final i in interfaces) {
+        if (isCellularInterface(i.name)) continue;
         for (final a in i.addresses) {
           if (isPrivateIPv4(a) && !a.isLoopback) out.add(a.address);
         }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/l10n.dart';
 import '../models/impulse.dart';
+import '../services/calendar_days.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bouncy_route.dart';
@@ -1305,8 +1306,8 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
 
     // Anchor the grid to the Monday on/before the first day so weekday rows line
     // up; the leading out-of-range cells become invisible spacers.
-    final gridOrigin = startDay.subtract(Duration(days: startDay.weekday - 1));
-    final cols = (endDay.difference(gridOrigin).inDays / 7).floor() + 1;
+    final gridOrigin = mondayOf(startDay);
+    final cols = (daysBetween(gridOrigin, endDay) / 7).floor() + 1;
 
     // The thread set the heatmap scores — long-term goals pull in their nested
     // curriculum threads, not just the flat reminder list.
@@ -1314,15 +1315,15 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
 
     // Footer counters: window length and how many elapsed days had every task
     // that was due that day ticked (a "complete" day).
-    final totalDays = endDay.difference(startDay).inDays + 1;
+    final totalDays = daysBetween(startDay, endDay) + 1;
     var doneDays = 0;
     for (var c = startDay;
         !c.isAfter(endDay) && !c.isAfter(today);
-        c = c.add(const Duration(days: 1))) {
+        c = addDays(c, 1)) {
       final (done, scheduled) = _dayTally(threads, c);
       if (scheduled > 0 && done >= scheduled) doneDays++;
     }
-    final daysLeft = endDay.difference(today).inDays;
+    final daysLeft = daysBetween(today, endDay);
 
     // Open scrolled so today sits near the right edge (recent activity in view),
     // with the start and the deadline a scroll away.
@@ -1331,7 +1332,7 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollCtrl.hasClients) return;
         final anchor = today.isAfter(endDay) ? endDay : today;
-        final col = (anchor.difference(gridOrigin).inDays / 7).floor();
+        final col = (daysBetween(gridOrigin, anchor) / 7).floor();
         final target =
             (col + 1) * _colW - _scrollCtrl.position.viewportDimension;
         _scrollCtrl
@@ -1395,7 +1396,7 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
                   for (var d = 0; d < 7; d++)
                     Padding(
                       padding: EdgeInsets.only(bottom: d == 6 ? 0 : _gap),
-                      child: _cellFor(gridOrigin.add(Duration(days: w * 7 + d)),
+                      child: _cellFor(addDays(gridOrigin, w * 7 + d),
                           startDay, endDay, today, threads),
                     ),
                 ],
@@ -1423,24 +1424,8 @@ class _ReflexHeatmapState extends State<_ReflexHeatmap> {
   /// of a checklist reflex, counts only on the day it was completed; every
   /// other thread counts on the weekdays it runs (empty = every day). Kept
   /// identical to the history calendar so both read the same.
-  (int done, int scheduled) _dayTally(List<Thread> threads, DateTime day) {
-    final key = AppState.dayKeyFor(day);
-    final onceLike = widget.impulse.mode == ImpulseMode.checklist;
-    var done = 0;
-    var scheduled = 0;
-    for (final t in threads) {
-      if (t.once || onceLike) {
-        if (t.doneDays.contains(key)) {
-          scheduled++;
-          done++;
-        }
-      } else if (t.days.isEmpty || t.days.contains(day.weekday)) {
-        scheduled++;
-        if (t.doneDays.contains(key)) done++;
-      }
-    }
-    return (done, scheduled);
-  }
+  (int done, int scheduled) _dayTally(List<Thread> threads, DateTime day) =>
+      AppState.dayTally(widget.impulse, day);
 
   Widget _cellFor(DateTime day, DateTime startDay, DateTime endDay,
       DateTime today, List<Thread> threads) {
@@ -1539,7 +1524,7 @@ String _deadlineText(BuildContext context, DateTime deadline) {
   final now = DateTime.now();
   final d = DateTime(deadline.year, deadline.month, deadline.day);
   final today = DateTime(now.year, now.month, now.day);
-  final days = d.difference(today).inDays;
+  final days = daysBetween(today, d);
   if (days < 0) return context.t.overdue;
   return context.t.daysLeft(days);
 }
